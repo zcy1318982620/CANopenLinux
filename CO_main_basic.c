@@ -43,6 +43,7 @@
 #include "CO_error.h"
 #include "CO_epoll_interface.h"
 #include "CO_storageLinux.h"
+#include "agv_log.h"
 
 /* Include optional external application functions */
 #ifdef CO_USE_APPLICATION
@@ -140,29 +141,59 @@ static void sigHandler(int sig) {
     CO_endProgram = 1;
 }
 
-/* Message logging function */
+/* syslog 优先级 → 统一日志 5 级。NOTICE 归 INFO，CRIT 及以上归 FATAL。 */
+static agv_log_level_t log_priority_to_level(int priority)
+{
+    switch (priority) {
+    case LOG_EMERG:
+    case LOG_ALERT:
+    case LOG_CRIT:    return AGV_LOG_FATAL;
+    case LOG_ERR:     return AGV_LOG_ERROR;
+    case LOG_WARNING: return AGV_LOG_WARN;
+    case LOG_NOTICE:
+    case LOG_INFO:    return AGV_LOG_INFO;
+    case LOG_DEBUG:   return AGV_LOG_DEBUG;
+    default:          return AGV_LOG_INFO;
+    }
+}
+
+/* 统一日志适配器。
+ * CANopenNode 全栈(CO_error.c / CO_driver_target.h 等)只依赖本函数的
+ * (priority, format, ...) 签名，故保留签名、只改内部实现，一次派发三路：
+ *   ① syslog：带 LOG_PERROR 会同步到 stderr，进程退出前也不会丢；
+ *   ② 异步 agv_log：统一分级后落 stdout，栈内日志由此被统一；
+ *   ③ 网关/HMI 镜像(CO_CONFIG_GTW_ASCII_LOG)：供上位机显示。
+ */
 void log_printf(int priority, const char *format, ...) {
+    char msg[256];
     va_list ap;
 
+    /* 先格式化一次，三路复用，避免反复解析 va_list */
     va_start(ap, format);
-    vsyslog(priority, format, ap);
+    int n = vsnprintf(msg, sizeof(msg), format, ap);
     va_end(ap);
+    if (n < 0) {
+        msg[0] = '\0';          /* 格式化失败：退化为空串，不影响后续派发 */
+    }
+
+    /* ① 系统日志(journal) */
+    syslog(priority, "%s", msg);
+
+    /* ② 统一异步日志：priority 映射为 5 级 */
+    (void)agv_log_write_text(log_priority_to_level(priority), msg);
 
 #if (CO_CONFIG_GTW) & CO_CONFIG_GTW_ASCII_LOG
+    /* ③ 网关镜像：带时间前缀，供上位机/HMI 显示 */
     if (CO != NULL) {
-        char buf[200];
-        time_t timer;
-        struct tm* tm_info;
-        size_t len;
+        char buf[256];
+        size_t len = 0;
+        time_t timer = time(NULL);
+        struct tm* tm_info = localtime(&timer);
 
-        timer = time(NULL);
-        tm_info = localtime(&timer);
-        len = strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S: ", tm_info);
-
-        va_start(ap, format);
-        vsnprintf(buf + len, sizeof(buf) - len - 2, format, ap);
-        va_end(ap);
-        strcat(buf, "\r\n");
+        if (tm_info != NULL) {
+            len = strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S: ", tm_info);
+        }
+        (void)snprintf(buf + len, sizeof(buf) - len, "%s\r\n", msg);
         CO_GTWA_log_print(CO->gtwa, buf);
     }
 #endif
@@ -327,8 +358,23 @@ int main (int argc, char *argv[]) {
 #endif
 
     /* configure system log */
+    /* 注：openlog() 返回 void、setlogmask() 只返回旧掩码，二者都无错误返回，
+     * 无法判错，这里保持原样。 */
     setlogmask(LOG_UPTO (LOG_DEBUG)); /* LOG_DEBUG - log all messages */
     openlog(argv[0], LOG_PID | LOG_PERROR, LOG_USER); /* print also to standard error */
+
+    /* 启动统一异步日志(队列 256 + 2 个工作线程)。放在最前面：
+     * 使启动早期日志(下面 getopt / CANopen 初始化等)也能进统一通道。
+     * 失败则退化为仅 syslog(带 LOG_PERROR 仍会打到 stderr)。 */
+    if (agv_log_init(256, 2) != 0) {
+        (void)fprintf(stderr,
+                      "agv_log_init() failed, fallback to syslog only\n");
+    } else {
+        /* 注册 atexit：下面有大量 exit(EXIT_FAILURE) 分支，若不等 worker
+         * 把队列落盘就退出，这条日志会丢。deinit 会 close→join→drain，
+         * 且幂等(main 结尾再调一次也没问题)。 */
+        (void)atexit(agv_log_deinit);
+    }
 
     /* Get program options */
     if(argc < 2 || strcmp(argv[1], "--help") == 0){
@@ -338,14 +384,29 @@ int main (int argc, char *argv[]) {
     while((opt = getopt(argc, argv, "i:p:rc:T:s:")) != -1) {
         switch (opt) {
             case 'i': {
-                long int nodeIdLong = strtol(optarg, NULL, 0);
+                char *end = NULL;
+                errno = 0;
+                long int nodeIdLong = strtol(optarg, &end, 0);
+                if (errno != 0 || end == optarg || *end != '\0') {
+                    log_printf(LOG_CRIT, DBG_ARGUMENT_UNKNOWN, "-i", optarg);
+                    exit(EXIT_FAILURE);
+                }
                 nodeIdFromArgs = (nodeIdLong < 0 || nodeIdLong > 0xFF)
-                               ? 0 : (uint8_t)strtol(optarg, NULL, 0);
+                               ? 0 : (uint8_t)nodeIdLong;
                 break;
             }
 #ifndef CO_SINGLE_THREAD
-            case 'p': rtPriority = strtol(optarg, NULL, 0);
+            case 'p': {
+                char *end = NULL;
+                errno = 0;
+                long int prio = strtol(optarg, &end, 0);
+                if (errno != 0 || end == optarg || *end != '\0') {
+                    log_printf(LOG_CRIT, DBG_ARGUMENT_UNKNOWN, "-p", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                rtPriority = (int)prio;
                 break;
+            }
 #endif
             case 'r': rebootEnable = true;
                 break;
@@ -377,9 +438,18 @@ int main (int argc, char *argv[]) {
                 }
                 break;
             }
-            case 'T':
-                socketTimeout_ms = strtoul(optarg, NULL, 0);
+            case 'T': {
+                char *end = NULL;
+                errno = 0;
+                unsigned long int timeout = strtoul(optarg, &end, 0);
+                if (errno != 0 || end == optarg || *end != '\0'
+                   || timeout > 0xFFFFFFFFul) {
+                    log_printf(LOG_CRIT, DBG_ARGUMENT_UNKNOWN, "-T", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                socketTimeout_ms = (uint32_t)timeout;
                 break;
+            }
 #endif
 #if (CO_CONFIG_STORAGE) & CO_CONFIG_STORAGE_ENABLE
             case 's': {
@@ -868,12 +938,16 @@ int main (int argc, char *argv[]) {
 
     /* Flush all buffers (and reboot) */
     if(rebootEnable && reset == CO_RESET_APP) {
-        sync();
+        sync(); /* 注：sync() 返回 void，无错误返回，无法判错 */
         if(reboot(LINUX_REBOOT_CMD_RESTART) != 0) {
             log_printf(LOG_CRIT, DBG_ERRNO, "reboot()");
             exit(EXIT_FAILURE);
         }
     }
+
+    /* 关日志：此刻 rt_thread 已 join、应用回调已停，无生产者，
+     * 可安全 close 队列 → join worker → 释放。 */
+    agv_log_deinit();
 
     exit(programExit);
 }
@@ -889,6 +963,7 @@ static void* rt_thread(void* arg) {
 
         CO_epoll_wait(&epRT);
         CO_epoll_processRT(&epRT, CO, true);
+        CO_epoll_processRT(&epRT, CO_2nd, true);
         CO_epoll_processLast(&epRT);
 
 #if (CO_CONFIG_TRACE) & CO_CONFIG_TRACE_ENABLE

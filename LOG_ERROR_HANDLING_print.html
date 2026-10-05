@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>日志分级 + 错误处理 · 知识讲解</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1a1a1a; line-height: 1.65; font-size: 13px;
+    max-width: 190mm; margin: 0 auto; padding: 8mm 4mm;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; padding-bottom: 4px;
+       border-bottom: 2px solid #0FDC78; color: #004D26; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #004D26; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+    background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  }
+  a { color: #004D26; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+  th, td { border: 1px solid #d7dbdf; padding: 5px 8px; text-align: left;
+           vertical-align: top; font-size: 12.5px; }
+  th { background: #E5FFF2; color: #004D26; font-weight: 600; }
+  pre.code {
+    background: #f8f9fa; border: 1px solid #e3e5e8; border-left: 3px solid #0FDC78;
+    padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    line-height: 1.55; margin: 8px 0;
+  }
+  .note {
+    background: #FFF7E5; border-left: 3px solid #f0a020;
+    padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px;
+  }
+  .good { background: #E5FFF2; border-left: 3px solid #0FDC78;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .pgbreak { page-break-before: always; }
+  .footnote { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e3e5e8;
+              color: #888; font-size: 11.5px; }
+  .toolbar { margin: 10px 0; }
+  .toolbar button {
+    background: #0FDC78; color: #004D26; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  @media print { .toolbar { display: none; } }
+</style>
+</head>
+<body>
+
+<h1>日志分级 + 错误处理 · 知识讲解</h1>
+<div class="meta">工程：panasonic_canopen_agv ｜ 主题：统一日志分级 · 所有系统调用返回值判错</div>
+
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h2>§1 为什么要做这件事</h2>
+<p>在 Linux/嵌入式里，系统调用失败是<b>常态</b>而不是意外：磁盘满、资源暂时不可用（<code>EAGAIN</code>）、被信号打断（<code>EINTR</code>）、对端断开（<code>EPIPE</code>）。不判返回值等于把错误<b>静默吞掉</b>，线上问题最难查的就是这种——程序没崩，行为却不对。</p>
+<p>目标两条：<b>① 统一日志分级</b>（一眼看出严重程度），<b>② 每个系统调用返回值都判错</b>（失败必有反应）。</p>
+
+<h2>§2 日志分级</h2>
+<h3>2.1 级别怎么定</h3>
+<table>
+  <tr><th>级别</th><th>数值</th><th>典型用途</th><th>Release 版</th></tr>
+  <tr><td>DEBUG</td><td>0</td><td>变量值、流程细节</td><td>裁剪掉</td></tr>
+  <tr><td>INFO</td><td>1</td><td>正常里程碑（启动、连接建立）</td><td>保留</td></tr>
+  <tr><td>WARN</td><td>2</td><td>可恢复异常（重试、丢弃）</td><td>保留</td></tr>
+  <tr><td>ERROR</td><td>3</td><td>本次操作失败</td><td>保留</td></tr>
+  <tr><td>FATAL</td><td>4</td><td>致命，准备退出</td><td>保留</td></tr>
+</table>
+<p>约定：<b>数值越大越严重</b>，过滤条件是 <code>level &gt;= g_min_level</code>。这样一条判断就能同时表达"打印哪些级别"。</p>
+
+<h3>2.2 编译期过滤（嵌入式常用）</h3>
+<p>DEBUG 日志在发布版不该占空间，用宏在<b>编译期</b>裁剪，比运行期判断更彻底：</p>
+<pre class="code">#define LOG_LEVEL 2            /* 编译期可改：低于此值整段不进二进制 */
+
+#define LOG(level, fmt, ...)                                  \
+    do {                                                      \
+        if ((level) >= LOG_LEVEL) {                           \
+            log_emit((level), __FILE__, __LINE__,             \
+                     __func__, (fmt), ##__VA_ARGS__);         \
+        }                                                     \
+    } while (0)</pre>
+<p>要点：<code>do { ... } while (0)</code> 让宏在 <code>if/else</code> 里当单条语句用；<code>##__VA_ARGS__</code> 支持可变参数；自动带上 <b>文件 / 行号 / 函数名</b>，否则日志定位全靠猜。</p>
+
+<h3>2.3 本工程现状</h3>
+<p>已有一条 RT 安全日志通道 [agv_log_rt()](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L58-L78)，级别字段是 [agv_logrec_t.level](file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L28-L32)，目前只有 <code>0=INFO 1=WARN 2=ERR</code>。改造方向：把这里的 <code>level</code> 换成上面的 5 级枚举，日志宏统一走它，就不必到处裸调 <code>printf</code>。</p>
+<div class="note"><b>为什么日志还要走队列？</b> RT 线程里绝不能做阻塞 IO。日志宏只负责"格式化 + 入队"，真正的写终端交给工作线程——这条链路已经建好，直接复用。</div>
+
+<h2>§3 系统调用的返回值约定</h2>
+<p>判错前必须先知道"失败长什么样"。不同 API 的失败信号不一样，别用一套模板套所有函数：</p>
+<table>
+  <tr><th>返回约定</th><th>典型函数</th><th>怎么判失败</th><th>错误在哪</th></tr>
+  <tr><td>返回 -1</td><td><code>open/read/write/ioctl/socket/close</code></td><td><code>== -1</code></td><td><code>errno</code></td></tr>
+  <tr><td>返回 NULL</td><td><code>malloc/calloc/strdup/fopen</code></td><td><code>== NULL</code></td><td><code>errno</code>（malloc 会置 <code>ENOMEM</code>）</td></tr>
+  <tr><td>返回 0 成功 / 非 0 错误码</td><td><code>pthread_*</code>（create/mutex_init…）</td><td><code>!= 0</code></td><td><b>返回值本身</b>，<b>不设 errno</b></td></tr>
+  <tr><td>返回字节数（可短）</td><td><code>read/write/recv/send</code></td><td>先判 <code>-1</code>，再判 <code>&lt; 请求长度</code></td><td>短读≠错误，要循环补齐</td></tr>
+</table>
+<div class="note"><b>最大的坑：<code>pthread_*</code> 不用 errno。</b>失败时它<b>直接返回错误码</b>（如 <code>EINVAL</code>），<code>errno</code> 里是上次别的调用的残值。写 <code>if (pthread_create(...) == -1) perror()</code> 是错的——它返回的是正数错误码。</div>
+
+<h2>§4 errno 的用法与陷阱</h2>
+<ul>
+  <li><b>只在失败后立即读才有效</b>。成功时 errno 可能残留旧值，不要拿它判断成功与否。</li>
+  <li><b>会被后续调用覆盖</b>。要留证据，失败后立刻存下来：<code>int e = errno;</code>。</li>
+  <li><b>线程安全</b>：errno 是线程局部存储（每个线程一份），多线程互不干扰——所以 worker 里用也没问题。</li>
+  <li><b>转字符串</b>：<code>perror("open")</code> 直接打；要拼进日志用 <code>strerror_r()</code>（<code>strerror()</code> 非线程安全）。</li>
+</ul>
+
+<h3>两个必须特判的错误</h3>
+<table>
+  <tr><th>错误</th><th>含义</th><th>正确处理</th></tr>
+  <tr><td><code>EINTR</code></td><td>被信号打断，操作<b>没执行</b></td><td><b>重试</b>（慢速系统调用如 read/recv 会中招）</td></tr>
+  <tr><td><code>EAGAIN / EWOULDBLOCK</code></td><td>非阻塞 fd 暂时无数据</td><td>不是错误，回去等 <code>epoll</code> 通知，别报错</td></tr>
+</table>
+
+<h2 class="pgbreak">§5 判错姿势速查（本工程常用）</h2>
+<table>
+  <tr><th>调用</th><th>失败标志</th><th>常见 errno</th><th>处理动作</th></tr>
+  <tr><td><code>malloc / calloc</code></td><td><code>NULL</code></td><td>ENOMEM</td><td>记录 + 清理已分配资源 + 返回错误</td></tr>
+  <tr><td><code>pthread_create</code></td><td><code>!= 0</code></td><td>EAGAIN/EPERM</td><td>回滚已建线程，返回错误码</td></tr>
+  <tr><td><code>pthread_mutex_init</code></td><td><code>!= 0</code></td><td>ENOMEM/EAGAIN</td><td>返回错误</td></tr>
+  <tr><td><code>open</code></td><td><code>-1</code></td><td>ENOENT/EACCES</td><td>记录路径 + 原因，返回</td></tr>
+  <tr><td><code>read</code></td><td><code>-1</code> 或短读</td><td>EINTR/EAGAIN</td><td>EINTR 重试；EAGAIN 等待；短读循环</td></tr>
+  <tr><td><code>write</code> / <code>send</code></td><td><code>-1</code> 或短写</td><td>EINTR/EPIPE</td><td>循环补写；EPIPE 视为对端断开</td></tr>
+  <tr><td><code>close</code></td><td><code>-1</code></td><td>EINTR/EBADF</td><td><b>不要重试</b>（fd 可能已被复用），记日志即可</td></tr>
+  <tr><td><code>ioctl</code></td><td><code>-1</code></td><td>EINVAL/ENOTTY</td><td>记录请求码 + 原因</td></tr>
+  <tr><td><code>socket / bind / connect</code></td><td><code>-1</code></td><td>EADDRINUSE/ECONNREFUSED</td><td>记录 + 按策略重试或退出</td></tr>
+</table>
+
+<h2>§6 三种错误处理写法</h2>
+<h3>6.1 嵌套 if（不推荐）</h3>
+<pre class="code">int r = a();
+if (r == 0) {
+    r = b();
+    if (r == 0) {
+        r = c();          /* 层数一多，缩进就失控 */
+    }
+}</pre>
+
+<h3>6.2 goto cleanup（Linux 内核风格，推荐）</h3>
+<p>把"申请资源"和"释放资源"分成两段，任何一步失败就跳到对应的清理标签，<b>只写一份清理代码</b>：</p>
+<pre class="code">int do_work(void)
+{
+    int ret = 0;
+    char *buf = NULL;
+    int fd = -1;
+
+    buf = malloc(1024);
+    if (buf == NULL) {
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    fd = open("/dev/x", O_RDWR);
+    if (fd == -1) {
+        ret = -errno;                 /* 保存 errno 再跳 */
+        goto out;
+    }
+
+    /* ... 正常逻辑 ... */
+
+out:
+    if (fd != -1)  close(fd);         /* 按申请逆序释放 */
+    free(buf);
+    return ret;                       /* 0 成功，负值错误码 */
+}</pre>
+<div class="good"><b>为什么好用：</b>资源释放只出现一次，不会漏；<code>ret = -errno</code> 把系统错误码统一成"0 成功 / 负值失败"，调用方判 <code>if (ret &lt; 0)</code> 就够。</div>
+
+<h3>6.3 宏封装（可选）</h3>
+<pre class="code">#define CHECK(expr)                        \
+    do {                                   \
+        if ((expr) &lt; 0) {                  \
+            LOG(ERROR, "%s failed: %s",    \
+                #expr, strerror(errno));   \
+            goto out;                      \
+        }                                  \
+    } while (0)</pre>
+<p>适合重复度高的判错，但别滥用——宏里藏 <code>goto</code> 会降低可读性，团队约定好再用。</p>
+
+<h2>§7 错误码设计</h2>
+<ul>
+  <li><b>统一约定</b>：<code>0 = 成功</code>，<code>负值 = 失败</code>。直接 <code>return -errno</code> 透传系统错误，语义清晰又不用自造码表。</li>
+  <li><b>自定义错误</b>用独立区段，避免和 errno 撞号：<code>#define AGV_E_PARAM (-1000)</code>、<code>AGV_E_STATE (-1001)</code>。</li>
+  <li><b>不要用裸 -1</b> 当内部函数返回：调用方拿不到"为什么失败"。要么返回 <code>-errno</code>，要么返回自己的错误码 + 单独输出。</li>
+  <li>当前队列模块用的是 <code>0 / -1</code>（[agv_queue.h:53](file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L53)），简单够用；要更细时可升级为负错误码。</li>
+</ul>
+
+<h2>§8 日志和错误怎么配合</h2>
+<h3>8.1 在哪一层记日志</h3>
+<p>原则：<b>底层函数只返回错误，不刷日志；最外层（业务入口）带上下文记一次</b>。否则一个错误从 <code>open</code> 一路往上返回，每层都打，日志立刻被刷屏。</p>
+<table>
+  <tr><th>层</th><th>职责</th></tr>
+  <tr><td>底层（<code>agv_queue</code> 等）</td><td>判错、返回错误码。不打印（最多 DEBUG）</td></tr>
+  <tr><td>中间层</td><td>能补救就补救（重试/回退）；救不了就继续往上抛</td></tr>
+  <tr><td>入口层（<code>app_programStart</code> 等）</td><td>记录一条 ERROR，带"做什么 + 哪个对象 + 为什么"</td></tr>
+</table>
+
+<h3>8.2 日志内容公式</h3>
+<pre class="code">/* 差：看不出上下文 */
+LOG(ERROR, "failed");
+
+/* 好：动作 + 对象 + 原因(errno 字符串) */
+LOG(ERROR, "open(%s) failed: %s", path, strerror_r_safe(errno));</pre>
+
+<h3>8.3 保留策略</h3>
+<p>环形队列满时是"丢最老的"还是"丢最新的"？当前实现是<b>丢弃新日志 + 计数</b>（[agv_queue.c:80-83](file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L80-L83)），好处是绝不阻塞 RT；代价是高峰会丢日志，所以用 <code>dropped</code> 计数 + <code>drop=N</code> 输出告知"这段日志不完整"。</p>
+
+<h2>§9 落地检查清单</h2>
+<ul>
+  <li>☐ 日志级别统一成 5 级枚举，替换现有 0/1/2 裸数字</li>
+  <li>☐ 提供 <code>LOG_DEBUG/INFO/WARN/ERROR/FATAL</code> 宏，自动带文件行号</li>
+  <li>☐ 排查所有 <code>malloc/pthread_*/open/read/write/close/socket</code> 调用，逐个判返回值</li>
+  <li>☐ 区分 <code>pthread_*</code>（返回错误码）与 errno 类调用</li>
+  <li>☐ <code>read/write</code> 处理 EINTR 重试与短读写</li>
+  <li>☐ 引入 <code>goto cleanup</code> 统一资源释放</li>
+  <li>☐ 内部函数统一 <code>0/-errno</code> 或自定义负错误码</li>
+  <li>☐ 日志只在入口层记一次，带上下文，不刷屏</li>
+</ul>
+
+<div class="footnote">
+  知识讲解（第 1 份）· 下一步：按本清单在工程里落地改造（第 2 份：改动清单与代码）。
+  相关：AGV_ASYNC_LOG_IMPL_print.html、CONCURRENCY_THREADPOOL_print.html。
+</div>
+
+</body>
+</html>

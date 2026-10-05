@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>并发基础 · 队列与生产者-消费者模型</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre.code { background:#f5f5f5; border:0.6pt solid #ccc; border-left:3pt solid #333; padding:2mm 2.6mm;
+           font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.3pt; line-height:1.42;
+           white-space:pre; overflow-x:auto; margin:2mm 0; page-break-inside:avoid; }
+pre.code .c { color:#777; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:30%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:35%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:35%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+.flow { margin:2.5mm 0; padding:3mm; border:0.6pt dashed #999; background:#fafafa; page-break-inside:avoid; }
+.flow .row { display:flex; align-items:center; gap:3mm; flex-wrap:wrap; }
+.flow .box { border:0.8pt solid #333; background:#fff; padding:1.6mm 2.6mm; border-radius:1.5mm;
+             font-size:8.8pt; text-align:center; min-width:26mm; }
+.flow .box b { display:block; font-size:9.4pt; }
+.flow .box span { color:#555; font-size:7.8pt; }
+.flow .box.hi { border-color:#111; background:#ececec; }
+.flow .arw { font-size:11pt; color:#333; }
+.flow .down { text-align:center; font-size:11pt; color:#333; margin:1mm 0; }
+.keyline { font-weight:700; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>并发基础 · 队列与生产者-消费者模型</h1>
+
+<div class="meta">
+<p><strong>文档定位</strong>：这是「线程池」的前置知识。线程池的本质就是<strong>一个工作线程数组 + 一条任务队列</strong>；不懂队列和同步原语，线程池就是黑盒。</p>
+<p><strong>与自检册的关系</strong>：《系统编程自测清单》负责「查漏」，本册负责「讲透 + 落到代码」。想自测请回看 <code>EMBEDDED_LINUX_APP_SELFCHECK_print.html</code>。</p>
+<p><strong>体例</strong>：先给<strong>一句话结论</strong>，再展开。代码是完整可编译的最小示例，逐函数讲解；带 <code>文件:行号</code> 的可点开本工程源码核对。</p>
+<p><strong>用法</strong>：先读 §1–§3 建立模型，再对着 §4 的代码把每行想一遍<strong>「谁在改这个变量、谁在等」</strong>。</p>
+</div>
+
+<h2>§1 为什么需要队列：生产者-消费者模型</h2>
+
+<p><strong>一句话结论：队列是解耦"干得快的人"和"干得慢的人"的缓冲区。</strong>生产者只管把活放进队列，消费者只管从队列取活；两边不必互相等待，速度不一致也不会互相拖累。</p>
+
+<p>没有队列时，两个线程只能直接交接：生产者必须等消费者接手才能继续，消费者也必须等生产者送来才有活干，这叫<strong>紧耦合</strong>。有了队列，中间多了一个缓冲，双方各自按自己的节奏跑。</p>
+
+<p>在嵌入式里，这个模型随处可见：</p>
+<table class="cols-2">
+<caption>表 1-1　生产者在哪、消费者在哪</caption>
+<tr><th>场景</th><th>生产者 → 消费者</th></tr>
+<tr><td>写日志</td><td>业务线程（Producer）往队列丢一条日志 → 日志线程（Consumer）慢慢写磁盘</td></tr>
+<tr><td>CAN 收帧</td><td>中断/驱动层收帧 → 应用线程从队列取帧处理</td></tr>
+<tr><td>线程池</td><td>提交任务的任意线程 → 工作线程池从任务队列取任务执行</td></tr>
+<tr><td>本工程（目标）</td><td>RT 线程（1ms 节拍）→ 有界队列 → 工作线程做日志落盘/位姿上报</td></tr>
+</table>
+
+<div class="flow">
+<div class="row">
+  <div class="box"><b>生产者</b><span>生产数据的速度不定</span></div>
+  <div class="arw">→ push →</div>
+  <div class="box hi"><b>队列</b><span>缓冲 / 解耦</span></div>
+  <div class="arw">→ pop →</div>
+  <div class="box"><b>消费者</b><span>处理数据的速度不定</span></div>
+</div>
+</div>
+
+<p><strong>队列带来的三个好处：</strong></p>
+<ul>
+<li><strong>解耦</strong>：收发双方不需要知道对方是谁、跑得多快，只依赖队列接口。</li>
+<li><strong>削峰</strong>：突发流量先堆在队列里，消费者按自己的能力慢慢消化。</li>
+<li><strong>异步</strong>：生产者不必等处理完成就能返回，响应更快。</li>
+</ul>
+
+<div class="note"><strong>引用本工程</strong>：现在 RT 线程（<code>rt_thread</code>，见 [CO_main_basic.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L885-L911)）在 1ms 节拍里直接 <code>printf</code> 打日志（[CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L247) 的 <code>[RT] tick</code>、[CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L309) 的 <code>[ODOM]</code>）。<code>printf</code>/<code>fflush</code> 会阻塞，等于把"慢消费者"的工作塞给了"不能慢的生产者"，破坏了实时性。正确做法：RT 线程只把日志<strong>入队</strong>，由消费者线程去打印。</div>
+
+<h2 class="pgbreak">§2 造队列的三个积木：互斥锁 / 条件变量 / 信号量</h2>
+
+<p><strong>一句话结论：队列 = 一块共享内存 + 一把锁 + 两个"等待条件"。</strong>共享内存放数据，锁保证同时只有一个人动它，条件变量负责"空了就睡、来了就叫"。</p>
+
+<h3>2.1 互斥锁（pthread_mutex_t）：保证临界区互斥</h3>
+<p>队列的 <code>buf/head/tail/count</code> 是多个线程都会碰的共享数据，必须<strong>成对加解锁</strong>包起来，这段代码叫临界区。</p>
+<pre class="code">pthread_mutex_lock(&amp;q-&gt;lock);
+<span class="c">/* 只有持有锁的线程能进这里 */</span>
+q-&gt;count++;
+pthread_mutex_unlock(&amp;q-&gt;lock);</pre>
+<p><strong>要点</strong>：锁的粒度要小（只包真正共享的几行），但进入临界区后<strong>不要做耗时操作</strong>（不要在里面 <code>printf</code>、不要做 IO）。</p>
+
+<h3>2.2 条件变量（pthread_cond_t）：空了就睡、来了就叫</h3>
+<p>光有锁还不够：消费者发现队列空了，如果一直拿着锁空转，生产者永远拿不到锁，白烧 CPU。条件变量解决这个：<strong>条件不满足就释放锁并睡眠，被唤醒后重新拿锁继续检查。</strong></p>
+<pre class="code"><span class="c">/* 消费者: 队列空就睡在 not_empty 上 */</span>
+pthread_mutex_lock(&amp;q-&gt;lock);
+while (q-&gt;count == 0)                 <span class="c">/* 必须 while, 不能 if! */</span>
+    pthread_cond_wait(&amp;q-&gt;not_empty, &amp;q-&gt;lock);
+<span class="c">/* 到这里 count&gt;0, 说明有货了 */</span>
+pthread_mutex_unlock(&amp;q-&gt;lock);
+
+<span class="c">/* 生产者: 放进一条后叫醒一个等待者 */</span>
+pthread_cond_signal(&amp;q-&gt;not_empty);</pre>
+
+<table class="cols-2">
+<caption>表 2-1　条件变量三个必须记住的点</caption>
+<tr><th>点</th><th>为什么</th></tr>
+<tr><td>为什么用 <code>while</code> 不用 <code>if</code></td><td>被唤醒 ≠ 条件成立：可能"虚假唤醒"，也可能刚醒来条件就被别的线程抢走了。必须循环复查。</td></tr>
+<tr><td><code>wait</code> 会自动释放锁</td><td>睡眠时必须放开锁，否则生产者进不来；被唤醒返回时又自动重新加锁。</td></tr>
+<tr><td><code>signal</code> vs <code>broadcast</code></td><td><code>signal</code> 只叫醒一个（还有名额时用）；<code>broadcast</code> 叫醒全部（状态整体变化、如关闭时用）。</td></tr>
+</table>
+
+<h3>2.3 信号量（sem_t）：计数型同步</h3>
+<p>信号量是一个<strong>带计数的"通行证"</strong>：<code>sem_wait</code> 拿一张（计数为 0 就睡），<code>sem_post</code> 还一张（并叫醒等待者）。它的计数可以大于 1，所以能表达"最多允许 N 个并发"。</p>
+<pre class="code">sem_t empty;   <span class="c">/* 空位数量, 初值 = 容量 */</span>
+sem_t full;    <span class="c">/* 已有数据条数, 初值 = 0 */</span>
+
+<span class="c">/* 生产者 */</span>
+sem_wait(&amp;empty);   <span class="c">/* 没有空位就睡 */</span>
+<span class="c">/* ...写入数据... */</span>
+sem_post(&amp;full);    <span class="c">/* 多了一条数据 */</span>
+
+<span class="c">/* 消费者 */</span>
+sem_wait(&amp;full);    <span class="c">/* 没有数据就睡 */</span>
+<span class="c">/* ...读出数据... */</span>
+sem_post(&amp;empty);   <span class="c">/* 多了一个空位 */</span></pre>
+
+<table class="cols-3">
+<caption>表 2-2　条件变量 vs 信号量：选哪个</caption>
+<tr><th>维度</th><th>条件变量</th><th>信号量</th></tr>
+<tr><td>本质</td><td>等一个"条件表达式"</td><td>等一个"计数 > 0"</td></tr>
+<tr><td>配锁</td><td>必须配互斥锁用</td><td>自带原子计数，可独立用</td></tr>
+<tr><td>表达能力</td><td>可表达复杂条件（队列非空且未关闭）</td><td>表达简单计数（还有几个空位）</td></tr>
+<tr><td>典型用途</td><td>队列空/满、线程池任务到达</td><td>限制并发数、经典 P/V 生产者-消费者</td></tr>
+</table>
+
+<div class="note"><strong>怎么记</strong>：条件变量是"<strong>什么时候可以走</strong>"（配锁、配条件），信号量是"<strong>还有几个名额</strong>"（纯计数）。两个都能实现队列，本册 §4 用条件变量，因为它能把"未关闭"这个条件也一起判掉。</div>
+
+<h2>§3 队列的两种骨架：环形数组 vs 链表</h2>
+
+<p><strong>一句话结论：追求性能用环形数组，追求动态规模用链表。</strong>嵌入式/RT 场景几乎都用<strong>预分配的环形数组</strong>——没有运行时内存分配，就不会有分配失败和分配延迟。</p>
+
+<h3>3.1 环形数组（ring buffer）</h3>
+<p>用 <code>head</code>（出队位置）、<code>tail</code>（入队位置）、<code>count</code>（当前条数）三个下标，在固定长度的数组上"绕圈"用。入队出队都是 <code>(i + 1) % cap</code>，O(1) 且不搬数据。</p>
+
+<table class="cols-2">
+<caption>表 3-1　环形缓冲的下标规则</caption>
+<tr><th>操作</th><th>动作</th></tr>
+<tr><td>入队</td><td><code>buf[tail] = v; tail = (tail+1) % cap; count++;</code></td></tr>
+<tr><td>出队</td><td><code>v = buf[head]; head = (head+1) % cap; count--;</code></td></tr>
+<tr><td>判空</td><td><code>count == 0</code></td></tr>
+<tr><td>判满</td><td><code>count == cap</code></td></tr>
+</table>
+<p>为什么额外用 <code>count</code> 而不是只靠 <code>head == tail</code> 判空/满？因为那样<strong>空和满的下标状态是一样的</strong>，分不清。带 <code>count</code> 最直观；另一种流派是<strong>故意浪费一个格子</strong>，用 <code>(tail+1)%cap == head</code> 判满。</p>
+
+<h3>3.2 链表队列</h3>
+<p>动态 <code>malloc</code> 每个节点，天然无容量上限。缺点：每入队一次就要分配一次内存（<code>malloc</code> 有不确定性，可能失败、可能加锁），在 RT 线程里是禁忌。适合非实时的普通业务队列。</p>
+
+<div class="note"><strong>选择建议</strong>：容量可预估（如日志、CAN 帧、任务）→ <strong>环形数组</strong>，预分配、零分配、确定性；容量无法预估 → 链表。本工程该用环形数组。</div>
+
+<h2 class="pgbreak">§4 完整实现：阻塞有界队列（互斥锁 + 条件变量）</h2>
+
+<p><strong>一句话结论：一个锁保护数据，两个条件变量分别管"满了别进"和"空了别出"。</strong>下面是最小可编译版本（存放 <code>int</code>，换成结构体同理）。</p>
+
+<pre class="code"><span class="c">/* queue.h 结构定义 */</span>
+#include &lt;pthread.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef struct {
+    int             *buf;        <span class="c">/* 预分配的环形缓冲区 */</span>
+    size_t           cap;        <span class="c">/* 容量 */</span>
+    size_t           head;       <span class="c">/* 出队位置 */</span>
+    size_t           tail;       <span class="c">/* 入队位置 */</span>
+    size_t           count;      <span class="c">/* 当前条数 */</span>
+    pthread_mutex_t  lock;       <span class="c">/* 保护上面所有字段 */</span>
+    pthread_cond_t   not_full;   <span class="c">/* 生产者等这个: 不满时才可入队 */</span>
+    pthread_cond_t   not_empty;  <span class="c">/* 消费者等这个: 不空时才可出队 */</span>
+    bool             closed;     <span class="c">/* 关闭标志, 用于唤醒所有人退出 */</span>
+} queue_t;
+
+int queue_init(queue_t *q, size_t cap) {
+    q-&gt;buf = malloc(cap * sizeof(int));
+    if (!q-&gt;buf) return -1;
+    q-&gt;cap = cap;
+    q-&gt;head = q-&gt;tail = q-&gt;count = 0;
+    q-&gt;closed = false;
+    pthread_mutex_init(&amp;q-&gt;lock, NULL);
+    pthread_cond_init(&amp;q-&gt;not_full,  NULL);
+    pthread_cond_init(&amp;q-&gt;not_empty, NULL);
+    return 0;
+}
+
+<span class="c">/* 阻塞入队: 满就睡在 not_full 上; 若队列已关闭返回 -1 */</span>
+int queue_push(queue_t *q, int v) {
+    pthread_mutex_lock(&amp;q-&gt;lock);
+    while (q-&gt;count == q-&gt;cap &amp;&amp; !q-&gt;closed)
+        pthread_cond_wait(&amp;q-&gt;not_full, &amp;q-&gt;lock);
+    if (q-&gt;closed) {                       <span class="c">/* 关闭时不再接收 */</span>
+        pthread_mutex_unlock(&amp;q-&gt;lock);
+        return -1;
+    }
+    q-&gt;buf[q-&gt;tail] = v;
+    q-&gt;tail = (q-&gt;tail + 1) % q-&gt;cap;
+    q-&gt;count++;
+    pthread_cond_signal(&amp;q-&gt;not_empty);    <span class="c">/* 叫醒一个消费者 */</span>
+    pthread_mutex_unlock(&amp;q-&gt;lock);
+    return 0;
+}
+
+<span class="c">/* 阻塞出队: 空就睡在 not_empty 上; 若"已关闭且取空"返回 -1 表示结束 */</span>
+int queue_pop(queue_t *q, int *v) {
+    pthread_mutex_lock(&amp;q-&gt;lock);
+    while (q-&gt;count == 0 &amp;&amp; !q-&gt;closed)
+        pthread_cond_wait(&amp;q-&gt;not_empty, &amp;q-&gt;lock);
+    if (q-&gt;count == 0) {                   <span class="c">/* closed &amp;&amp; empty → 该退出了 */</span>
+        pthread_mutex_unlock(&amp;q-&gt;lock);
+        return -1;
+    }
+    *v = q-&gt;buf[q-&gt;head];
+    q-&gt;head = (q-&gt;head + 1) % q-&gt;cap;
+    q-&gt;count--;
+    pthread_cond_signal(&amp;q-&gt;not_full);     <span class="c">/* 叫醒一个生产者 */</span>
+    pthread_mutex_unlock(&amp;q-&gt;lock);
+    return 0;
+}
+
+<span class="c">/* 关闭: 唤醒所有睡着的线程, 让它们检查 closed 后退出 */</span>
+void queue_close(queue_t *q) {
+    pthread_mutex_lock(&amp;q-&gt;lock);
+    q-&gt;closed = true;
+    pthread_cond_broadcast(&amp;q-&gt;not_full);  <span class="c">/* 必须 broadcast, 不能 signal */</span>
+    pthread_cond_broadcast(&amp;q-&gt;not_empty);
+    pthread_mutex_unlock(&amp;q-&gt;lock);
+}
+
+void queue_destroy(queue_t *q) {
+    pthread_mutex_destroy(&amp;q-&gt;lock);
+    pthread_cond_destroy(&amp;q-&gt;not_full);
+    pthread_cond_destroy(&amp;q-&gt;not_empty);
+    free(q-&gt;buf);
+}</pre>
+
+<h3>4.1 逐函数讲解：看清"谁在改、谁在等"</h3>
+<table class="cols-3">
+<caption>表 4-1　每个函数里谁改共享变量、谁在等条件</caption>
+<tr><th>函数</th><th>改了什么（持锁）</th><th>等待 / 唤醒</th></tr>
+<tr><td><code>queue_push</code></td><td>写 <code>buf[tail]</code>、<code>tail</code>、<code>count</code></td><td>满时睡 <code>not_full</code>；成功唤醒 <code>not_empty</code></td></tr>
+<tr><td><code>queue_pop</code></td><td>读 <code>buf[head]</code>、改 <code>head</code>、<code>count</code></td><td>空时睡 <code>not_empty</code>；成功唤醒 <code>not_full</code></td></tr>
+<tr><td><code>queue_close</code></td><td>置 <code>closed</code></td><td><code>broadcast</code> 唤醒两边</td></tr>
+</table>
+
+<div class="note"><strong>关闭为什么要 <code>broadcast</code></strong>：睡着的线程可能有好几个（多个生产者/消费者）。<code>signal</code> 只叫醒一个，剩下的会永远睡着导致 <code>join</code> 卡死。关闭是"整体状态变化"，必须广播。</div>
+
+<h2>§5 RT 版：非阻塞入队（满则丢帧并计数）</h2>
+
+<p><strong>一句话结论：RT 线程绝不能为了入队而睡眠，满了就丢、丢就计数。</strong>上面 <code>queue_push</code> 满时会睡，这在 RT 线程里不可接受——一睡就错过 1ms 节拍。RT 侧要用 <strong>try 版</strong>：拿不到锁或队列满都立刻返回，把帧丢掉并累加一个丢弃计数（用于事后观察丢了多少）。</p>
+
+<pre class="code">#include &lt;stdatomic.h&gt;
+
+<span class="c">/* 非阻塞入队: 满或拿不到锁 → 立刻返回 -1(丢帧), 绝不睡眠 */</span>
+int queue_try_push(queue_t *q, int v, unsigned *dropped) {
+    if (pthread_mutex_trylock(&amp;q-&gt;lock) != 0) {  <span class="c">/* 锁被占, 不等, 直接丢 */</span>
+        (*dropped)++;
+        return -1;
+    }
+    int rc;
+    if (q-&gt;count &lt; q-&gt;cap &amp;&amp; !q-&gt;closed) {       <span class="c">/* 还有空位 */</span>
+        q-&gt;buf[q-&gt;tail] = v;
+        q-&gt;tail = (q-&gt;tail + 1) % q-&gt;cap;
+        q-&gt;count++;
+        pthread_cond_signal(&amp;q-&gt;not_empty);
+        rc = 0;
+    } else {                                     <span class="c">/* 满: 丢弃并计数 */</span>
+        (*dropped)++;
+        rc = -1;
+    }
+    pthread_mutex_unlock(&amp;q-&gt;lock);
+    return rc;
+}</pre>
+
+<table class="cols-2">
+<caption>表 5-1　阻塞 push 与 try_push 的使用边界</caption>
+<tr><th>版本</th><th>用在哪</th></tr>
+<tr><td><code>queue_push</code>（会睡）</td><td>普通业务线程：可以等，丢了数据更可惜</td></tr>
+<tr><td><code>queue_try_push</code>（不睡）</td><td><strong>RT 线程 / 中断相关</strong>：宁可丢一帧，也不能错过节拍</td></tr>
+</table>
+
+<h2 class="pgbreak">§6 无锁 SPSC 环形队列（单生产者单消费者）</h2>
+
+<p><strong>一句话结论：如果生产者只有一个、消费者也只有一个，可以完全不用锁。</strong>因为"头"只有生产者改、"尾"只有消费者改，没有竞争，只需保证<strong>一个线程写完的数据，另一个线程能按顺序看见</strong>——用 C11 原子变量 + acquire/release 内存序即可。</p>
+
+<pre class="code">#include &lt;stdatomic.h&gt;
+#include &lt;stdbool.h&gt;
+
+typedef struct {
+    int           *buf;
+    size_t         cap;    <span class="c">/* 容量, 取 2 的幂, 用位与代替取模 */</span>
+    size_t         mask;   <span class="c">/* cap - 1 */</span>
+    atomic_size_t  head;   <span class="c">/* 写位置: 只有生产者改 */</span>
+    atomic_size_t  tail;   <span class="c">/* 读位置: 只有消费者改 */</span>
+} spsc_t;
+
+<span class="c">/* 生产者侧: 无锁 */</span>
+bool spsc_push(spsc_t *q, int v) {
+    size_t head = atomic_load_explicit(&amp;q-&gt;head, memory_order_relaxed);
+    size_t next = (head + 1) &amp; q-&gt;mask;
+    size_t tail = atomic_load_explicit(&amp;q-&gt;tail, memory_order_acquire);
+    if (next == tail) return false;                    <span class="c">/* 满(牺牲一格) */</span>
+    q-&gt;buf[head] = v;                                  <span class="c">/* 先写数据 */</span>
+    atomic_store_explicit(&amp;q-&gt;head, next, memory_order_release); <span class="c">/* 再发布 head */</span>
+    return true;
+}
+
+<span class="c">/* 消费者侧: 无锁 */</span>
+bool spsc_pop(spsc_t *q, int *v) {
+    size_t tail = atomic_load_explicit(&amp;q-&gt;tail, memory_order_relaxed);
+    size_t head = atomic_load_explicit(&amp;q-&gt;head, memory_order_acquire);
+    if (tail == head) return false;                    <span class="c">/* 空 */</span>
+    *v = q-&gt;buf[tail];
+    atomic_store_explicit(&amp;q-&gt;tail, (tail + 1) &amp; q-&gt;mask, memory_order_release);
+    return true;
+}</pre>
+
+<table class="cols-2">
+<caption>表 6-1　为什么 SPSC 能无锁（关键在"各改各的"）</caption>
+<tr><th>变量</th><th>谁写 / 谁读</th></tr>
+<tr><td><code>head</code></td><td>只有生产者写；消费者只读</td></tr>
+<tr><td><code>tail</code></td><td>只有消费者写；生产者只读</td></tr>
+<tr><td><code>buf[]</code></td><td>生产者写格子、消费者读格子，靠 release/acquire 保证顺序</td></tr>
+</table>
+
+<div class="note"><strong>内存序为什么这样写</strong>：<code>release</code> 保证"我前面写的 <code>buf[head]</code> 一定在我发布新 <code>head</code> 之前完成"；<code>acquire</code> 保证"我读到新 <code>head</code> 时，对应的 <code>buf[]</code> 数据也一定看得见"。少了它，编译器/CPU 可能重排，消费者就会读到旧数据甚至脏数据。</div>
+
+<h2>§7 队满怎么办：三种策略 + 本工程怎么选</h2>
+
+<table class="cols-3">
+<caption>表 7-1　队满的三种处理策略</caption>
+<tr><th>策略</th><th>做法</th><th>合适场景</th></tr>
+<tr><td>阻塞等待</td><td>生产者睡到有空位</td><td>普通业务线程，数据不能丢</td></tr>
+<tr><td>丢弃 + 计数</td><td>满了就丢，累加 <code>dropped</code></td><td><strong>RT / 高频采样</strong>：实时性优先，丢几帧可接受</td></tr>
+<tr><td>覆盖最旧</td><td>丢最早的一条，写最新的一条</td><td>只要"最新值"的场景（如状态快照、位姿）</td></tr>
+</table>
+
+<p><strong>本工程（AGV）的选择</strong>：RT 线程 1ms 一拍，产生的日志/位姿属于"高频、可容忍少量丢失"。因此选<strong>丢弃 + 计数</strong>：RT 线程用 <code>queue_try_push</code> 非阻塞入队，满了就丢并记 <code>dropped++</code>，<strong>绝不睡眠</strong>；工作线程用阻塞 <code>queue_pop</code> 慢慢消费。这样 RT 的抖动不再受消费者速度影响，丢了多少也能从计数看出来。</p>
+
+<div class="flow">
+<div class="row">
+  <div class="box"><b>RT 线程</b><span>1ms 节拍 · try_push</span></div>
+  <div class="arw">→ 非阻塞入队 →</div>
+  <div class="box hi"><b>有界环形队列</b><span>满则丢 + dropped++</span></div>
+  <div class="arw">→ 阻塞出队 →</div>
+  <div class="box"><b>工作线程</b><span>日志落盘 / 上报</span></div>
+</div>
+</div>
+
+<table class="cols-2">
+<caption>表 7-2　本工程的接口对照</caption>
+<tr><th>角色</th><th>调用</th></tr>
+<tr><td>RT 线程（生产者）</td><td><code>queue_try_push()</code>，替代 [CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L247) 与 [CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L309) 里的 <code>printf</code></td></tr>
+<tr><td>工作线程（消费者）</td><td><code>queue_pop()</code>，出队后真正打印/写文件/发网络</td></tr>
+<tr><td>关闭</td><td><code>queue_close()</code> 广播，工作线程收到 <code>-1</code> 后退出，主线程 <code>join</code></td></tr>
+</table>
+
+<div class="note"><strong>下一步</strong>：把本册的"队列"和下一个动作"工作线程的集合"合起来，就是<strong>线程池</strong>——见配套册《线程池 · 原理、实现与嵌入式落地》。</div>
+
+<div class="footnote">
+本册为「嵌入式 Linux 应用岗」学习系列之一，配套：队列与生产者-消费者（本册）、线程池、系统编程自测清单。<br>
+所有 <code>文件:行号</code> 指向本工程真实源码，可点击跳转核对。体例：先给结论，再补为什么。
+</div>
+
+</body>
+</html>

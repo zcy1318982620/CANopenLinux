@@ -27,9 +27,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+#include <errno.h>
 #include <math.h>
 #include "OD.h"
 #include "OD_2nd.h"
+#include "agv_log.h"
+
+/* ===================== 日志：统一分级 + 异步落盘 =====================
+ * 见 LOG_ERROR_HANDLING_print.html §2 与 AGV_ASYNC_LOG_IMPL_print.html。
+ * 日志通道封装在 agv_log 模块里(RT 只 vsnprintf + 非阻塞入队，工作线程落
+ * stdout)。这里只用宏：AGV_LOGD/I/W/E/F，自动带文件名+行号，并支持编译期
+ * 分级过滤。RT 侧丢弃计数用 agv_log_dropped() 读取。
+ */
 
 /* 迟到量超过该值(us)记一次 "over" */
 #define RT_JITTER_OVER_US     200u
@@ -141,7 +151,12 @@ CO_ReturnError_t app_programStart(uint16_t *bitRate,
         return CO_ERROR_OD_PARAMETERS;
     }
 
+    /* malloc 必须判 NULL，否则 *objR 直接段错误 */
     uint16_t *objR = (uint16_t*)malloc(sizeof(uint16_t));
+    if (objR == NULL) {
+        AGV_LOGF("malloc objR(RPDO 0x038A) 失败: %s", strerror(errno));
+        return CO_ERROR_OUT_OF_MEMORY;
+    }
     *objR = 0x038A;
     H6064_extentionR.object = objR;
     OD_extension_init(OD_ENTRY_H6064_positionActualValue, &H6064_extentionR);
@@ -172,6 +187,10 @@ CO_ReturnError_t app_programStart(uint16_t *bitRate,
     }
 
     uint16_t *objL = (uint16_t*)malloc(sizeof(uint16_t));
+    if (objL == NULL) {
+        AGV_LOGF("malloc objL(RPDO 0x038B) 失败: %s", strerror(errno));
+        return CO_ERROR_OUT_OF_MEMORY;
+    }
     *objL = 0x038B;
     H6064_extentionL.object = objL;
     OD_extension_init(OD_2nd_ENTRY_H6064_positionActualValue, &H6064_extentionL);
@@ -195,7 +214,8 @@ void app_communicationReset(CO_t *co) {
 
 /******************************************************************************/
 void app_programEnd() {
-
+    /* 日志生命周期(agv_log_init/agv_log_deinit)现由 main 统一管理：
+     * main 结尾还有收尾日志，此处若关日志会把它丢掉，故不再关闭。 */
 }
 
 
@@ -244,10 +264,10 @@ void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent) {
     total++;
 
     if (win_n >= RT_STAT_TICKS) {
-        printf("[RT] tick n=%u lat_avg=%u lat_min=%u lat_max=%u over%u=%u other=%u total=%u\n",
-               win_n, win_lat_sum / win_n, win_lat_min, win_lat_max,
-               RT_JITTER_OVER_US, win_over, win_other, total);
-        fflush(stdout);
+        AGV_LOGI("[RT] tick n=%u lat_avg=%u lat_min=%u lat_max=%u over%u=%u other=%u total=%u drop=%llu",
+                 win_n, win_lat_sum / win_n, win_lat_min, win_lat_max,
+                 RT_JITTER_OVER_US, win_over, win_other, total,
+                 (unsigned long long)agv_log_dropped());
 
         win_n = 0; win_lat_sum = 0; win_lat_min = UINT32_MAX;
         win_lat_max = 0; win_over = 0; win_other = 0;
@@ -302,13 +322,12 @@ void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent) {
     OD_RAM.x6FFF_agvOdometry[2] = (float32_t)odom_th;
     CO_UNLOCK_OD(co->CANmodule);
 
-    /* 每 1000 拍(≈1s)打印一次，避免 RT 线程终端 IO 拖垮实时性 */
+    /* 每 1000 拍(≈1s)记录一次，避免 RT 线程终端 IO 拖垮实时性 */
     static uint32_t odom_n;
     if (++odom_n >= 1000u) {
         odom_n = 0;
-        printf("[ODOM] x=%.3f y=%.3f th=%.1fdeg\n",
-               odom_x, odom_y, odom_th * 180.0 / ODOM_PI);
-        fflush(stdout);
+        AGV_LOGI("[ODOM] x=%.3f y=%.3f th=%.1fdeg",
+                 odom_x, odom_y, odom_th * 180.0 / ODOM_PI);
     }
 #if 0
     /* Simulation: detect change of state of the variable and trigger TPDO, to

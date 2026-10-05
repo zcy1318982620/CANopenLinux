@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>嵌入式 Linux 应用岗 · 系统编程自测清单（反向体检）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:24%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:38%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+
+.qa { margin:0 0 3.4mm; page-break-inside:avoid; }
+.qa .q { font-weight:700; font-size:10.5pt; padding:1.2mm 2.2mm; background:#f0f0f0; border-left:3.5pt solid #111; }
+.qa .q .n { display:inline-block; min-width:11mm; color:#555; }
+.qa .q .tag { font-size:7.6pt; font-weight:400; color:#666; margin-left:2.5mm; }
+.qa .a { margin:1.4mm 0 0 2.2mm; }
+.qa .a strong { color:#111; }
+.qa .self { margin:1.2mm 0 0 2.2mm; font-size:8.4pt; color:#555; letter-spacing:0.2pt; }
+.legend { font-size:9pt; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>嵌入式 Linux 应用岗 · 系统编程自测清单</h1>
+
+<div class="meta">
+<p><strong>文档定位</strong>：这是「反向体检」清单，不是教程。你已经学过正点原子的 Linux C 应用编程，API 覆盖面够了；本册用来<strong>找出你"会用但讲不清"的窟窿</strong>。</p>
+<p><strong>回答体例</strong>：每题先给<strong>加粗的一句话结论</strong>，再补"为什么 / 展开"。带 <code>文件:行号</code> 的可点开源码核对，是本工程里真实用到的点。</p>
+<p><strong>用法（重要）</strong>：<strong>先盖住答案，自己讲一遍，再对照。</strong>讲不顺就打勾。全部过完后看文末的结论表，决定后面补什么。</p>
+<p><strong>自评标记</strong>：<span class="legend">□ 能讲清（能脱稿说 1 分钟）　□ 模糊（记得但说不全）　□ 不会（没印象）</span></p>
+</div>
+
+<h2>§1 进程与线程</h2>
+
+<div class="qa">
+<div class="q"><span class="n">Q1</span>进程和线程的本质区别？</div>
+<div class="a"><strong>进程是资源分配的基本单位，线程是 CPU 调度的基本单位。</strong>进程有独立地址空间；线程共享所属进程的地址空间（代码段、数据段、堆、文件描述符），但各有独立栈和寄存器。线程切换不用换页表，比进程切换轻。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q2</span><code>fork</code> 之后父子进程的内存是什么关系？什么是写时复制（COW）？</div>
+<div class="a"><strong>不立即复制，靠写时复制：先共享、写时才拷。</strong><code>fork</code> 时父子共享同一批物理页并标记只读，任一方写入会触发缺页异常，内核才复制那一页。所以 <code>fork</code> 很快，子进程改自己的变量不影响父进程。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q3</span><code>fork</code> / <code>vfork</code> / <code>exec</code> 的区别？</div>
+<div class="a"><strong>fork 是复制，vfork 是共享且阻塞父进程，exec 是替换。</strong><code>fork</code> 复制地址空间（COW）；<code>vfork</code> 与父进程共享地址空间且父进程挂起，子进程几乎立刻 <code>exec</code> 时用（现已少见）；<code>exec</code> 不创建新进程，只把当前进程映像整体换掉。<strong>fork + exec 是启动新程序的标准组合</strong>，shell 就是这么干的。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q4</span><code>wait</code> / <code>waitpid</code> 干什么用？不调用会怎样？</div>
+<div class="a"><strong>回收子进程的退出状态和内核资源（PCB）。</strong>子进程先退出而父进程不回收，它就变成<strong>僵尸进程</strong>，一直占着 PCB。若父进程先退出，子进程被 <code>init(1)</code> 收养。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q5</span>僵尸进程和孤儿进程的区别？</div>
+<div class="a"><strong>僵尸是"死了没人收"，孤儿是"父先死了"。</strong>僵尸：子进程已退出但父进程没 <code>wait</code>，仍占 PCB，有害；孤儿：父进程先退出，子进程被 <code>init</code> 收养，反而能被正常回收。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q6</span>什么是守护进程？创建一个 daemon 的步骤？</div>
+<div class="a"><strong>脱离终端、后台长期运行、独立于控制终端的进程。</strong>步骤：<code>fork</code> 后父进程退出 → <code>setsid()</code> 建立新会话脱离控制终端 → 可选再 <code>fork</code> 使自身不是会话首进程 → <code>chdir("/")</code> → 把 stdin/stdout/stderr 重定向到 <code>/dev/null</code>。本工程的 <code>canopend</code> 就常以服务方式长期运行。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q7</span>条件变量为什么必须用 <code>while</code> 而不是 <code>if</code> 包住 <code>pthread_cond_wait</code>？</div>
+<div class="a"><strong>防"虚假唤醒"和"唤醒后条件已被抢走"。</strong>被唤醒不等于条件一定成立：可能被虚假唤醒，也可能条件刚被别人改回去。必须重新检查条件，<code>while</code> 保证只有条件真成立才往下走。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q8</span>什么是竞态条件？怎么避免？</div>
+<div class="a"><strong>多个执行流非原子地访问共享数据，结果依赖调度顺序。</strong>避免手段：加锁（互斥量/自旋锁）、原子操作、把共享范围降到最小、用消息传递替代共享内存。本工程位姿是"RT 线程写、主线程读"，所以用 <code>CO_LOCK_OD</code> 保护。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q9</span>死锁的四个必要条件？怎么避免？</div>
+<div class="a"><strong>互斥、持有并等待、不可剥夺、循环等待——破坏任意一条即可。</strong>固定加锁顺序（破循环等待）、<code>trylock</code> 加超时（破不可剥夺）、一次性申请全部锁（破持有并等待）、减少锁粒度。本工程主线程与 RT 线程共用 OD 锁，靠"单一加锁点"避免死锁。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q10</span>互斥锁、自旋锁、读写锁、信号量分别用在什么场景？</div>
+<div class="a"><strong>看"能不能睡"和"读多还是写多"。</strong>互斥锁：临界区可能阻塞/睡眠时用（会睡眠）；自旋锁：临界区极短且<strong>不可睡眠</strong>（如中断上下文），忙等；读写锁：<strong>读多写少</strong>，允许多读单写；信号量：<strong>计数型</strong>，能控制并发数量（不止 0/1），可用于线程也可用于进程。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<h2 class="pgbreak">§2 进程间通信（IPC）</h2>
+
+<div class="qa">
+<div class="q"><span class="n">Q11</span>进程间通信有哪几种？各适合什么场景？</div>
+<div class="a"><strong>管道/FIFO、消息队列、共享内存、信号量、信号、socket 六类。</strong>管道/FIFO：简单字节流；消息队列：有边界的结构化消息、可按类型收；共享内存：<strong>最快</strong>，适合大数据，但要自己同步；信号量：同步互斥，常配共享内存；信号：异步事件通知；socket：本机或跨主机通用。本工程用 SocketCAN 走的就是 socket 这条路。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q12</span>管道（pipe）和命名管道（FIFO）的区别？</div>
+<div class="a"><strong>匿名管道只能亲缘进程用，FIFO 有文件名、任意进程可用。</strong><code>pipe</code> 靠 <code>fork</code> 继承 fd，无名字；FIFO 是文件系统里的一个路径，无亲缘关系的进程也能 <code>open</code> 来通信。二者都是半双工字节流。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q13</span>共享内存为什么最快？为什么必须配信号量？</div>
+<div class="a"><strong>因为它免去了内核与用户之间的数据拷贝。</strong>共享内存把同一块物理内存映射进多个进程的地址空间，读写<strong>不经过内核拷贝</strong>，所以最快。但内核只提供内存、<strong>不提供任何同步</strong>，多进程同时读写会乱，必须用信号量/互斥锁保护。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q14</span>System V IPC 和 POSIX IPC 的区别？</div>
+<div class="a"><strong>功能对应，接口风格不同。</strong>System V：<code>shmget/semget/msgget</code>，用 key 换 id；POSIX：<code>shm_open/mq_open/sem_open</code>，用"名字"（路径风格），更像文件 API，更现代、更推荐。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q15</span>消息队列和管道（字节流）的区别？</div>
+<div class="a"><strong>消息队列有"消息边界"和类型，管道没有边界。</strong>消息队列按条收发（<code>msgrcv</code> 还能按 type 选择性接收），天然适合结构化消息；管道是纯字节流，发两次可能粘成一次读出来，也没有类型。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q16</span>信号（signal）和信号量（semaphore）是一回事吗？</div>
+<div class="a"><strong>不是，一个是"通知"，一个是"同步"。</strong>信号是<strong>异步事件通知</strong>机制（<code>kill</code> 发送、<code>sigaction</code> 注册处理函数，如 SIGINT/SIGTERM）；信号量是<strong>同步原语</strong>（P/V 操作），用于互斥和计数。名字像，作用完全不同。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q17</span>要把"RT 线程算出的位姿"给另一个进程，该用什么？</div>
+<div class="a"><strong>共享内存 + 信号量。</strong>位姿需要高频、低延迟读取，共享内存避免了数据拷贝，最快；再用信号量保证读到的是完整的一帧。本工程位姿目前还在同进程内（<code>0x6FFF</code> 数组），若拆成两个进程就该这么做。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<h2>§3 网络编程</h2>
+
+<div class="qa">
+<div class="q"><span class="n">Q18</span>TCP 三次握手、四次挥手的过程？为什么挥手要四次？</div>
+<div class="a"><strong>握手三次（SYN / SYN+ACK / ACK），挥手四次（FIN / ACK / FIN / ACK）。</strong>握手是为了双方确认收发能力并同步序号。挥手之所以四次，是因为 TCP <strong>全双工</strong>——一方说"我没数据发了"，另一方可能还有数据要发，所以"关"要分两个方向各关一次。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q19</span>为什么必须有 TIME_WAIT？持续多久？</div>
+<div class="a"><strong>一是保证最后的 ACK 能送达，二是让旧报文消散。</strong>若最后那个 ACK 丢了，对方会重发 FIN，必须有端口能响应；同时等旧连接的报文在网络里死光，避免被新连接错收。时长约为 <strong>2MSL</strong>（报文最大生存期的两倍）。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q20</span>什么是粘包 / 拆包？怎么解决？</div>
+<div class="a"><strong>TCP 是字节流、没有消息边界，多次 send 会被合并、一次 send 会被拆开。</strong>解决办法：<strong>长度前缀</strong>（先发 4 字节表示长度，再发内容，最稳）、定长消息、或分隔符（如 <code>\r\n</code>）。本工程 HMI 若把 CiA-309 换成自定义 TCP 协议，就用长度前缀。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q21</span>TCP 和 UDP 的区别？各自适用场景？</div>
+<div class="a"><strong>TCP 面向连接、可靠有序；UDP 无连接、不可靠、开销小、延迟低。</strong>TCP 适合文件传输、命令下发、HTTP；UDP 适合实时音视频、广播、心跳、能容忍少量丢包的场景。本工程 CAN 上的 PDO 更像"UDP 思路"（周期广播、无应答），SDO 更像"TCP 思路"（点对点、有应答）。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q22</span><code>select</code> / <code>poll</code> / <code>epoll</code> 的区别？epoll 好在哪？</div>
+<div class="a"><strong>epoll 把"遍历"换成"只返回就绪的"，适合大量连接。</strong><code>select</code> 用位图、有 1024 上限、每次调用都要把集合拷进内核并全量轮询 O(n)；<code>poll</code> 用数组去掉了上限但仍是 O(n) 全量轮询；<code>epoll</code> 在内核维护红黑树 + 就绪链表，只返回就绪 fd，接近 O(就绪数)。本工程 <code>CO_epoll_wait</code> 同时等 CAN 和网关，见 [CO_epoll_interface.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c)。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q23</span>epoll 的水平触发（LT）和边缘触发（ET）的区别？</div>
+<div class="a"><strong>LT 是"还有数据就一直通知"，ET 是"只在状态变化那一刻通知一次"。</strong>LT 编程简单、不易丢数据、可用阻塞 fd；ET 必须一次读到 <code>EAGAIN</code>（读空），否则剩余数据不再通知，且<strong>必须用非阻塞 fd</strong>，效率更高。本工程用默认的 LT。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q24</span>服务器为什么通常要设 <code>SO_REUSEADDR</code>？</div>
+<div class="a"><strong>为了快速重启时能立刻重新绑定端口。</strong>否则端口处于 TIME_WAIT 期间无法 <code>bind</code>/<code>listen</code>，得等约 2MSL，服务器重启会"地址被占用"。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q25</span>TCP 三次握手能不能改成两次？</div>
+<div class="a"><strong>不能，两次无法可靠确认双方收发能力。</strong>缺了最后一次 ACK，被动方无法确认"自己的接收能力"和"对方确实收到了我的 SYN+ACK"都正常；还可能因网络里滞留的旧 SYN 建立错误连接。三次是最小可靠次数。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<h2 class="pgbreak">§4 IO 模型与内存</h2>
+
+<div class="qa">
+<div class="q"><span class="n">Q26</span>Linux 有哪五种 IO 模型？</div>
+<div class="a"><strong>阻塞、非阻塞、IO 多路复用、信号驱动、异步 IO。</strong>前四种都算<strong>同步 IO</strong>（真正的"内核→用户"数据拷贝阶段仍要程序自己做），只有异步 IO（AIO）是内核全程代劳、完成才通知。epoll 属于"IO 多路复用"。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q27</span>"阻塞/非阻塞"和"同步/异步"是一回事吗？</div>
+<div class="a"><strong>不是。阻塞/非阻塞看"调用是否立即返回"，同步/异步看"数据拷贝谁来做"。</strong>阻塞与否由 fd 的 <code>O_NONBLOCK</code> 决定；同步意味着数据从内核拷到用户缓冲还得用户自己 <code>read</code> 触发。所以 <code>epoll</code> 是同步的，AIO 才是异步的。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q28</span>虚拟内存是什么？为什么需要它？</div>
+<div class="a"><strong>每个进程一套独立虚拟地址空间，由 MMU 映射到物理内存。</strong>好处：进程隔离（互不踩内存）、可运行超过物理内存的程序（换页）、内存保护、共享（共享库 / COW）。这也是"进程比线程重"的根源。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q29</span><code>malloc</code> 和 <code>mmap</code> 是什么关系？内存泄漏的本质是什么？</div>
+<div class="a"><strong>malloc 是用户态分配器，大块内存底层直接用 mmap。</strong>小块从堆（<code>brk</code> 扩展）分配，大块（glibc 通常 ≥128KB）直接 <code>mmap</code> 一块匿名内存；<code>free</code> 后大块会 <code>munmap</code> 归还。<strong>内存泄漏的本质就是 malloc 之后没有 free</strong>，进程存活期间这块内存再也回不去。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<h2>§5 工具链与调试</h2>
+
+<div class="qa">
+<div class="q"><span class="n">Q30</span>程序出现段错误（Segmentation fault），你怎么定位？</div>
+<div class="a"><strong>开 core dump，用 gdb 看调用栈。</strong>① 编译加 <code>-g</code>；② <code>ulimit -c unlimited</code> 打开 core；③ <code>gdb ./prog core</code>，<code>bt</code> 看栈、<code>frame N</code> 切帧、<code>print</code> 看变量；④ 或直接 <code>gdb run</code> 复现。常见原因：空指针、数组越界、use-after-free、栈溢出。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q31</span>valgrind 能查什么？怎么用？</div>
+<div class="a"><strong>查内存泄漏、越界、使用未初始化内存、use-after-free。</strong>用法：<code>valgrind --leak-check=full --track-origins=yes ./prog</code>。代价是慢（10~30 倍），适合在测试阶段跑，不适合上线。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q32</span>strace 是干什么的？什么时候用？</div>
+<div class="a"><strong>跟踪进程的系统调用和信号，看程序到底在向内核要什么。</strong>用法：<code>strace ./prog</code>、<code>strace -p PID</code>、<code>strace -e trace=open,read</code>。排查"卡在哪一步""系统调用返回了什么错误码"最有用——比如本工程真机上 <code>EPOLL</code> 报 <code>EOPNOTSUPP(95)</code> 就靠它发现。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q33</span>程序从源码到可执行经历了哪几步？</div>
+<div class="a"><strong>预处理 → 编译 → 汇编 → 链接。</strong><code>cpp</code> 展开宏和头文件，<code>cc1</code> 生成汇编，<code>as</code> 生成目标文件 <code>.o</code>，<code>ld</code> 合并目标文件和库生成可执行。理解这条链能解释大部分报错：<strong>编译错误 = 语法/头文件问题，链接错误 = 库或符号找不到</strong>。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<div class="qa">
+<div class="q"><span class="n">Q34</span>CMake 相比手写 Makefile 的优势？</div>
+<div class="a"><strong>跨平台、自动依赖分析、target 语义更清晰。</strong>CMake 能生成 Makefile / Ninja / VS 工程，自动分析头文件依赖，大工程几乎都用它；手写规则繁琐易错。本工程现在还是 [Makefile](file:///home/zcy/Project/panasonic_canopen_agv/Makefile)，改 CMake 正好是一次实战。</div>
+<div class="self">自评：□ 能讲清　□ 模糊　□ 不会</div>
+</div>
+
+<h2 class="pgbreak">§6 自检结果怎么用</h2>
+
+<table class="cols-2">
+<caption>按"打勾情况"决定后面补什么</caption>
+<thead><tr><th>自检结果</th><th>说明与行动</th></tr></thead>
+<tbody>
+<tr><td><strong>大部分"能讲清"</strong></td><td>API 与原理都过关。直接跳过"补深度"，进入<strong>把 API 练成设计</strong>（线程池 / 自定义协议 / 日志错误处理）。</td></tr>
+<tr><td><strong>多个"模糊"</strong></td><td>正常，属于"记得但说不全"。挑<b>模糊项</b>回查 man 手册 + 《TLPI》对应章节，各写一个最小 demo 跑通即可。</td></tr>
+<tr><td><strong>出现"不会"</strong></td><td>这是真空洞。优先补：<b>§1 并发（锁/条件变量/死锁）</b>和 <b>§3 网络（TCP 状态机/粘包/epoll）</b>——这两块是应用岗笔试面试的重灾区。</td></tr>
+<tr><td><strong>全部不会</strong></td><td>说明正点原子那遍"只敲了 API 没理解原理"。按下表顺序重过一遍，每节配一个 demo。</td></tr>
+</tbody>
+</table>
+
+<table class="cols-3">
+<caption>本章五节 → 对应学习动作</caption>
+<thead><tr><th>章节</th><th>核心考点</th><th>配的动手练习（用本工程）</th></tr></thead>
+<tbody>
+<tr><td>§1 进程与线程</td><td>fork/COW、僵尸孤儿、条件变量、死锁</td><td>写一个有界队列 + 线程池消费 CAN 帧</td></tr>
+<tr><td>§2 IPC</td><td>共享内存+信号量、消息队列 vs 管道</td><td>把里程计位姿放进共享内存，另一进程读</td></tr>
+<tr><td>§3 网络</td><td>TCP 状态机、TIME_WAIT、粘包、epoll LT/ET</td><td>HMI 从 CiA-309 改成自定义 TCP（长度前缀）</td></tr>
+<tr><td>§4 IO 与内存</td><td>五种 IO 模型、虚拟内存、malloc/mmap</td><td>对比阻塞 / 非阻塞 / epoll 三种收帧写法</td></tr>
+<tr><td>§5 工具链</td><td>gdb core、valgrind、strace、编译链</td><td>故意造段错误/泄漏，用 gdb + valgrind 定位</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>判断标准</strong>：<strong>能跟着教程敲出来 = 会 API；能在自己项目里设计出来 = 会工程；能用嘴讲清原理 = 能过面试。</strong>本册只测最后一项。
+</div>
+
+<div class="footnote">
+参考：正点原子《Linux C 应用编程》覆盖面 + 《Linux/UNIX 系统编程手册》(TLPI) + 一线应用岗(J)常见笔试面试点。本册为"反向体检"，不替代系统学习。
+</div>
+
+</body>
+</html>

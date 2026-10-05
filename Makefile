@@ -43,7 +43,10 @@ SOURCES = \
 	$(APPL_SRC)/OD.c \
 	$(APPL_SRC)/OD_2nd.c \
 	$(DRV_SRC)/CO_main_basic.c \
-	$(DRV_SRC)/CO_application.c
+	$(DRV_SRC)/CO_application.c \
+	$(DRV_SRC)/agv_queue.c \
+	$(DRV_SRC)/agv_pool.c \
+	$(DRV_SRC)/agv_log.c
 
 
 OBJS = $(SOURCES:%.c=%.o)

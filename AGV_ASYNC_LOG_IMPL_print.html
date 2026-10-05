@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AGV 异步日志改造 · 代码梳理（精简版）</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1a1a1a; line-height: 1.6; font-size: 13px;
+    max-width: 190mm; margin: 0 auto; padding: 8mm 4mm;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; padding-bottom: 4px;
+       border-bottom: 2px solid #0FDC78; color: #004D26; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #004D26; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+    background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  }
+  a { color: #004D26; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+  th, td { border: 1px solid #d7dbdf; padding: 6px 8px; text-align: left;
+           vertical-align: top; font-size: 12.5px; }
+  th { background: #E5FFF2; color: #004D26; font-weight: 600; }
+  pre.code {
+    background: #f8f9fa; border: 1px solid #e3e5e8; border-left: 3px solid #0FDC78;
+    padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    line-height: 1.5; margin: 8px 0;
+  }
+  .note {
+    background: #FFF7E5; border-left: 3px solid #f0a020;
+    padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px;
+  }
+  .flow { margin: 12px 0; }
+  .flow .row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .flow .box {
+    border: 1px solid #b9c0c6; border-radius: 6px; padding: 6px 10px;
+    font-size: 12px; background: #fff; white-space: nowrap;
+  }
+  .flow .box.hi { background: #E5FFF2; border-color: #0FDC78; color: #004D26; font-weight: 600; }
+  .flow .arw { color: #0FDC78; font-weight: 700; }
+  .pgbreak { page-break-before: always; }
+  .footnote { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e3e5e8;
+              color: #888; font-size: 11.5px; }
+  .toolbar { margin: 10px 0; }
+  .toolbar button {
+    background: #0FDC78; color: #004D26; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  @media print { .toolbar { display: none; } }
+</style>
+</head>
+<body>
+
+<h1>AGV 异步日志改造 · 代码梳理（精简）</h1>
+<div class="meta">工程：panasonic_canopen_agv ｜ 主题：RT 线程 printf → 有界队列 + 工作线程池</div>
+
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h2>§1 改了哪里（一句话）</h2>
+<p>RT 线程（1ms 节拍）原来直接 <code>printf + fflush</code>，终端 IO 会拖慢节拍。现在 RT 里只做「格式化 + 非阻塞入队」，真正的写终端交给 2 个工作线程。</p>
+<div class="flow">
+  <div class="row">
+    <span class="box">改前：RT 线程</span>
+    <span class="arw">→</span>
+    <span class="box">printf / fflush（阻塞写终端）</span>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <span class="box">改后：RT 线程</span>
+    <span class="arw">→</span>
+    <span class="box hi">有界环形队列 cap=256</span>
+    <span class="arw">→</span>
+    <span class="box">工作线程池 ×2</span>
+    <span class="arw">→</span>
+    <span class="box">stdout</span>
+  </div>
+</div>
+
+<h2>§2 新增/改动的文件</h2>
+<table>
+  <tr><th>文件</th><th>角色</th></tr>
+  <tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h"><code>agv_queue.h</code></a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c"><code>agv_queue.c</code></a></td><td>有界环形队列：非阻塞入队 + 阻塞出队 + 丢弃计数</td></tr>
+  <tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_pool.h"><code>agv_pool.h</code></a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_pool.c"><code>agv_pool.c</code></a></td><td>工作线程池：N 个常驻消费者循环 pop 队列</td></tr>
+  <tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c"><code>CO_application.c</code></a></td><td>接线：启动/停止队列与线程池，RT 侧改调 <code>agv_log_rt()</code></td></tr>
+  <tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/Makefile"><code>Makefile</code></a></td><td>把 <code>agv_queue.c</code> / <code>agv_pool.c</code> 加进编译单元</td></tr>
+</table>
+
+<h2>§3 数据结构</h2>
+<h3>agv_logrec_t（一条日志，接口文件 <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L29-L33">agv_queue.h:29</a>）</h3>
+<table>
+  <tr><th>字段</th><th>含义</th></tr>
+  <tr><td><code>ts_us</code></td><td>时间戳（CLOCK_MONOTONIC，微秒）</td></tr>
+  <tr><td><code>level</code></td><td>0=INFO 1=WARN 2=ERR</td></tr>
+  <tr><td><code>text[160]</code></td><td>格式化后的文本</td></tr>
+</table>
+
+<h3>agv_queue_t（队列，<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L35-L48">agv_queue.h:35</a>）</h3>
+<table>
+  <tr><th>字段</th><th>含义</th></tr>
+  <tr><td><code>buf / cap</code></td><td>环形数组与容量；cap 恒为 2 的幂</td></tr>
+  <tr><td><code>head / tail / count</code></td><td>出队下标 / 入队下标 / 当前元素数</td></tr>
+  <tr><td><code>closed</code></td><td>1=已关闭，消费者取空后退出</td></tr>
+  <tr><td><code>lock / not_empty</code></td><td>互斥锁 / 非空条件变量</td></tr>
+  <tr><td><code>pushed / dropped</code></td><td>原子计数：累计入队数 / 累计丢弃数</td></tr>
+</table>
+
+<h2>§4 agv_queue：每个函数做什么</h2>
+<table>
+  <tr><th>函数</th><th>做什么</th><th>传参</th><th>返回</th></tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L10-L47"><code>agv_queue_init</code></a></td>
+    <td>把 cap 向上取整到 2 的幂，分配环形数组，初始化锁与条件变量，计数清零</td>
+    <td><code>q</code> 队列指针；<code>cap</code> 期望容量（&lt;2 非法）</td>
+    <td>0 成功；-1 失败</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L49-L58"><code>agv_queue_destroy</code></a></td>
+    <td>销毁条件变量、锁，释放数组</td>
+    <td><code>q</code></td>
+    <td>无</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L60-L87"><code>agv_queue_try_push</code></a></td>
+    <td><b>非阻塞入队（RT 专用）</b>：<code>trylock</code> 拿不到锁 / 队列满 / 已关闭 → 丢弃并 <code>dropped++</code>；成功则写入并 <code>signal</code></td>
+    <td><code>q</code>；<code>rec</code> 待入队记录</td>
+    <td>0 成功；-1 丢弃</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L89-L109"><code>agv_queue_pop</code></a></td>
+    <td><b>阻塞出队（工作线程专用）</b>：空则 <code>cond_wait</code>；关闭且取空返回 -1 让消费者退出</td>
+    <td><code>q</code>；<code>out</code> 输出缓冲</td>
+    <td>0 取到；-1 已关闭且空</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L111-L120"><code>agv_queue_close</code></a></td>
+    <td>置 <code>closed=1</code> 并 <code>broadcast</code> 唤醒全部消费者</td>
+    <td><code>q</code></td>
+    <td>无</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L122-L128"><code>agv_queue_dropped</code></a></td>
+    <td>读取累计丢弃数（原子读，RT 可无锁调用）</td>
+    <td><code>q</code></td>
+    <td>当前丢弃计数</td>
+  </tr>
+</table>
+
+<h2>§5 agv_pool：每个函数做什么</h2>
+<table>
+  <tr><th>函数</th><th>做什么</th><th>传参</th><th>返回</th></tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_pool.c#L18-L27"><code>agv_worker</code></a>（static）</td>
+    <td>worker 主体：循环 <code>agv_queue_pop</code>，每条记录调一次 <code>handler</code></td>
+    <td><code>arg</code> = 池指针</td>
+    <td>NULL（线程退出值）</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_pool.c#L29-L65"><code>agv_pool_create</code></a></td>
+    <td>分配池对象，创建 N 个 worker 线程；任一创建失败则回滚（close + join 已建线程 + 释放）</td>
+    <td><code>nthreads</code> 线程数；<code>q</code> 共享队列；<code>handler</code> 处理回调；<code>user</code> 透传参数</td>
+    <td>池对象指针；失败 NULL</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_pool.c#L67-L81"><code>agv_pool_destroy</code></a></td>
+    <td>优雅关闭：先 <code>agv_queue_close</code>（唤醒）→ 再 <code>pthread_join</code> 全部 worker → 释放</td>
+    <td><code>p</code> 池指针</td>
+    <td>无</td>
+  </tr>
+</table>
+<div class="note"><b>顺序铁律：</b>必须先 <code>close</code> 再 <code>join</code>。worker 此刻正阻塞在 <code>cond_wait</code>，不 close 就 join 会永久卡死。</div>
+
+<h2>§6 CO_application.c 的接线</h2>
+<table>
+  <tr><th>函数 / 位置</th><th>作用</th></tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L50-L56"><code>agv_log_to_stdout(rec, user)</code></a></td>
+    <td>工作线程里的处理回调：<code>fputs + fputc + fflush</code> 写 stdout，与改造前输出一致</td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L59-L78"><code>agv_log_rt(level, fmt, ...)</code></a></td>
+    <td>RT 专用：取时间戳 → <code>vsnprintf</code> 格式化 → <code>agv_queue_try_push</code> 入队。<b>全程不睡眠</b></td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L225-L234"><code>app_programStart</code></a></td>
+    <td>启动：<code>agv_queue_init(&amp;g_logq,256)</code> → <code>agv_pool_create(2, …)</code> → <code>g_log_ready=1</code></td>
+  </tr>
+  <tr>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L254-L265"><code>app_programEnd</code></a></td>
+    <td>停止：先 <code>agv_pool_destroy</code> 再 <code>agv_queue_destroy</code>（此时 RT 线程已被 join，无生产者）</td>
+  </tr>
+</table>
+<p>RT 拍里原来的 <code>printf</code> 改成 <code>agv_log_rt("...")</code>，输出里带 <code>drop=N</code> 便于观测丢弃数。</p>
+
+<h2>§7 整个队列/线程池怎么跑起来</h2>
+<div class="flow">
+  <div class="row"><span class="box">① RT 拍触发</span><span class="arw">→</span><span class="box">② agv_log_rt 格式化</span><span class="arw">→</span><span class="box hi">③ try_push 入队</span></div>
+  <div class="row" style="margin-top:6px;"><span class="arw" style="margin-left:24px;">↓ signal</span></div>
+  <div class="row" style="margin-top:6px;"><span class="box">④ 某 worker 从 cond_wait 醒来</span><span class="arw">→</span><span class="box">⑤ pop 取出记录</span><span class="arw">→</span><span class="box">⑥ handler 写 stdout</span></div>
+</div>
+<ul>
+  <li><b>正常路径：</b>RT 入队成功 → 队列 <code>signal</code> → 2 个 worker 抢锁依次取走 → 各写各的 stdout。RT 全程不等 IO。</li>
+  <li><b>队列满 / 锁被占：</b><code>try_push</code> 直接丢弃并 <code>dropped++</code>，RT 不阻塞，日志里 <code>drop=N</code> 随之增长。</li>
+  <li><b>关闭时序：</b>主线程先 join RT（生产者停）→ <code>agv_pool_destroy</code> 内部 <code>close</code> 唤醒 worker → worker 取空后 <code>pop</code> 返回 -1 退出 → join 全部 → 释放队列。</li>
+</ul>
+
+<h2>§8 几个容易踩的点</h2>
+<ul>
+  <li><code>trylock</code> 语义：拿不到锁就当失败丢弃，这是"宁可丢日志也不拖节拍"的取舍。</li>
+  <li><code>while (count==0 &amp;&amp; !closed) cond_wait</code>：用 <code>while</code> 防虚假唤醒，不能写 <code>if</code>。</li>
+  <li>容量取 2 的幂，<code>(tail+1) &amp; (cap-1)</code> 代替 <code>% cap</code>，省一次除法。</li>
+  <li><code>pushed / dropped</code> 用 C11 <code>_Atomic</code>，RT 侧只做 <code>atomic_fetch_add</code>，读侧 <code>atomic_load</code>，不上锁。</li>
+  <li><b>销毁顺序不能反：</b>先 <code>close</code>（broadcast）再 <code>join</code>。</li>
+</ul>
+
+<div class="footnote">
+  精简梳理 · 配套详版见 CONCURRENCY_QUEUE_PRODUCER_CONSUMER_print.html 与 CONCURRENCY_THREADPOOL_print.html。
+</div>
+
+</body>
+</html>
