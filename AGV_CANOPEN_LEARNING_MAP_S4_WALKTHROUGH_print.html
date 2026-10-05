@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 4 站 · PDO 映射 &amp; CiA402（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:17%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:23%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:22%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.cols-5 th:nth-child(1),.cols-5 td:nth-child(1){width:18%}
+.cols-5 th:nth-child(2),.cols-5 td:nth-child(2){width:22%}
+.cols-5 th:nth-child(3),.cols-5 td:nth-child(3){width:20%}
+.cols-5 th:nth-child(4),.cols-5 td:nth-child(4){width:10%}
+.cols-5 th:nth-child(5),.cols-5 td:nth-child(5){width:30%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 4 站 · PDO 映射 &amp; CiA402 —— 运行时的数据怎么跑</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode V4 的 CANopen 从站（Linux 用户态 + SocketCAN，进程名 <code>canopend</code>）。双对象字典：<code>OD</code>（右电机）/ <code>OD_2nd</code>（左电机）。</p>
+<p><strong>本篇定位：</strong>第 4 站 = <strong>全工程的心脏</strong>。讲两件事——<strong>① PDO 这套「周期性数据通道」是怎么配出来、怎么用的；② CiA402 这套「伺服驱动的标准语言」是什么</strong>。读懂本册，终端里那两行 <code>posR = …</code> / <code>posL = …</code> 就彻底通了。</p>
+<p><strong>怎么读：</strong>本册<strong>以模块为单位</strong>，每个模块只回答：<span class="star">干什么 → 传什么参数（参数含义）→ 返回什么 → 被谁调用 → 它调用了谁</span>。变量<strong>在出现的地方就地说明</strong>。重点看<strong>流程图</strong>和各模块怎么接起来。</p>
+<p><strong>标记：</strong><span class="star">★★★</span> 必会 / <span class="star">★★</span> 重要 / <span class="star">★</span> 知道即可。行号格式 <code>文件:行号</code>。灰框=补充，红框=坑。</p>
+</div>
+
+<h2>0. 一页地图：第 4 站也只有两条链</h2>
+
+<p>先给一句话结论：<strong>PDO 是「运行时的数据通道」——它不像 SDO 那样一问一答，而是周期性地、一帧把好几个数据打包送出去/收进来。快，但代价是：只能传「提前配置好映射关系」的那几个对象</strong>。所以第 4 站的全部内容，就是「<strong>配置</strong>怎么把这些数据绑上通道」+「<strong>运行</strong>时帧怎么变成应用里的值」。</p>
+
+<pre>第 4 站 全部内容
+
+链 A  配置链 —— 开机时把 0x38A / 0x38B 这两条「数据管道」铺好（静态，配完就不动了）
+   app_programStart()          写 OD：用哪条 CAN 帧、装哪几个对象、每项多少位
+        │                     挂钩子：0x6064 被写时打印
+        ▼
+   CO_CANopenInitPDO()         对每个 PDO 调一次初始化
+        ▼
+   CO_RPDO_init()              解析映射 → 注册「收这个 CAN-ID」 → 把配置对象也挂上钩子
+        │
+        ├─ PDO_initMapping / PDOconfigMap()   读映射项，找出「装的是哪几个 OD 对象」
+        └─ CO_CANrxBufferInit()               告诉驱动：收到 0x38A/0x38B 就交给我
+   一句话：输入一张「配置表」，输出一条「能收数据的管道」。
+
+链 B  运行链 —— 每来一帧，就把里面的数写进 OD（动态，收到帧才动）
+   CAN 帧到达 ─▶ CO_PDO_receive()  「收下 + 举手（置标志）」
+                        │
+                        ▼
+              RT 线程 CO_epoll_processRT() ─▶ CO_process_RPDO()
+                        │
+                        ▼
+              CO_RPDO_process()   把帧里的数按映射顺序写进各 OD 对象
+                        │
+                        ▼
+              写 0x6064 时命中应用钩子 H6064_write() ─▶ printf("posR = …" / "posL = …")
+   一句话：输入一帧 CAN，输出两行打印。
+
+   ★ 一句话记住本项目：右电机收 0x38A、左电机收 0x38B；每帧 = 0x6041(状态字) + 0x6064(实际位置)。
+     本工程「一发都不发」TPDO，只收。应用层目前做的全部事情，就是把收到的位置打印出来。
+</pre>
+
+<div class="note">
+<strong>为什么 PDO 要单独一站、还说是「心脏」？</strong>因为 AGV 真正跑起来靠的是<strong>每秒成百上千次的位置/速度交换</strong>，这必须是 PDO 这种「快通道」；SDO 那种一问一答只配用来改参数。第 3 站讲了「数据放在 OD 里、SDO 怎么按索引读写」；本站讲「PDO 怎么把这些 OD 里的数据批量、周期地运起来」。后面第 7 站里程计要拿的左右轮位置，就是从这条链上来的。
+</div>
+
+<h2 class="pgbreak">1. PDO 是什么：运行时的「数据高速公路」</h2>
+
+<h3>1.1 一句话原理</h3>
+<p>PDO = Process Data Object，<strong>过程数据对象</strong>。它的设计目标只有一个：<strong>快</strong>。为了快，它放弃了 SDO 的灵活性——<strong>帧里不带索引、不带子索引，只有「裸数据」</strong>。那接收方怎么知道每个字节是什么？靠<strong>开机时双方约定好的「映射表」</strong>：这条帧按固定顺序装哪几个对象、每项占多少位，事先写进 OD 的 PDO 配置对象里。运行时只发裸数据，靠位置对应关系还原。</p>
+<p>一句话对比记忆：<strong>SDO = 带门牌的快递（慢但送哪都行）；PDO = 定好格子的流水线（快但只能装约定的东西）。</strong></p>
+
+<h3>1.2 两个方向：RPDO 与 TPDO</h3>
+<table class="cols-3">
+<caption>表 1-1　PDO 的两个方向（站在「本节点」角度）</caption>
+<thead><tr><th>名字</th><th>方向</th><th>含义与配置对象</th></tr></thead>
+<tbody>
+<tr><td><strong>RPDO</strong><br>Receive PDO</td><td>别人 → 我</td><td>我<strong>接收</strong>的帧。谁来发？主站/另一个节点。配置对象在 <code>0x1400~0x1403</code>（通信参数）与 <code>0x1600~0x1603</code>（映射参数）。<span class="star">本项目用的就是 RPDO。</span></td></tr>
+<tr><td><strong>TPDO</strong><br>Transmit PDO</td><td>我 → 别人</td><td>我<strong>发送</strong>的帧。配置对象在 <code>0x1800~0x1803</code>（通信参数）与 <code>0x1A00~0x1A03</code>（映射参数）。本项目<strong>没有使用</strong>（§6 讲为什么）。</td></tr>
+</tbody>
+</table>
+
+<h3>1.3 PDO 与 SDO 的分工</h3>
+<table class="cols-3">
+<caption>表 1-2　SDO vs PDO：一个管「配置」，一个管「数据」</caption>
+<thead><tr><th>维度</th><th>SDO（第 3 站）</th><th>PDO（本站）</th></tr></thead>
+<tbody>
+<tr><td>用途</td><td>改参数、读参数、调试</td><td>周期性传实时数据</td></tr>
+<tr><td>节奏</td><td>一问一答，不定时</td><td>周期广播 / 事件触发，很密集</td></tr>
+<tr><td>内容</td><td>带索引+子索引（说清读谁写谁）</td><td>裸数据，靠事先约定</td></tr>
+<tr><td>速度</td><td>慢</td><td>快</td></tr>
+<tr><td>能传什么</td><td>OD 里<strong>任何</strong>对象</td><td>只有<strong>被映射过</strong>的那几个对象</td></tr>
+<tr><td>谁来配置</td><td>—</td><td><strong>通常就是先用 SDO 把 PDO 的配置写进去</strong>（本项目直接写在代码里，见 §4）</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>关键认知：</strong>PDO 的「配置」本身也是 OD 里的对象（<code>0x1400/0x1600/…</code>）。所以第 3 站学的 SDO 没有白学——真实项目里，主站往往就是<strong>用 SDO 去写 <code>0x1400</code>、<code>0x1600</code>，把 PDO 配好，然后 PDO 才开始传数据</strong>。本项目省掉了这一步，直接在 <code>app_programStart()</code> 里用代码写好。
+</div>
+
+<h2 class="pgbreak">2. PDO 的「四件套」：四个配置对象</h2>
+
+<p>每一条 PDO 都靠 <strong>两个 OD 对象</strong>来描述：一个说「这条帧用哪个 CAN-ID、什么时候发/收」，另一个说「帧里装哪几个 OD 对象」。加上收发两个方向，就是<strong>四件套</strong>。</p>
+
+<table class="cols-4">
+<caption>表 2-1　PDO 四个配置对象（索引范围，本项目都只用第 0、1 号）</caption>
+<thead><tr><th>索引</th><th>名字</th><th>管什么</th><th>本项目用法</th></tr></thead>
+<tbody>
+<tr><td><code>0x1400~0x1403</code></td><td>RPDO 通信参数</td><td>RPDO 的 CAN-ID、传输类型、事件定时器</td><td>右电机用 <code>0x1400</code>（COB-ID 0x38A）；左电机用 <code>0x1401</code>（COB-ID 0x38B）</td></tr>
+<tr><td><code>0x1600~0x1603</code></td><td>RPDO 映射参数</td><td>RPDO 里<strong>装哪几个对象</strong>、每项多少位</td><td>右电机 <code>0x1600</code>、左电机 <code>0x1601</code>，都映射 <code>0x6041</code>+<code>0x6064</code></td></tr>
+<tr><td><code>0x1800~0x1803</code></td><td>TPDO 通信参数</td><td>TPDO 的 CAN-ID、传输类型、抑制/事件时间</td><td>未使用</td></tr>
+<tr><td><code>0x1A00~0x1A03</code></td><td>TPDO 映射参数</td><td>TPDO 里装哪几个对象</td><td>未使用</td></tr>
+</tbody>
+</table>
+
+<h3>2.1 「通信参数」对象里有哪几个子索引</h3>
+<p>以 RPDO 的 <code>0x1400</code> 为例（TPDO 的 <code>0x1800</code> 类似，只是多两项）。<strong>子索引 0 是这个对象的「成员个数」，子索引 1 起才是真正的配置值</strong>——这是 CANopen 里 REC（记录型）对象的通用规矩，第 3 站讲过。</p>
+
+<pre>0x1400  RPDO 通信参数（右电机）
+ ├─ sub0 : 成员个数（= 5，说明下面有 5 项）
+ ├─ sub1 : COB-ID        ← 这条 PDO 用哪个 CAN 帧号 + 是否启用   ★最重要
+ ├─ sub2 : transmissionType ← 传输类型：同步(跟 SYNC)还是事件驱动
+ ├─ sub3 : inhibitTime    ← 抑制时间（两条帧之间至少隔多久）本项目未用
+ ├─ sub4 : （保留）
+ └─ sub5 : eventTimer     ← 事件定时器：多久没收到就当超时（本项目 0=不启用）
+
+0x1800  TPDO 通信参数（对比：多两项）
+ ├─ sub0 : 成员个数
+ ├─ sub1 : COB-ID
+ ├─ sub2 : transmissionType
+ ├─ sub3 : inhibitTime
+ ├─ sub4 : （保留）
+ ├─ sub5 : eventTimer
+ └─ sub6 : SYNC 起始值   ← TPDO 才有的「第几个 SYNC 发一次」
+</pre>
+
+<h3>2.2 「映射参数」对象里装了什么</h3>
+<p>以 RPDO 的 <code>0x1600</code> 为例。<strong>sub0 是「映射了几项」，sub1、sub2…… 每一项是一个 32 位数，描述「装的是哪个 OD 对象、多少位」</strong>。</p>
+
+<pre>0x1600  RPDO 映射参数（右电机）
+ ├─ sub0 : 映射项数 = 2          ← 说明这条帧里装 2 个对象
+ ├─ sub1 : 0x60410010            ← 第 1 项：0x6041(状态字)、16 位
+ ├─ sub2 : 0x60640020            ← 第 2 项：0x6064(实际位置)、32 位
+ └─ sub3.. : 0（没用到的位置留空）
+
+  → 这条帧一共 16 + 32 = 48 位 = 6 字节，装「状态字 + 实际位置」两样东西。
+</pre>
+
+<div class="note">
+<strong>数量必须对得上：</strong><code>sub0</code> 写的「几项」必须和后面真正填了的项数一致，且所有项总位数不能超过一帧能装的量（经典 CAN 单帧最多 8 字节）。写错会报 <code>CO_EM_PDO_WRONG_MAPPING</code>（§4 会看到）。
+</div>
+
+<h2 class="pgbreak">3. 三个「配置值」怎么读</h2>
+
+<p>配置时只需要看懂三种值。它们看着像乱码，其实都是从高位往低位分段拼出来的。（本节只讲<strong>语义怎么拆</strong>，不做逐字节拆帧。）</p>
+
+<h3>3.1 映射项：一个整数里塞了「索引 + 子索引 + 位长」</h3>
+<p>映射项是一个 32 位数，从高到低分成三段：</p>
+
+<pre>映射项 = 0x60410010   （32 位）
+ ┌──────────────┬─────────┬────────────┐
+ │  高 16 位     │ 中 8 位  │  低 8 位    │
+ │  0x6041      │   0x00  │    0x10    │
+ │  = 索引       │ = 子索引 │ = 位长(16) │
+ └──────────────┴─────────┴────────────┘
+ 读作：把 OD 里「索引 0x6041、子索引 0、占 16 位」的那个对象，装进这条帧。
+
+再对照两条：
+   0x60410010 → 0x6041 : 0，16 位   （状态字，本来就 16 位）
+   0x60640020 → 0x6064 : 0，32 位   （实际位置，本来就 32 位；低 8 位 0x20 = 32）
+
+ （低 8 位是「位」不是「字节」：16 位=2 字节，32 位=4 字节。）
+</pre>
+
+<h3>3.2 传输类型 transmissionType：这条帧什么时候动</h3>
+<table class="cols-2">
+<caption>表 3-1　transmissionType 的取值含义</caption>
+<thead><tr><th>取值</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>0 ~ 240</code></td><td><strong>同步</strong>：跟着 SYNC 节拍走。0=收到 SYNC 就更新；1~240=每 N 个 SYNC 更新一次。（同步 PDO 才会有「两个接收缓冲、交替使用」的机制。）</td></tr>
+<tr><td><code>254 / 255</code></td><td><strong>事件驱动（异步）</strong>：不跟 SYNC，数据一到就处理/发送。<span class="star">本项目 RPDO 初值就是 254</span>，所以每收到一帧就立刻处理，不等 SYNC。</td></tr>
+<tr><td>其它</td><td>252/253 与 RTR 相关，本项目用不到。</td></tr>
+</tbody>
+</table>
+
+<h3>3.3 COB-ID：用哪个 CAN 帧号，以及「是否启用」</h3>
+<pre>COB-ID 是一个 32 位数，但只有低 11 位是真正的「CAN 帧号」，最高位另有含义：
+
+   0x0000038A  →  bit31=0（启用）  低 11 位 = 0x38A   读作：启用，用 CAN-ID 0x38A
+   0x80000300  →  bit31=1（禁用）  低 11 位 = 0x300   读作：这条 PDO 先关着，别用
+
+ ★ 关键：本工程 OD 里 0x1400 的 COB-ID「出厂值」是 0x80000200 ——高位是 1，意思是默认关闭；
+   必须由 app_programStart() 改写成 0x0000038A 才是「启用 + 用 0x38A」。这一步没做，帧就收不到。
+</pre>
+
+<div class="warn">
+<strong>坑 1：</strong>COB-ID 低 11 位不能是 0，也不能用协议保留的高优先级帧号（0x000~0x080 那几个 NMT/SYNC/EMCY 专用号）。校验不过 <code>CO_RPDO_init</code> 会把它当非法，直接报文 <code>CO_ERROR_OD_PARAMETERS</code> 或把这帧判为无效。<br>
+<strong>坑 2：</strong>「通道配好了」和「通道开着」是两回事。<code>0x80000000</code> 这一位就是总开关，忘了解开会一直静默，很难查。
+</div>
+
+<h2 class="pgbreak">4. 链 A：配置链 —— 谁把 0x38A / 0x38B 铺好</h2>
+
+<p>这一节回答：「开机那几百毫秒里，PDO 是怎么从一纸参数，变成一条真能收数据的管道？」</p>
+
+<pre>开机配置链（按时间顺序）
+
+ ① CO_main_basic.c:503
+    app_programStart(&bitRate, &nodeId, &errInfo)
+        │  作用：把「要用的 PDO 参数」写进 OD，并给 0x6064 挂钩子
+        │  写法：调 OD_set_u32 / OD_set_u8（第 3 站的接口，一行一个配置）
+        ▼
+     OD 里现在有了：
+       0x1005 = 0x40000080      （使能 SYNC，用 0x80 帧）
+       0x1006 = 100000          （SYNC 周期 = 100000µs = 100ms）
+       0x1400:1 = 0x0000038A    （右电机 RPDO 用 0x38A，启用）
+       0x1600:0 = 2             （右电机 RPDO 装 2 项）
+       0x1600:1 = 0x60410010    （第 1 项 = 0x6041 状态字 16 位）
+       0x1600:2 = 0x60640020    （第 2 项 = 0x6064 位置 32 位）
+       0x1401:1 = 0x0000038B / 0x1601:…（左电机，同构，用 0x38B）
+       0x6064 对象 → 挂上 H6064_write 钩子（左、右各一个）
+
+ ② CO_main_basic.c:751 / :768
+    CO_CANopenInitPDO(CO, …) 和 CO_CANopenInitPDO(CO_2nd, …)
+        │  作用：对每个 PDO 索引各调一次「初始化」
+        │  本工程先做 CO（右），再做 CO_2nd（左）
+        ▼
+ ③ CANopen.c:1206  CO_CANopenInitPDO()
+        从 OD 里取 0x1400/0x1600（右）、0x1401/0x1601（左），
+        算出「默认 CAN-ID」，调 CO_RPDO_init()（TPDO 则调 CO_TPDO_init）
+        ▼
+ ④ CO_PDO.c:627  CO_RPDO_init()
+        先 PDO_initMapping()（解析映射）→ 再读 COB-ID → 注册接收 → 最后挂配置钩子
+        ▼
+ ⑤ CO_PDO.c:87  PDOconfigMap()（被 PDO_initMapping 反复调用）
+        对 0x1600 的每一项：拆出索引/子索引/位长 → OD_find + OD_getSub
+        校验三点：这个对象允许被 RPDO 传吗？位长是整字节吗？够装吗？
+        ▼
+ ⑥ CO_PDO.c:702  CO_CANrxBufferInit(…, CAN_ID=0x38A, CO_PDO_receive)
+        告诉 CAN 驱动：收到 0x38A 的帧，就交给 CO_PDO_receive 处理
+        → 到这里，管道真正铺好，可以收数据了
+</pre>
+
+<p>下面把链上每个模块单独说清楚。看表格即可，不用记代码细节。</p>
+
+<table class="cols-5">
+<caption>表 4-1　配置链上的模块（干什么 / 传参 / 返回 / 被谁调 / 调谁）</caption>
+<thead><tr><th>模块<br>位置</th><th>干什么</th><th>传什么参数（含义）</th><th>返回什么</th><th>被谁调 → 调了谁</th></tr></thead>
+<tbody>
+<tr>
+<td><code>app_programStart</code><br>CO_application.c:65</td>
+<td>把 SYNC 与两条 RPDO 的全部参数写进 OD；给 0x6064 挂打印钩子</td>
+<td><code>bitRate</code>=波特率（出参，本项目不覆盖）；<code>nodeId</code>=节点号（出参）；<code>errInfo</code>=出错时回填哪个对象出错（出参）</td>
+<td><code>CO_ReturnError_t</code><br>（<code>CO_ERROR_NO</code> = 成功）</td>
+<td><strong>被</strong> <code>CO_main_basic.c</code> 启动流程调<br><strong>调</strong> <code>OD_set_u32/u8</code>、<code>OD_extension_init</code></td>
+</tr>
+<tr>
+<td><code>CO_CANopenInitPDO</code><br>CANopen.c:1206</td>
+<td>遍历「每个 PDO 索引」，把 OD 里的通信参数/映射参数交给对应的初始化函数</td>
+<td><code>co</code>=哪个实例（右/左）；<code>od</code>=哪本字典；<code>nodeId</code>；<code>errInfo</code></td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>CO_main_basic.c:751/768</code><br><strong>调</strong> <code>OD_GET</code> 取对象、<code>CO_RPDO_init</code>/<code>CO_TPDO_init</code></td>
+</tr>
+<tr>
+<td><code>CO_RPDO_init</code><br>CO_PDO.c:627</td>
+<td>一条 RPDO 的「总装」：解映射 → 读 CAN-ID → 注册接收 → 读传输类型 → 挂配置钩子</td>
+<td><code>RPDO</code>=要被填的那个结构；<code>OD</code>；<code>preDefinedCanId</code>=默认帧号（<code>基址+节点号</code>，仅当 OD 里没写具体帧号时用）；<br><code>OD_14xx/OD_16xx</code>=通信/映射参数对象；<code>CANdevRx/Idx</code>=用哪个接收槽</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>CO_CANopenInitPDO</code><br><strong>调</strong> <code>PDO_initMapping</code>、<code>OD_get_u32/u8/u16</code>、<code>CO_CANrxBufferInit</code>、<code>OD_extension_init</code></td>
+</tr>
+<tr>
+<td><code>PDOconfigMap</code><br>CO_PDO.c:87</td>
+<td>拆开<strong>一个</strong>映射项，找到它指的 OD 对象，校验合法性，记下「写去哪、多少位」</td>
+<td><code>PDO</code>=哪条 PDO；<code>map</code>=那个 32 位映射项；<code>mapIndex</code>=第几项；<code>isRPDO</code>=收还是发；<code>OD</code></td>
+<td><code>ODR_t</code><br>（<code>ODR_NO_MAP</code> = 这项不合法）</td>
+<td><strong>被</strong> <code>PDO_initMapping</code><br><strong>调</strong> <code>OD_find</code>+<code>OD_getSub(…, false)</code>（第 3 站的查表搭档）</td>
+</tr>
+<tr>
+<td><code>CO_CANrxBufferInit</code><br>CANopenNode 驱动层</td>
+<td>在驱动里登记一条「接收过滤器」：以后收到这个 CAN-ID 的帧，交给指定函数</td>
+<td><code>CANdevRx</code>；<code>idx</code>=第几个接收槽；<code>CAN_ID</code>=要听的帧号；<code>mask</code>=比对掩码；<code>object</code>=回调时带上谁；<code>func</code>=<code>CO_PDO_receive</code></td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>CO_RPDO_init</code>（运行时改 CAN-ID 则被 <code>OD_write_14xx</code> 再调一次）<br><strong>调</strong> 驱动内部表</td>
+</tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>为什么钩子能在映射解析时就生效？</strong>因为顺序是<strong>先挂钩子、后解映射</strong>：<code>app_programStart()</code>（:503，挂 <code>H6064_write</code>）跑在 <code>CO_CANopenInitPDO()</code>（:751，解映射）<strong>之前</strong>。这样 <code>PDOconfigMap</code> 里那句 <code>OD_getSub(…, false)</code>（最后那个 <code>false</code> = 允许走应用钩子）才会拿到「带钩子」的读写入口。
+</div>
+
+<h3>4.1 一个容易混的点：PDO 配置对象自己也挂着钩子</h3>
+<p>除了我们给 <code>0x6064</code> 挂的「打印钩子」，<code>CO_RPDO_init</code> 末尾还给 <code>0x1400</code>、<code>0x1600</code> <strong>也各挂了一个钩子</strong>（:748-755）。作用不是打印，而是让 PDO <strong>支持运行时改配置</strong>：</p>
+<pre>0x1400（通信参数）挂 OD_write_14xx
+    → 以后有人（比如主站用 SDO）改 0x1400:1 的 CAN-ID，
+      会被拦下来：校验新帧号 → 重新调 CO_CANrxBufferInit 换过滤器 → 再落盘
+
+0x1600（映射参数）挂 OD_write_PDO_mapping
+    → 有人改映射项时，重新检查项数/位长是否合法
+</pre>
+<p>本项目没用到运行时改配置，但这段代码解释了：<strong>为什么 PDO 的配置既能开机写、也能运行中改</strong>（都是同一套钩子机制）。</p>
+
+<h2 class="pgbreak">5. 链 B：运行链 —— 一帧进来怎么变成 posR / posL</h2>
+
+<p>这一节回答：「<code>0x38A</code> 那帧到了网卡，到屏幕打印 <code>posR</code>，中间发生了什么？」这是整个项目的<strong>主血管</strong>。</p>
+
+<pre>运行时链路（每来一帧就走一遍）
+
+ 物理层：右电机从站周期性发出 CAN 帧 0x38A（里面按约定装着 状态字+位置）
+        │
+        ▼
+ ① CO_PDO_receive(…, msg)          CO_PDO.c:465   ← 驱动收到 0x38A 时回调它
+        │  干什么：把帧数据「抄」进 RPDO 的缓冲，然后「举手」
+        │  做什么：
+        │    · 只有帧长度 ≥ 约定长度才抄（太短记「短帧错误」）
+        │    · memcpy 到 CANrxData[bufNo]
+        │    · CO_FLAG_SET(CANrxNew[bufNo])  ← 举旗：有新数据了
+        │  ★ 它只是「收下 + 举手」，还没往 OD 里写
+        ▼
+ ② CO_epoll_processRT(ep, CO, realtime=true)     CO_epoll_interface.c:313
+        │  这是 RT 线程（实时线程）的入口，被 CO_main_basic.c:885 的循环反复调用
+        │  它先收帧，再依次调 SYNC → RPDO → TPDO 三步处理
+        ▼
+ ③ CO_process_RPDO(co, syncWas, …)               CANopen.c:1442
+        │  干什么：对「本实例的每条 RPDO」各调一次 process
+        │  传入 NMTisOperational（只有 NMT 进入 Operational 才处理）
+        ▼
+ ④ CO_RPDO_process(RPDO, …, NMTisOperational, syncWas)   CO_PDO.c:776
+        │  干什么：真正把帧里的数「写进 OD」
+        │  做什么：
+        │    · 判断该不该处理：valid 且 NMT Operational 且（异步 或 收到 SYNC）
+        │    · while (有「举手」标志) { 清标志 → 逐项写 OD → }  ★「收下→举手→处理」节拍
+        │    · 每一项：OD_IO->write(&stream, 数据, 长度, &写了多少)
+        ▼
+ ⑤ OD_IO->write(…)  →  命中 H6064_write()        CO_application.c:31
+        │  为什么能命中：0x6064 挂了应用钩子，且映射用的是「走钩子」的入口
+        │  干什么：认出这帧是 0x38A 还是 0x38B，把值打印出来
+        ▼
+ 终端：
+        H6064_write  posR = 12345      ← 右电机实际位置
+        H6064_write  posL = -678       ← 左电机实际位置
+</pre>
+
+<p>把运行链上的模块逐个说清（重点看「和 SDO 有什么不同」）。</p>
+
+<table class="cols-5">
+<caption>表 5-1　运行链上的模块</caption>
+<thead><tr><th>模块<br>位置</th><th>干什么</th><th>传什么参数（含义）</th><th>返回什么</th><th>被谁调 → 调了谁</th></tr></thead>
+<tbody>
+<tr>
+<td><code>CO_PDO_receive</code><br>CO_PDO.c:465</td>
+<td>收到 RPDO 帧时被驱动回调：<strong>收下数据 + 举旗</strong>（不在中断里干重活）</td>
+<td><code>object</code>=哪个 RPDO（注册时传进来的）；<code>msg</code>=收到的帧（含长度和数据）</td>
+<td><code>void</code></td>
+<td><strong>被</strong> CAN 驱动收帧时回调<br><strong>调</strong> <code>memcpy</code>、<code>CO_FLAG_SET</code>（可选再调一个「预处理」回调）</td>
+</tr>
+<tr>
+<td><code>CO_epoll_processRT</code><br>CO_epoll_interface.c:313</td>
+<td><strong>RT 线程</strong>每轮的主处理：先收帧，再跑 SYNC/RPDO/TPDO</td>
+<td><code>ep</code>=epoll 上下文（含时间和事件）；<code>co</code>=哪个实例；<code>realtime</code>=是否实时模式</td>
+<td><code>void</code></td>
+<td><strong>被</strong> RT 线程循环（<code>CO_main_basic.c:885</code>）<br><strong>调</strong> <code>CO_CANrxFromEpoll</code>、<code>CO_process_SYNC</code>、<code>CO_process_RPDO</code>、<code>CO_process_TPDO</code></td>
+</tr>
+<tr>
+<td><code>CO_process_RPDO</code><br>CANopen.c:1442</td>
+<td>对本实例的每条 RPDO 统一调一次 process；并先算出「NMT 是不是 Operational」</td>
+<td><code>co</code>；<code>syncWas</code>=这轮有没有收到 SYNC；<code>timeDifference_us</code>=距上次多久（<code>timerNext_us</code> 是出参，回填「下次还想被多快叫醒」）</td>
+<td><code>void</code></td>
+<td><strong>被</strong> <code>CO_epoll_processRT</code><br><strong>调</strong> <code>CO_RPDO_process</code>（循环）</td>
+</tr>
+<tr>
+<td><code>CO_RPDO_process</code><br>CO_PDO.c:776</td>
+<td>核心动作：把帧数据<strong>按映射逐项写进 OD</strong>；顺带做长度错误上报与超时检查</td>
+<td><code>RPDO</code>；<code>NMTisOperational</code>=NMT 是否处于可通信状态；<code>syncWas</code>=本轮有没有 SYNC</td>
+<td><code>void</code></td>
+<td><strong>被</strong> <code>CO_process_RPDO</code><br><strong>调</strong> <code>OD_IO->write()</code>（每项一次；走钩子）、出错时 <code>CO_error</code></td>
+</tr>
+<tr>
+<td><code>H6064_write</code><br>CO_application.c:31</td>
+<td>应用钩子：<strong>谁写 0x6064，就把值按左右轮打印出来</strong></td>
+<td><code>stream</code>=被写的那条数据（<code>stream-&gt;object</code> 指向 0x038A/0x038B 标记）；<code>buf</code>=要写进去的值；<code>count</code>=几字节；<code>countWritten</code>=出参</td>
+<td><code>ODR_t</code></td>
+<td><strong>被</strong> <code>OD_IO->write()</code> 调<br><strong>调</strong> 只有 <code>printf</code>（不碰别人）</td>
+</tr>
+</tbody>
+</table>
+
+<h3>5.1 「收下 → 举手 → 主循环处理」：和 NMT / SDO 是同一套节拍</h3>
+<p>注意 <code>CO_PDO_receive</code> <strong>不在回调里直接写 OD</strong>，只做「抄数据 + 举旗」；真正的 <code>OD_IO->write()</code> 发生在 <code>CO_RPDO_process</code> 里。这样设计的理由和第 2/3 站一样：<strong>收帧可能发生在内核/驱动上下文，不能在那里干重活；举旗后交给固定节拍的主循环慢慢处理</strong>。<code>while (CO_FLAG_READ(...))</code> 还顺手解决了「处理期间又来了新帧」——处理完再看旗子，有就再来一遍，永远拿最新数据。</p>
+
+<h3>5.2 重要区别：PDO 走「实时线程」，SDO 走「主线程」</h3>
+<p>这是第 4 站和第 3 站在结构上最大的不同。同一个进程有两条处理路径：</p>
+
+<pre>主线程（普通优先级）                         RT 线程（实时优先级，realtime=true）
+ loop{ CO_epoll_processMain(…) }             loop{ CO_epoll_processRT(…) }
+        │                                            │
+        ▼                                            ▼
+  CO_process()  CANopen.c:1293                CO_process_SYNC()
+    ├─ CO_CANmodule_process（收发搬运）           CO_process_RPDO()   ← PDO 在这里
+    ├─ CO_NMT_process（网络管理）                 CO_process_TPDO()
+    ├─ CO_EM_process（紧急报文）
+    ├─ CO_SDOserver_process  ← SDO 在这里
+    └─ 心跳 / 时间 / 网关
+
+ 一句话：周期性强、要准时的 PDO/SYNC 交给实时线程；偶尔发生、不赶时间的 SDO/NMT 放主线程。
+ ★ 注意：CO_process()（主路径）里「没有 PDO」。找 PDO 要去 CO_epoll_processRT()。
+</pre>
+
+<div class="note">
+<strong>为什么这么分？</strong>AGV 跑起来时，位置/速度这类数据每毫秒都在更新，晚一拍就可能影响控制；而「改个参数」晚几十毫秒无所谓。把 PDO 放到实时线程，是为了让它在调度上更优先、更准时——这正是第 6 站「实时性改造」要接着深挖的点。
+</div>
+
+<h2 class="pgbreak">6. 反向链：TPDO 怎么发（以及本项目为什么不用）</h2>
+
+<p>方向反过来就是 TPDO：本项目<strong>一条都不发</strong>，但仍值得知道「如果要发，是怎么发的」，这样整条链才算完整。</p>
+
+<pre>TPDO 发送链（本项目未使用，仅作理解）
+
+ 谁触发 ──▶ CO_TPDO_process(TPDO, …, syncWas)      CO_PDO.c:1318
+                │  判断该不该发：事件驱动？收到 SYNC？到定时？
+                ▼
+           CO_TPDOsend(TPDO)                        CO_PDO.c:1226
+                │  干什么：反过来操作——从 OD 里「读」出各映射对象，
+                │           按顺序拼进发送缓冲 CANtxBuff->data
+                ▼
+           CO_CANsend(…)
+                │  把这条帧真正发上总线
+                ▼
+           总线其他节点收到（内容顺序按它们的映射表还原）
+
+ 关键差别：
+   · 收（RPDO）：注册「接收过滤器」→ 帧来了回调 CO_PDO_receive
+   · 发（TPDO）：注册「发送缓冲」 CO_CANtxBufferInit（CO_PDO.c:1160）
+       —— 不是过滤器，而是「我随时能把数据塞进去发出去的一个出口」
+</pre>
+
+<table class="cols-2">
+<caption>表 6-1　为什么本项目只收不发</caption>
+<thead><tr><th>问题</th><th>答案</th></tr></thead>
+<tbody>
+<tr><td>PDO 是不是收发必须成对？</td><td>不是。RPDO 和 TPDO 各自独立配置，用不用、用几条都由项目决定。</td></tr>
+<tr><td>本项目的角色是？</td><td>它是<strong>「数据消费者」</strong>：只接收电机的状态字和位置，暂不向总线下发命令、也不广播自己的数据。</td></tr>
+<tr><td>那 AGV 还能动吗？</td><td>目前是「只读观察」的底座版本（第 0 站定位）。要真正控电机，后面才需要补上 TPDO（或 RPDO 收控制字）与 CiA402 状态机（§7）。</td></tr>
+</tbody>
+</table>
+
+<h2 class="pgbreak">7. CiA402 是什么：伺服驱动的「标准语言」</h2>
+
+<h3>7.1 一句话原理</h3>
+<p>CANopen 允许各家设备自定义数据格式，但那样每家电机都不一样、没法通用。于是 CiA 协会定义了<strong>设备行规（Device Profile）</strong>：约定好「伺服/变频驱动这类设备」的 OD 该有哪些对象、每个对象什么含义。<strong>CiA402 就是「伺服驱动」的行规</strong>。凡自称兼容 CiA402 的驱动器，都用同一套对象号——所以本工程虽然换了品牌/型号，代码里 <code>0x6041</code>、<code>0x6064</code> 这些号仍然通用。</p>
+
+<h3>7.2 最该认识的那几个对象</h3>
+<table class="cols-3">
+<caption>表 7-1　CiA402 常用对象（本项目 OD 里 0x6xxx 共 55 个，这里挑最重要的）</caption>
+<thead><tr><th>索引</th><th>名字</th><th>一句话说明</th></tr></thead>
+<tbody>
+<tr><td><code>0x6040</code></td><td>controlword<br>控制字</td><td>我<strong>发给驱动器</strong>的命令位（enable、quick stop、fault reset…），用位组合下命令</td></tr>
+<tr><td><code>0x6041</code></td><td>statusword<br>状态字</td><td>驱动器<strong>回给我</strong>的状态位（是否已使能、是否故障…）。<span class="star">本项目 RPDO 每帧的第 1 项</span></td></tr>
+<tr><td><code>0x6060</code></td><td>modesOfOperation<br>运行模式</td><td>我想让它工作在哪个模式（位置模式 / 速度模式 / 回零…）</td></tr>
+<tr><td><code>0x6061</code></td><td>modesOfOperationDisplay<br>当前模式</td><td>驱动器告诉我「它现在实际在哪个模式」</td></tr>
+<tr><td><code>0x6064</code></td><td>positionActualValue<br>实际位置</td><td>编码器当前读数。<span class="star">本项目 RPDO 每帧的第 2 项，也是 posR/posL 的来源</span></td></tr>
+<tr><td><code>0x607A</code></td><td>targetPosition<br>目标位置</td><td>位置模式下，我要求它走到的目标</td></tr>
+<tr><td><code>0x60FF</code></td><td>targetVelocity<br>目标速度</td><td>速度模式下，我要求它转多快</td></tr>
+<tr><td><code>0x6062 / 0x606B</code></td><td>positionDemandValue<br>velocityDemandValue</td><td>内部「期望值」——控制器算出来准备执行的中间量</td></tr>
+<tr><td><code>0x606C</code></td><td>velocityActualValue</td><td>当前实际速度</td></tr>
+<tr><td><code>0x603F</code></td><td>errorCode</td><td>出错时的错误码</td></tr>
+<tr><td><code>0x6081 / 0x6083 / 0x6084</code></td><td>profileVelocity / Accel / Decel</td><td>位置模式下的「走多快、加速多快、减速多快」</td></tr>
+<tr><td><code>0x6098 / 0x6099 / 0x609A</code></td><td>homingMethod / Speeds / Accel</td><td>回零（找机械原点）用的一组参数</td></tr>
+<tr><td><code>0x6502</code></td><td>supportedDriveModes</td><td>驱动器能力自述：支持哪些运行模式（只读）</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>不用背。</strong>记住三件事就够用：<strong>①</strong> 控制字 <code>0x6040</code> 是我下的命令、状态字 <code>0x6041</code> 是它的回话，两者用「位」对话；<strong>②</strong> <code>0x6064</code> 是位置、<code>0x60FF</code>/<code>0x607A</code> 是速度/位置目标；<strong>③</strong> 这些号是 CiA402 规定的，换台驱动器也通用。
+</div>
+
+<h3>7.3 状态机：控制字与状态字怎么配合「点着火」</h3>
+<p>伺服不是一上电就能转的，要按 <strong>CiA402 状态机</strong>一步步「点火」。规律是：<strong>我通过控制字 <code>0x6040</code> 的某些位下命令；驱动器把当前处于哪一步，反映在状态字 <code>0x6041</code> 的某些位上</strong>。这就是一种握手。</p>
+
+<pre>CiA402 上电启动顺序（简化：只画主路；左边是「我发的命令」，右边是「它回的状态」）
+
+   Not ready to switch on
+            │  （驱动器自检完成）
+            ▼
+   Switch on disabled  ──控制字 bit7=1（Fault reset，清故障）──▶ 若在 Fault，清回这里
+            │  控制字 = Shutdown（bit2 quick stop=1 等组合）
+            ▼
+   Ready to switch on
+            │  控制字 = Switch on（bit0=1）
+            ▼
+   Switched on
+            │  控制字 = Enable operation（bit3=1）
+            ▼
+   Operation enabled  ◀── 只有到这里，电机才真正「使能」，能按目标走
+            │  控制字 bit3=0 → 回到 Switched on
+            │  控制字 bit2=0 → 走 Quick stop
+            ▼
+        （任意状态）出错 ──▶  Fault ：需要写 bit7=1（Fault reset）清除，再从头来
+
+ 用到的控制字位：bit0=Switch on  bit1=Enable voltage  bit2=Quick stop  bit3=Enable operation  bit7=Fault reset
+ 对应的状态字位：bit0=Ready to switch on  bit1=Switched on  bit2=Operation enabled  bit3=Fault
+</pre>
+
+<div class="warn">
+<strong>现状提醒：</strong>本项目<strong>目前没有实现这套状态机的驱动逻辑</strong>——它只收了 <code>0x6041</code>（状态字）和 <code>0x6064</code>（位置）并打印。<code>0x6040</code> 这些对象在 OD 里<strong>存在，但没被使用</strong>。要真正「使能电机并下达运动目标」，正是这个底座上要长出来的增量（可放到第 5/7 站之后）。
+</div>
+
+<h2 class="pgbreak">8. 小结 · 自测 · 衔接</h2>
+
+<h3>8.1 一页复盘</h3>
+<pre>① PDO = 运行时的周期性数据通道。快，但只能传「提前映射好」的那几个对象；
+   RPDO 收、TPDO 发；本项目只收不发。
+② 每条 PDO 靠两个 OD 对象描述：通信参数（0x1400/0x1800，管 CAN-ID/传输类型）
+   + 映射参数（0x1600/0x1A00，管装哪几个对象、每项多少位）。
+③ 映射项 0x60410010 是「高16位=索引 / 中8位=子索引 / 低8位=位长」拼出来的；
+   传输类型 ≤240 同步、254/255 事件驱动；COB-ID 最高位=1 表示「禁用」。
+④ 配置链：app_programStart 写参数+挂钩子 → CO_CANopenInitPDO → CO_RPDO_init
+   → PDOconfigMap 解析 → CO_CANrxBufferInit 注册接收过滤器。先挂钩子后解映射，所以钩子生效。
+⑤ 运行链：帧到 → CO_PDO_receive（收下+举旗）→ RT 线程 CO_epoll_processRT
+   → CO_process_RPDO → CO_RPDO_process（写 OD）→ 命中 H6064_write → 打印 posR/posL。
+   ★ PDO 在 RT 线程，SDO/NMT 在主线程 —— 这是本项目两条处理路径的分工。
+⑥ CiA402 = 伺服驱动的标准对象集（0x6040 控制字 / 0x6041 状态字 / 0x6064 位置…），
+   规定了一套「控制字位命令 + 状态字位反馈」的状态机。本项目暂未驱动它。
+</pre>
+
+<h3>8.2 合上文档，答这五问</h3>
+<pre>1. RPDO 和 TPDO 分别是什么方向？本项目用了哪个、为什么？
+2. 一条 PDO 的「通信参数」和「映射参数」各管什么？各在哪个索引？
+3. 映射项 0x60640020 怎么读？它表示「装谁、多少位」？
+4. 一帧 0x38A 从进网卡到打印 posR，中间经过哪几个函数？为什么打印会在 H6064_write 里发生？
+5. 为什么 PDO 放在实时线程、SDO 放在主线程？这跟「实时性」有什么关系？
+</pre>
+
+<h3>8.3 与前后站的衔接</h3>
+<table class="cols-3">
+<caption>表 8-1　第 4 站的位置</caption>
+<thead><tr><th>方向</th><th>连接</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>承接</td><td>第 3 站 OD &amp; SDO</td><td>PDO 的配置对象（<code>0x1400/0x1600</code>）就住在 OD 里，解析时用的正是 <code>OD_find</code>+<code>OD_getSub</code>；<code>0x6064</code> 的钩子也是第 3 站讲的 <code>OD_extension_init</code> 机制。</td></tr>
+<tr><td>承接</td><td>第 2 站 报文层</td><td>「收下→举手→主循环处理」节拍、SYNC 的作用，和第 2 站是同一套。</td></tr>
+<tr><td>通往</td><td>第 5 站 启动链路</td><td>本站的配置链只是启动流程中的一环，第 5 站会把 <code>CO_main_basic.c</code> 从头到尾串起来看。</td></tr>
+<tr><td>通往</td><td>第 6 站 实时性改造</td><td>「PDO 走 RT 线程」正是实时性改造的抓手（调度优先级、抖动）。</td></tr>
+<tr><td>落点</td><td>第 7 站 里程计</td><td>里程计要的左右轮位置，就来自本站运行链末端那个钩子（把 <code>posR/posL</code> 换成累计位姿）。</td></tr>
+</tbody>
+</table>
+
+<div class="footnote">
+第 4 站补充册 · PDO 映射 &amp; CiA402 · 对应主手册《AGV_CANOPEN_LEARNING_MAP_print.html》站点地图第 4 站。<br>
+主要取证文件：<code>CO_application.c</code>、<code>CANopenNode/301/CO_PDO.c</code>、<code>CANopenNode/301/CO_PDO.h</code>、<code>CANopenNode/CANopen.c</code>、<code>CANopenNode/301/CO_ODinterface.c</code>、<code>CO_epoll_interface.c</code>、<code>CO_main_basic.c</code>、<code>application/OD.c</code>、<code>CANopenNode/301/CO_driver.h</code>、<code>CO_driver_target.h</code>。
+</div>
+
+</body>
+</html>

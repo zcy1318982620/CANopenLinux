@@ -1,0 +1,2629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>播放器进程走读 × Qt 接口 × C++ 知识 对照手册（打印版）</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm 12mm;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-size: 10pt;
+    line-height: 1.55;
+    color: #111;
+    background: #fff;
+    margin: 0 auto;
+    max-width: 190mm;
+    padding: 6mm 0;
+  }
+  h1 {
+    font-size: 17pt;
+    margin: 0 0 2mm;
+    padding-bottom: 2mm;
+    border-bottom: 2.5pt solid #111;
+  }
+  h2 {
+    font-size: 13pt;
+    margin: 7mm 0 2mm;
+    padding: 1.2mm 0 1.2mm 2.5mm;
+    border-left: 4pt solid #111;
+    background: #f0f0f0;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 11pt;
+    margin: 4mm 0 1.5mm;
+    page-break-after: avoid;
+  }
+  h4 {
+    font-size: 10pt;
+    margin: 3mm 0 1mm;
+    page-break-after: avoid;
+  }
+  p { margin: 1.5mm 0; }
+  ul, ol { margin: 1.5mm 0; padding-left: 6mm; }
+  li { margin: 0.8mm 0; }
+  code {
+    font-family: "DejaVu Sans Mono", "Liberation Mono", Consolas, monospace;
+    font-size: 8.6pt;
+    background: #f2f2f2;
+    padding: 0 0.6mm;
+    border-radius: 1pt;
+    word-break: break-all;
+  }
+  pre {
+    font-family: "DejaVu Sans Mono", "Liberation Mono", Consolas, monospace;
+    font-size: 7.6pt;
+    line-height: 1.32;
+    background: #fafafa;
+    border: 0.6pt solid #bbb;
+    border-left: 2.5pt solid #666;
+    padding: 2.5mm 3mm;
+    margin: 2mm 0;
+    white-space: pre;
+    overflow-x: auto;
+    page-break-inside: avoid;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 3mm;
+    font-size: 8.8pt;
+    table-layout: fixed;
+  }
+  caption {
+    caption-side: top;
+    text-align: left;
+    font-weight: 700;
+    font-size: 9.5pt;
+    padding: 0 0 1.2mm;
+  }
+  th, td {
+    border: 0.6pt solid #999;
+    padding: 1.4mm 1.8mm;
+    text-align: left;
+    vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  th {
+    background: #e8e8e8;
+    font-weight: 700;
+  }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  /* 列宽变体 */
+  .cols-3a th:nth-child(1), .cols-3a td:nth-child(1) { width: 16%; }
+  .cols-3a th:nth-child(2), .cols-3a td:nth-child(2) { width: 34%; }
+  .cols-3a th:nth-child(3), .cols-3a td:nth-child(3) { width: 50%; }
+  .cols-3b th:nth-child(1), .cols-3b td:nth-child(1) { width: 19%; }
+  .cols-3b th:nth-child(2), .cols-3b td:nth-child(2) { width: 25%; }
+  .cols-3b th:nth-child(3), .cols-3b td:nth-child(3) { width: 56%; }
+  .cols-4a th:nth-child(1), .cols-4a td:nth-child(1) { width: 10%; }
+  .cols-4a th:nth-child(2), .cols-4a td:nth-child(2) { width: 23%; }
+  .cols-4a th:nth-child(3), .cols-4a td:nth-child(3) { width: 21%; }
+  .cols-4a th:nth-child(4), .cols-4a td:nth-child(4) { width: 46%; }
+  .cols-4b th:nth-child(1), .cols-4b td:nth-child(1) { width: 20%; }
+  .cols-4b th:nth-child(2), .cols-4b td:nth-child(2) { width: 26%; }
+  .cols-4b th:nth-child(3), .cols-4b td:nth-child(3) { width: 30%; }
+  .cols-4b th:nth-child(4), .cols-4b td:nth-child(4) { width: 24%; }
+  .cols-4c th:nth-child(1), .cols-4c td:nth-child(1) { width: 9%; }
+  .cols-4c th:nth-child(2), .cols-4c td:nth-child(2) { width: 27%; }
+  .cols-4c th:nth-child(3), .cols-4c td:nth-child(3) { width: 26%; }
+  .cols-4c th:nth-child(4), .cols-4c td:nth-child(4) { width: 38%; }
+  .cols-5a th:nth-child(1), .cols-5a td:nth-child(1) { width: 14%; }
+  .cols-5a th:nth-child(2), .cols-5a td:nth-child(2) { width: 14%; }
+  .cols-5a th:nth-child(3), .cols-5a td:nth-child(3) { width: 18%; }
+  .cols-5a th:nth-child(4), .cols-5a td:nth-child(4) { width: 14%; }
+  .cols-5a th:nth-child(5), .cols-5a td:nth-child(5) { width: 40%; }
+  .cols-5b th:nth-child(1), .cols-5b td:nth-child(1) { width: 22%; }
+  .cols-5b th:nth-child(2), .cols-5b td:nth-child(2) { width: 30%; }
+  .cols-5b th:nth-child(3), .cols-5b td:nth-child(3) { width: 22%; }
+  .cols-5b th:nth-child(4), .cols-5b td:nth-child(4) { width: 12%; }
+  .cols-5b th:nth-child(5), .cols-5b td:nth-child(5) { width: 14%; }
+  .cols-5c th:nth-child(1), .cols-5c td:nth-child(1) { width: 10%; }
+  .cols-5c th:nth-child(2), .cols-5c td:nth-child(2) { width: 15%; }
+  .cols-5c th:nth-child(3), .cols-5c td:nth-child(3) { width: 19%; }
+  .cols-5c th:nth-child(4), .cols-5c td:nth-child(4) { width: 28%; }
+  .cols-5c th:nth-child(5), .cols-5c td:nth-child(5) { width: 28%; }
+  .meta {
+    font-size: 8.6pt;
+    color: #333;
+    border: 0.6pt dashed #888;
+    background: #fafafa;
+    padding: 2.5mm 3mm;
+    margin: 0 0 4mm;
+  }
+  .meta p { margin: 0.6mm 0; }
+  .star { font-weight: 700; }
+  .pgbreak { page-break-before: always; }
+  .avoid { page-break-inside: avoid; }
+  .note {
+    border: 0.6pt solid #999;
+    border-left: 3pt solid #333;
+    background: #f7f7f7;
+    padding: 2mm 3mm;
+    margin: 2.5mm 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .warn {
+    border: 0.6pt solid #b33;
+    border-left: 3pt solid #b33;
+    background: #fdf5f5;
+    padding: 2mm 3mm;
+    margin: 2.5mm 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .warn strong:first-child { color: #a11; }
+  .cpp {
+    border: 0.6pt solid #2255a4;
+    border-left: 3pt solid #2255a4;
+    background: #f4f7fc;
+    padding: 2mm 3mm;
+    margin: 2.5mm 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .cpp strong:first-child { color: #1a3f7a; }
+  .toolbar {
+    text-align: right;
+    margin-bottom: 3mm;
+  }
+  .toolbar button {
+    font-size: 10pt;
+    padding: 2mm 5mm;
+    cursor: pointer;
+    border: 1pt solid #333;
+    background: #fff;
+  }
+  @media print {
+    .toolbar { display: none; }
+    body { padding: 0; max-width: none; }
+    a { color: #111; text-decoration: none; }
+  }
+  .footnote {
+    margin-top: 6mm;
+    padding-top: 2mm;
+    border-top: 0.6pt solid #bbb;
+    font-size: 8pt;
+    color: #444;
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button onclick="window.print()">打印 / 导出 PDF</button>
+</div>
+
+<h1>播放器进程走读 × Qt 接口 × C++ 知识 对照手册</h1>
+
+<div class="meta">
+  <p><strong>工程：</strong>imx6ull_Qt5-CarPlay-main / <code>x86/MusicPlayerWW</code> —— Qt 5.12.8，qmake 工程，尺寸 1024×600</p>
+  <p><strong>本篇定位：</strong>接着上一本《主菜单进程链路 × Qt 接口对照手册》往下走。上一本走的是<span class="star">主菜单进程</span>（<code>CarPlayMainWW</code>），这一本走它拉起来的<span class="star">子进程</span>（<code>MusicPlayerWW</code>，音乐播放器）。套路完全一样：<span class="star">按代码执行顺序走，走到哪一行讲哪一行</span>。</p>
+  <p><strong>本篇升级点：</strong>在「链路 × Qt 接口」的基础上，每一站再补一栏 <span class="star">C++ 语言知识</span>（表格最后一列 + 蓝色知识框）。因为这个播放器里有真正的 C++ 内容：自己写的类、模板容器、迭代器、STL 算法、运算符重载、仿函数、lambda、类型转换、有符号/无符号……这些在主菜单进程里几乎看不到。</p>
+  <p><strong>本篇回答：</strong>播放器从 <code>main()</code> 到能放歌，一路碰了哪些 Qt 接口、哪些 C++ 语法、各自为什么这么写、哪里是坑？</p>
+  <p><strong>怎么读：</strong>每一站都是同一个套路 —— ①先看代码（标了行号）→ ②再看对照表（行号 / 代码 / Qt 接口 / C++ 知识）→ ③蓝框 = C++ 语言知识 → ④灰框 = 补充说明、红框 = 踩坑与缺陷。<span class="star">强烈建议对着源码同时打开</span>，一行一行比。</p>
+  <p><strong>标记：</strong>★ = 本项目核心、必须会；☆ = 知道有这个东西即可。<strong>框的颜色：</strong>蓝框讲 C++ 语言，灰框讲 Qt 补充，红框讲坑。<strong>行号</strong>格式 <code>文件:行号</code>，均已打开本工程源码逐处核对。</p>
+</div>
+
+<h2>0. 一页总览：播放器进程的站点、接口与 C++ 知识点</h2>
+
+<p>播放器进程启动后会依次跑 <span class="star">7 个站点</span>，然后进入事件循环，靠「按钮点击 + 定时器轮询 + 播放器信号」驱动。后面各节就按这个顺序展开。</p>
+
+<pre>
+【站点地图】
+main() ─①─▶ 构造 MainWidget ─②─▶ init_ui() ─③─▶ init_play() ─④─▶ init_sqlite() ─⑤─▶ init_musiclist_widget() ─⑥─▶ init_shm() ─⑦─▶ a.exec()
+                                                                                                              │
+                    事件循环里：15 个按钮槽 + readTimer 每秒轮询 + 播放器信号回调（链路 A/B）  ─⑧─▶ 干活
+                                                                                    │
+数据模型（本篇 C++ 重点，§9~§10）：MyMusic（单曲） ─ MusicList（歌单，vector&lt;MyMusic&gt;） ─ MusicCompare（比较器/仿函数）
+                                                  LyricWidget（歌词） ─ LyricLine（歌词行，重载 operator&lt;）
+</pre>
+
+<table class="cols-5c">
+  <caption>表 0-1　七个站点分别在做什么、碰了哪些 Qt 接口、牵出哪些 C++ 知识</caption>
+  <thead>
+    <tr><th>站点</th><th>代码位置</th><th>这一站在做什么</th><th>用到的 Qt 接口</th><th>牵出的 C++ 知识</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>① main()</strong><br>（§1）</td>
+      <td><code>main.cpp:5-11</code></td>
+      <td>建应用 → 建窗口 → 判断命令行参数决定显示/隐藏 → 进事件循环</td>
+      <td><code>QApplication</code>、<code>show()</code>/<code>hide()</code>、<code>exec()</code>、<code>QStringLiteral</code></td>
+      <td><code>argc/argv</code> 本质、<code>&amp;&amp;</code> 短路求值、运算符重载（<code>QString::operator==</code>）、隐式类型转换</td>
+    </tr>
+    <tr>
+      <td><strong>② 构造函数</strong><br>（§2）</td>
+      <td><code>MainWidget.cpp:22-30</code><br><code>:17-20, :52</code></td>
+      <td>生成界面、依次调 5 个 init；文件顶部放全局变量和一个 extern 函数声明</td>
+      <td><code>ui-&gt;setupUi()</code>、<code>delete ui</code></td>
+      <td><strong>成员初始化列表</strong>、<code>new</code>/<code>delete</code> 配对、全局变量、<code>extern</code> 声明 vs 定义</td>
+    </tr>
+    <tr>
+      <td><strong>③ init_ui()</strong><br>（§3）</td>
+      <td><code>MainWidget.cpp:54-68</code></td>
+      <td>定尺寸、去标题栏、套 QSS、初始化图标与封面</td>
+      <td><code>setFixedSize</code>、<code>setAttribute</code>、<code>setWindowFlags</code>、<code>setStyleSheet</code>、<code>QIcon</code>、<code>QPixmap</code>、<code>QStackedWidget</code></td>
+      <td><code>-&gt;</code> 与 <code>.</code> 的区别、Qt 资源路径 <code>:/</code>、<code>inline</code> 函数</td>
+    </tr>
+    <tr>
+      <td><strong>④ init_play()</strong><br>（§4）</td>
+      <td><code>MainWidget.cpp:70-84</code></td>
+      <td>建播放器与播放列表，连 5 个信号槽</td>
+      <td><code>QMediaPlayer</code>、<code>QMediaPlaylist</code>、<code>connect</code>、<code>setVolume</code></td>
+      <td><strong>成员函数指针</strong> <code>&amp;QMediaPlayer::stateChanged</code>、枚举作用域、栈对象 vs 堆对象</td>
+    </tr>
+    <tr>
+      <td><strong>⑤ init_sqlite()</strong><br>（§5）</td>
+      <td><code>MainWidget.cpp:86-124</code></td>
+      <td>连数据库、查表在不在、不在就建表</td>
+      <td><code>QSqlDatabase</code>、<code>QSqlQuery</code>、<code>QMessageBox</code>、<code>QVariant</code></td>
+      <td><strong>RAII</strong>（栈对象自动析构）、句柄式值语义、参数化查询防注入</td>
+    </tr>
+    <tr>
+      <td><strong>⑥ init_musiclist_widget()</strong><br>（§6）</td>
+      <td><code>MainWidget.cpp:126-143</code></td>
+      <td>调歌单控件外观，从数据库恢复歌单</td>
+      <td><code>QListWidget</code>、<code>QFont</code>、<code>QScroller</code>、<code>refresh()</code></td>
+      <td><strong>友元 friend</strong> 访问私有成员、值语义与隐式共享（COW）</td>
+    </tr>
+    <tr>
+      <td><strong>⑦ init_shm()</strong><br>（§7）</td>
+      <td><code>MainWidget.cpp:189-210</code></td>
+      <td>设共享内存键、起每秒轮询定时器、读主菜单命令</td>
+      <td><code>QSharedMemory</code>（<code>setKey/attach/data/detach</code>）、<code>QTimer</code>、<strong>lambda</strong></td>
+      <td><strong>lambda 表达式与捕获列表</strong>、<code>static_cast&lt;int*&gt;</code>（void* 转换）、解引用</td>
+    </tr>
+    <tr>
+      <td><strong>⑧ 事件循环</strong><br>（§8、§11、§12）</td>
+      <td><code>MainWidget.cpp:145-505</code></td>
+      <td>命令分发（switch）+ 15 个按钮槽 + 写共享内存叫回主菜单</td>
+      <td>信号槽、<code>QPropertyAnimation</code>、<code>QFileDialog</code>、<code>QSharedMemory</code> 写方向</td>
+      <td><code>switch/case/break</code>、宏 <code>#define</code>、重复 <code>connect</code> 的后果</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="cols-3b">
+  <caption>表 0-2　本篇牵出的 C++ 知识点总索引（按主题，后面各节逐一展开）</caption>
+  <thead>
+    <tr><th>C++ 主题</th><th>关键内容</th><th>讲在哪一节</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>编译与头文件</strong></td><td><code>#ifndef</code> 头文件守卫、<code>#include</code>、前置声明、<code>extern</code> 声明 vs 定义、<code>.pro</code> 里的 <code>CONFIG += c++11</code></td><td>§1、§2、§9</td></tr>
+    <tr><td><strong>类与封装</strong></td><td><code>class</code>、<code>private</code>/<code>public</code>、构造函数重载、成员初始化列表、<code>const</code> 成员函数、<code>friend</code> 友元、析构函数</td><td>§2、§9.1</td></tr>
+    <tr><td><strong>指针与内存</strong></td><td><code>new</code>/<code>delete</code>、栈对象 vs 堆对象、<code>-&gt;</code> 与 <code>.</code>、父子对象自动回收、内存泄漏</td><td>§3、§4、§12</td></tr>
+    <tr><td><strong>类型与转换</strong></td><td>隐式转换（<code>QString</code> ⇄ <code>const char*</code>、<code>QString</code> → <code>QUrl</code>）、<code>static_cast</code>、C 风格强制转换、<code>void*</code>、<code>QVariant</code></td><td>§1、§7、§9.1、§9.2</td></tr>
+    <tr><td><strong>函数进阶</strong></td><td>函数重载、默认参数、成员函数指针 <code>&amp;类::函数</code>、<code>inline</code> 内联、lambda 表达式与捕获列表</td><td>§3.1、§4、§7、§12</td></tr>
+    <tr><td><strong>模板与 STL 容器</strong></td><td><code>std::vector&lt;MyMusic&gt;</code>、<code>QList&lt;T&gt;</code>、<code>QStringList</code>、迭代器 <code>begin()/end()</code>、<code>auto</code>、范围 for / <code>foreach</code></td><td>§9.3</td></tr>
+    <tr><td><strong>STL 算法</strong></td><td><code>sort</code>、<code>stable_sort</code>、<code>unique</code>、<code>erase</code>（erase-remove 惯用法）、比较器 / 仿函数 <code>operator()</code></td><td>§9.4、§10.1、§10.2</td></tr>
+    <tr><td><strong>运算符重载</strong></td><td>非成员 <code>operator&lt;</code>、<code>operator()</code>（仿函数）、<code>operator&lt;&lt;</code>（QList 追加）、<code>operator[]</code>（vector 下标）</td><td>§10.1、§9.4</td></tr>
+    <tr><td><strong>值语义与隐式共享</strong></td><td>值传递 vs <code>const&amp;</code> 引用传递、返回拷贝、Qt 的 COW（copy-on-write）</td><td>§9.3、§9.5</td></tr>
+    <tr><td><strong>枚举与宏</strong></td><td><code>enum COMPARE</code>、<code>QMediaPlayer::PlayingState</code>、<code>#define</code> vs <code>const</code>、<code>QStringLiteral</code></td><td>§2、§4、§8</td></tr>
+    <tr><td><strong>容易踩的语法细节</strong></td><td>成员未初始化（内置类型）、有符号/无符号比较（<code>-Wsign-compare</code>）、<code>NULL</code> vs <code>nullptr</code>、<code>using namespace std</code> 放头文件</td><td>§9.1、§9.3、§10.3</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <p><strong>和前三篇的关系：</strong>《项目总览》讲「这是什么项目」；《主菜单进程链路图》讲主菜单的「流程」；《主菜单进程链路 × Qt 接口对照手册》讲主菜单「流程上的每个接口」；<span class="star">本篇</span>是它的姊妹篇 —— 换成播放器进程，并且多带一路 C++ 语言线。两条进程通过共享内存 <code>shm_for_music</code> / <code>shm_for_menu</code> 搭话，这一点两篇都会重复讲，因为它是整个项目的主轴。</p>
+</div>
+
+<h2 class="pgbreak">1. 站点①：main() —— 程序是怎么「活」起来的</h2>
+
+<p>先看全部代码，只有 12 行，但它决定了进程的<b>入口、窗口可见性、生死循环</b>三件事。</p>
+
+<pre>
+文件：x86/MusicPlayerWW/main.cpp
+ 1  #include "MainWidget.h"
+ 2
+ 3  #include &lt;QApplication&gt;
+ 4
+ 5  int main(int argc, char *argv[])
+ 6  {
+ 7      QApplication a(argc, argv);
+ 8      MainWidget w;
+ 9      if(argc &lt; 2) w.show();
+10      if(argc &gt;= 2 &amp;&amp; argv[1] == QStringLiteral("-hide")) w.hide();
+11      return a.exec();
+12  }
+</pre>
+
+<table class="cols-4c">
+  <caption>表 1-1　main() 逐行：代码 → Qt 接口 → C++ 知识</caption>
+  <thead>
+    <tr><th>行号</th><th>代码</th><th>Qt 接口</th><th>C++ 知识与说明</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>:5</code></td>
+      <td><code>int main(int argc, char *argv[])</code></td>
+      <td>—（C++ 标准入口，不是 Qt 的）</td>
+      <td><code>main</code> 是 C++ 唯一的程序入口。<code>argc</code> = 命令行参数个数（<b>含程序名本身</b>，所以最小是 1）；<code>argv</code> 是「字符指针数组」，<code>argv[0]</code> 是程序自己的路径，<code>argv[1]</code> 才是第一个真正参数。★ 数组作为参数会「退化」成指针，所以写成 <code>char *argv[]</code> 和 <code>char **argv</code> 是一回事。</td>
+    </tr>
+    <tr>
+      <td><code>:7</code></td>
+      <td><code>QApplication a(argc, argv);</code></td>
+      <td><code>QApplication</code> ★★★</td>
+      <td>★ 一个 Qt GUI 程序<b>有且只能有</b>一个 <code>QApplication</code>，而且必须在任何 <code>QWidget</code> 之前构造。它负责事件循环、全局资源、命令行解析（<code>-style</code> 之类）。这里的 <code>a</code> 是<b>栈对象</b>，<code>main</code> 结束自动析构。</td>
+    </tr>
+    <tr>
+      <td><code>:8</code></td>
+      <td><code>MainWidget w;</code></td>
+      <td><code>MainWidget</code>（自定义 <code>QWidget</code> 子类）</td>
+      <td>同样在<b>栈</b>上构造，所以<b>不需要也不能</b>写 <code>delete &amp;w</code>。构造一执行完，界面控件、播放器、定时器、数据库全都在这一行里建好了（见 §2）。★ 栈对象的析构时机是确定的（作用域结束），这就是所谓 RAII。</td>
+    </tr>
+    <tr>
+      <td><code>:9</code></td>
+      <td><code>if(argc &lt; 2) w.show();</code></td>
+      <td><code>QWidget::show()</code> ★</td>
+      <td>不带参数调用 = 直接双击运行 → 显示窗口。<code>if</code> 后面只有一条语句时可以省略花括号（但建议一律加）。</td>
+    </tr>
+    <tr>
+      <td><code>:10</code></td>
+      <td><code>if(argc &gt;= 2 &amp;&amp; argv[1] == QStringLiteral("-hide")) w.hide();</code></td>
+      <td><code>QStringLiteral</code>、<code>QString::operator==</code>、<code>QWidget::hide()</code></td>
+      <td>带 <code>-hide</code> 参数启动 → 只建窗口不显示。<code>&amp;&amp;</code> 是<b>短路求值</b>：左边 <code>argc &gt;= 2</code> 为假就直接返回假，<b>右边不会执行</b> —— 这就是为什么必须把长度判断写在前面，否则 <code>argv[1]</code> 会越界读。★ <code>argv[1] == QStringLiteral("-hide")</code> 看着像在比较两个指针，其实不是：<code>QString</code> 重载了 <code>operator==</code>，左边是 <code>QString</code> 就会走「字符串内容比较」。</td>
+    </tr>
+    <tr>
+      <td><code>:11</code></td>
+      <td><code>return a.exec();</code></td>
+      <td><code>QApplication::exec()</code> ★★★</td>
+      <td>进入<b>事件循环</b>：从此程序不再顺着往下走，而是「有事件就处理，没事件就睡」。返回值是退出码（<code>quit()</code>/<code>exit()</code> 的参数）。<b>所有信号槽、定时器、点击响应都发生在这句话"里面"</b>。★ 忘记调 <code>exec()</code>，窗口会一闪而过。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 1-①　argc / argv 到底是什么</strong></p>
+  <p>在终端敲 <code>./MusicPlayerWW -hide</code>，操作系统交给 <code>main</code> 的就是这两个参数：</p>
+  <ul>
+    <li><code>argc</code> = 2（<code>./MusicPlayerWW</code> 算一个，<code>-hide</code> 算一个）</li>
+    <li><code>argv[0]</code> = <code>"./MusicPlayerWW"</code>，<code>argv[1]</code> = <code>"-hide"</code>，<code>argv[2]</code> = <code>nullptr</code>（<b>数组结尾一定是空指针</b>，这是可以在不知道 <code>argc</code> 时遍历的保证）</li>
+  </ul>
+  <p>每个元素都是 <code>char*</code>（C 风格字符串），本质是「以 <code>'\0'</code> 结尾的一串字节」。所以 <b>不能</b>用 <code>==</code> 比较内容（那比的是地址），C 里要用 <code>strcmp()</code>。本项目偷了个懒：把它交给 <code>QString</code> 去比，所以写法很干净。</p>
+  <p><strong>关键点：</strong>参数是「运行时才给」的，程序<b>无法在编译期知道有几个参数</b>。所以任何用到 <code>argv[n]</code> 的地方，前面必须有一个 <code>argc</code> 范围的检查 —— 本项目 <code>:9</code> 和 <code>:10</code> 就是这两道闸门。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 1-②　运算符重载：为什么 <code>argv[1] == QStringLiteral("-hide")</code> 能比较字符串</strong></p>
+  <p><code>QStringLiteral("-hide")</code> 是一个宏，编译期就把字面量转成 <code>QString</code> 对象（比运行时 <code>QString("-hide")</code> 快，因为它不用每次去算长度和做编码转换）。</p>
+  <p>于是 <code>argv[1] == QStringLiteral("-hide")</code> 里，右边已经是个 <code>QString</code>。C++ 看到「<code>const char*</code> 和 <code>QString</code> 用 <code>==</code>」，会先做<b>隐式类型转换</b>把左边也变成 <code>QString</code>（<code>QString</code> 有接受 <code>const char*</code> 的构造函数，且没标记 <code>explicit</code>），然后调用重载过的 <code>QString::operator==</code>，做的是<b>内容逐字符比较</b>。</p>
+  <p><strong>一句话记住：</strong>「<code>==</code> 比的是地址」只对<b>裸指针</b>成立；一旦某一侧是类类型，<code>==</code> 就可能被重载成"按内容比"。这也是 C++ 和 C 的一个哲学差异。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 1-①　条件顺序不能反。</strong>如果把 <code>:10</code> 写成 <code>if(argv[1] == QStringLiteral("-hide") &amp;&amp; argc &gt;= 2)</code> —— 不带参数运行时 <code>argv[1]</code> 是 <code>nullptr</code>，用 <code>QString</code> 接 <code>nullptr</code> 虽然不会立刻崩，但语义已经是「用了不存在的参数」。这就是典型的<b>越界/空指针</b>问题，必须靠「先判长度、再取值」的顺序躲开。</p>
+</div>
+
+<div class="note">
+  <p><strong>为什么要支持 <code>-hide</code> 启动？</strong>因为主菜单进程是用 <code>QProcess::start(路径, QStringList("-hide"))</code> 把它拉起来的（见上一篇 §2）。主菜单在<b>程序一启动</b>时就把播放器进程挂在后台，但这时候用户还在看主菜单，播放器窗口不能弹出来。所以约定：<b>主菜单拉起的就用 <code>-hide</code> 静默启动，用户双击的就不带参数正常显示</b>。一个 <code>if</code> 解决了两种启动场景。</p>
+</div>
+
+<h2 class="pgbreak">2. 站点②：构造函数 —— 五个 init 的调用顺序</h2>
+
+<p>构造函数只有 9 行，但它是整个类的「总开关」：界面、播放器、数据库、歌单、共享内存全都在这几行里点起来。</p>
+
+<pre>
+文件：x86/MusicPlayerWW/MainWidget.cpp
+17  // 设置全局变量
+18  QStringList nameFile;
+19  QString openDir;
+20  int preNum = 0, volRecord = 50;
+21
+22  MainWidget::MainWidget(QWidget *parent) : QWidget(parent), ui(new Ui::MainWidget)
+23  {
+24      ui-&gt;setupUi(this);
+25
+26      init_ui();
+27      init_play();
+28      init_sqlite();
+29      init_musiclist_widget();
+30      init_shm();
+31
+32  //    scan_music();
+33  //    add_music_to_list(nameFile);
+34  //    init_playlist();
+45  }
+46
+47  MainWidget::~MainWidget()
+48  {
+49      delete ui;
+50  }
+51
+52  extern QString my_format_time(qint64 msTime);  // 外部链接已定义好的函数
+</pre>
+
+<table class="cols-4c">
+  <caption>表 2-1　构造 / 析构 / 全局区逐行对照</caption>
+  <thead>
+    <tr><th>行号</th><th>代码</th><th>Qt 接口</th><th>C++ 知识与说明</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>:18-20</code></td>
+      <td><code>QStringList nameFile; QString openDir; int preNum = 0, volRecord = 50;</code></td>
+      <td><code>QStringList</code>（= <code>QList&lt;QString&gt;</code>）</td>
+      <td><b>全局变量</b>：定义在所有函数之外，具有「静态存储期」，程序一启动就存在、一退出才销毁。<code>preNum/volRecord</code> 带初始值会被<b>常量初始化</b>；<code>nameFile/openDir</code> 是类类型，会调它们自己的默认构造函数。<code>volRecord</code> 是「上次的音量」，<code>:20</code> 给它 50 当出厂默认。</td>
+    </tr>
+    <tr>
+      <td><code>:22</code></td>
+      <td><code>MainWidget::MainWidget(QWidget *parent) : QWidget(parent), ui(new Ui::MainWidget)</code></td>
+      <td><code>QWidget(parent)</code> 基类构造</td>
+      <td>★ <b>成员初始化列表</b>（冒号后面那一串）。两件事：① 先调用基类 <code>QWidget</code> 的构造函数把「窗口本体」建出来；② 给成员 <code>ui</code> 分配内存并调用 <code>Ui::MainWidget</code> 的构造函数。<b>初始化顺序只看成员在类里的声明顺序，与列表书写顺序无关</b>（编译器会按声明顺序重排并可能给警告）。</td>
+    </tr>
+    <tr>
+      <td><code>:24</code></td>
+      <td><code>ui-&gt;setupUi(this);</code></td>
+      <td><code>Ui::MainWidget::setupUi()</code>（uic 生成）★</td>
+      <td>把 <code>MainWidget.ui</code> 里画的控件<b>一个个 <code>new</code> 出来</b>，并按 XML 里的层级挂到 <code>this</code> 上，最后把成员指针 <code>ui-&gt;btnPlay</code> 之类指向它们。<b>传 <code>this</code> 是关键</b>：不传的话信号槽命名约定（<code>on_btnXxx_clicked</code>）就找不到宿主。<code>this</code> 是成员函数里隐含的「当前对象指针」。</td>
+    </tr>
+    <tr>
+      <td><code>:26</code></td>
+      <td><code>init_ui();</code></td>
+      <td><code>setFixedSize</code>/<code>setWindowFlags</code>…</td>
+      <td>窗口外貌（§3）。<b>必须排在 <code>setupUi</code> 之后</b>，因为它要操作 <code>ui-&gt;xxx</code>。</td>
+    </tr>
+    <tr>
+      <td><code>:27</code></td>
+      <td><code>init_play();</code></td>
+      <td><code>QMediaPlayer</code>、<code>QMediaPlaylist</code></td>
+      <td>播放器与播放列表，并连 5 个信号槽（§4）。</td>
+    </tr>
+    <tr>
+      <td><code>:28</code></td>
+      <td><code>init_sqlite();</code></td>
+      <td><code>QSqlDatabase</code>、<code>QSqlQuery</code></td>
+      <td>数据库连接与建表（§5）。</td>
+    </tr>
+    <tr>
+      <td><code>:29</code></td>
+      <td><code>init_musiclist_widget();</code></td>
+      <td><code>QListWidget</code>、<code>QScroller</code></td>
+      <td>歌单控件外观 + 从数据库恢复歌单。<b>必须在 <code>init_sqlite()</code> 之后</b>，因为它要读数据库（§6）。</td>
+    </tr>
+    <tr>
+      <td><code>:30</code></td>
+      <td><code>init_shm();</code></td>
+      <td><code>QSharedMemory</code>、<code>QTimer</code></td>
+      <td>共享内存 + 轮询定时器（§7）。<b>放最后</b>：定时器一启动就可能立刻触发命令（比如 <code>SWITCH_VISIBILITY</code> 要 <code>show()</code>），此时界面和播放器必须已经就绪。</td>
+    </tr>
+    <tr>
+      <td><code>:47-50</code></td>
+      <td><code>~MainWidget() { delete ui; }</code></td>
+      <td>—</td>
+      <td>★ 析构函数。<code>ui</code> 是<b>裸指针</b>、<b>不是 QObject 子类</b>，所以 Qt 的对象树<b>不负责</b>它，必须手动 <code>delete</code>，否则每开关一次窗口泄漏一块。<b>其他 <code>new</code> 出来的东西几乎都指定了父对象 <code>this</code>，由 Qt 自动回收</b>（详见表 12-2）。</td>
+    </tr>
+    <tr>
+      <td><code>:52</code></td>
+      <td><code>extern QString my_format_time(qint64 msTime);</code></td>
+      <td>—</td>
+      <td>★ <b>extern 声明</b>：只是告诉编译器「有这么个函数，签名长这样，定义在别的 <code>.cpp</code> 里，链接时去找」。真正定义在 <code>MyMusic.cpp:19-25</code>。<code>MainWidget.cpp</code> 里到处用它格式化时间（<code>:228</code>、<code>:263</code>）。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 2-①　初始化列表 vs 构造函数体赋值</strong></p>
+  <p>对比下面两种写法：</p>
+  <pre>
+// 写法 A：初始化列表（本项目用的）
+MainWidget::MainWidget(QWidget *parent) : QWidget(parent), ui(new Ui::MainWidget)
+{
+    ui-&gt;setupUi(this);
+}
+
+// 写法 B：函数体里赋值
+MainWidget::MainWidget(QWidget *parent) : QWidget(parent)
+{
+    ui = new Ui::MainWidget;   // 合法，但不推荐
+    ui-&gt;setupUi(this);
+}</pre>
+  <p>区别有三条：</p>
+  <ul>
+    <li><b>顺序</b>：成员永远按「声明顺序」初始化，且一定在函数体之前完成。用列表能让你看清真实顺序。</li>
+    <li><b>能不能</b>：<code>const</code> 成员、引用成员、没有默认构造函数的类成员，<b>只能用初始化列表</b>赋值。</li>
+    <li><b>效率</b>：写法 B 对类成员相当于「先默认构造一次，再赋值一次」；<code>int</code> 这类内置类型在写法 B 里则是<b>先随机值、后覆盖</b>。</li>
+  </ul>
+  <p><strong>易错点：</strong>很多人以为成员是按「列表里写的顺序」初始化的，于是写下 <code>: b(a), a(1)</code>，结果 <code>b</code> 拿到的是未初始化的 <code>a</code> —— 因为实际顺序是声明顺序 <code>a</code> 再 <code>b</code>。编 <code>-Wall</code> 时会报警告。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 2-②　<code>new Ui::MainWidget</code> 是什么，为什么要 <code>delete</code></strong></p>
+  <p><code>Ui::MainWidget</code> 不是本项目手写的类，而是 <b>uic 工具根据 <code>MainWidget.ui</code> 自动生成的</b>（生成文件 <code>ui_MainWidget.h</code>）。它的内容大致长这样：</p>
+  <pre>
+namespace Ui {
+class MainWidget {                      // 纯 C++ 类，不是 QObject！
+public:
+    QPushButton *btnPlay;               // 界面上每个控件一个裸指针成员
+    QSlider     *sliderProgress;
+    ...
+    void setupUi(QWidget *MainWidget);  // 按 .ui 把控件建出来
+};
+}</pre>
+  <p><b>要点：</b>它<b>没有继承 <code>QObject</code></b>，所以它不在 Qt 对象树里、不会自动被回收；但它持有一堆 `<code>new</code> 出来的控件指针` —— 那些控件挂到了 <code>this</code>（主窗口）名下，主窗口销毁时它们会一起没。于是真正该手动 <code>delete</code> 的，就只剩这个「装指针的小盒子」本身：这就是 <code>:49 delete ui;</code> 的全部意义。</p>
+  <p><strong>因果链：</strong>主窗口析构 → 先执行 <code>~MainWidget()</code> 里的 <code>delete ui</code>（释放盒子）→ 再执行 <code>QWidget</code> 的析构（对象树递归删掉所有子控件）。顺序反了也不会立刻崩，但概念上要清楚：<b>盒子先走，控件后走</b>。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 2-①　全局变量不宜多用。</strong><code>:18-20</code> 这四个全局变量谁都能改（本项目 <code>MainWidget.cpp</code> 里就有多处直接写 <code>volRecord = …</code>），排查问题时「谁把它改了」很难找；而且不同 <code>.cpp</code> 里的全局变量<b>初始化顺序不保证</b>。更好的做法是把它们收进类里当成员，或放到一个专门的「设置」类里。</p>
+</div>
+
+<div class="note">
+  <p><strong><code>:32-34</code> 和 <code>:36-44</code> 为什么被注释掉了？</strong>这是作者留下的「自动扫描音乐」功能（<code>scan_music()</code>、<code>add_music_to_list()</code>、<code>init_playlist()</code> 三个函数在 <code>:290-312</code>、<code>:407-414</code> 定义着，但没被调用）。现在改成了「手动添加 + SQLite 记住歌单」的方案。<b>读到没被调用的函数，不要以为漏了什么</b> —— 全篇末尾的 §13.3 会统一盘点这类「死代码」。</p>
+</div>
+
+<h2 class="pgbreak">3. 站点③：init_ui() —— 窗口外貌与初始状态</h2>
+
+<pre>
+文件：x86/MusicPlayerWW/MainWidget.cpp
+54  void MainWidget::init_ui()
+55  {
+56      setFixedSize(1024, 600);
+57      setAttribute(Qt::WA_StyledBackground);  // 告诉窗口，应该使用设置的样式表进行渲染控件背景
+58      setWindowFlags(Qt::FramelessWindowHint);  // 去除标题栏
+59      ui-&gt;sliderVol-&gt;hide();
+60      ui-&gt;stackedWidget-&gt;setCurrentIndex(0);
+61      ui-&gt;musicListWidget-&gt;set_icon(QIcon(":/Assets/Icon/music.png"));
+62      // 封面图片
+63      QPixmap albumImg(":/Assets/Icon/non-music.png");
+64      ui-&gt;coverPic-&gt;setPixmap(albumImg);
+65      ui-&gt;coverPic-&gt;setScaledContents(true);
+66      // 需要图标变换的图标初始化
+67      ui-&gt;btnPlay-&gt;setStyleSheet(PauseStyle());
+68  }
+</pre>
+
+<table class="cols-4c">
+  <caption>表 3-1　init_ui() 逐行对照</caption>
+  <thead>
+    <tr><th>行号</th><th>代码</th><th>Qt 接口</th><th>C++ 知识与说明</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>:56</code></td>
+      <td><code>setFixedSize(1024, 600)</code></td>
+      <td><code>QWidget::setFixedSize</code> ★</td>
+      <td>把窗口尺寸<b>锁死</b>为 1024×600：既不能拉伸也不能最大化。嵌入式屏幕分辨率固定，这么做最省事。<code>setFixedSize</code> 内部其实是同时设了 minimum 和 maximum。</td>
+    </tr>
+    <tr>
+      <td><code>:57</code></td>
+      <td><code>setAttribute(Qt::WA_StyledBackground)</code></td>
+      <td><code>QWidget::setAttribute</code>、<code>Qt::WidgetAttribute</code> 枚举</td>
+      <td>告诉 Qt「这个窗口的背景要用 QSS 里写的 <code>background</code> 来画」。<b>不设这个属性，给自定义 QWidget 子类写 <code>background-image</code> 是不生效的</b> —— 这是新手最常见的「QSS 没反应」原因之一。★ 枚举值写全名 <code>Qt::WA_StyledBackground</code>，这是「枚举作用域」的写法。</td>
+    </tr>
+    <tr>
+      <td><code>:58</code></td>
+      <td><code>setWindowFlags(Qt::FramelessWindowHint)</code></td>
+      <td><code>QWidget::setWindowFlags</code></td>
+      <td>去掉系统标题栏和边框，变成「无边框窗口」。车载中控、全屏 UI 都这么做。★ 副作用：没了标题栏也就没了拖动和关闭按钮，得自己实现（本项目用「退出」按钮代替关闭）。</td>
+    </tr>
+    <tr>
+      <td><code>:59</code></td>
+      <td><code>ui-&gt;sliderVol-&gt;hide()</code></td>
+      <td><code>QWidget::hide()</code> ★</td>
+      <td>音量条默认不显示，点音量按钮才弹出来（见 <code>:329-334</code>）。<code>hide()</code>/<code>show()</code> 是同一对开关，并不销毁控件。</td>
+    </tr>
+    <tr>
+      <td><code>:60</code></td>
+      <td><code>ui-&gt;stackedWidget-&gt;setCurrentIndex(0)</code></td>
+      <td><code>QStackedWidget::setCurrentIndex</code> ★</td>
+      <td><code>QStackedWidget</code> 是「一摞卡片」，同一时刻只显示一张。<b>第 0 页 = 播放界面，第 1 页 = 歌单界面</b>，靠右上角「列表」按钮切换（<code>:366-371</code>）。启动默认停在播放页。</td>
+    </tr>
+    <tr>
+      <td><code>:61</code></td>
+      <td><code>ui-&gt;musicListWidget-&gt;set_icon(QIcon(":/Assets/Icon/music.png"))</code></td>
+      <td><code>QIcon</code>、自定义 <code>set_icon()</code></td>
+      <td>设置歌单每行默认用的小图标。<code>set_icon</code> 是 <code>MusicListWidget</code> 自己加的函数（<code>MusicListWidget.h:22</code>），不是 Qt 的。★ <code>:/Assets/...</code> 是 <b>Qt 资源系统</b>路径，<code>:/</code> 前缀表示「从编译进程序的资源里找」，不是磁盘路径。</td>
+    </tr>
+    <tr>
+      <td><code>:63</code></td>
+      <td><code>QPixmap albumImg(":/Assets/Icon/non-music.png");</code></td>
+      <td><code>QPixmap</code> ★</td>
+      <td>在<b>栈</b>上构造一个图片对象（函数一结束自动析构，不需要 delete）。<code>QPixmap</code> 是为「屏幕显示」优化的位图；<code>QImage</code> 是为「像素读写/元数据封面」优化的。本项目两个都用到了。</td>
+    </tr>
+    <tr>
+      <td><code>:64-65</code></td>
+      <td><code>setPixmap(albumImg); setScaledContents(true);</code></td>
+      <td><code>QLabel::setPixmap</code>、<code>QLabel::setScaledContents</code></td>
+      <td><code>QLabel</code> 能显示文字也能显示图片。<code>setScaledContents(true)</code> = 图片自动缩放到 label 大小（否则原图尺寸显示，可能溢出或留白）。</td>
+    </tr>
+    <tr>
+      <td><code>:67</code></td>
+      <td><code>ui-&gt;btnPlay-&gt;setStyleSheet(PauseStyle())</code></td>
+      <td><code>QWidget::setStyleSheet</code> ★、<code>PauseStyle()</code></td>
+      <td>用 QSS 给按钮贴图标。<b>注意这里是「函数返回字符串」而不是「函数设置按钮」</b> —— <code>PauseStyle()</code> 只是个返回 <code>QString</code> 的普通函数（见 §3.1），真正的动作是 <code>setStyleSheet</code>。★ 一开始是「未播放」状态，所以用 <code>PauseStyle()</code>（暂停图标 = 待播放）。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 3-①　<code>-&gt;</code> 和 <code>.</code> 的区别</strong></p>
+  <p>两者都是「取成员的运算符」，区别只在于左边是<b>指针</b>还是<b>对象</b>：</p>
+  <pre>
+ui-&gt;btnPlay-&gt;setStyleSheet(...);   // ui 是指针（Ui::MainWidget*），用 -&gt;
+sliderVol.setValue(50);            // sliderVol 是对象，用 .
+// a-&gt;b  完全等价于  (*a).b</pre>
+  <p>本类里 <code>ui</code> 是指针（<code>MainWidget.h:91</code>：<code>Ui::MainWidget *ui;</code>），所以到处都是 <code>ui-&gt;</code>。而 <code>player</code>、<code>playlist</code>、<code>timer</code> 也都是指针，所以也都用 <code>-&gt;</code>。★ 记住：<b><code>-&gt;</code> 左边永远是指针</b> —— 看到 <code>-&gt;</code> 就该想到「这里有一层解引用」。</p>
+</div>
+
+<h3>3.1 QSS 样式集中管理：<code>MyQSS.h</code> 里的 <code>inline</code> 函数</h3>
+
+<pre>
+文件：x86/MusicPlayerWW/MyQSS.h
+ 1  #ifndef MYQSS_H
+ 2  #define MYQSS_H
+ 3  #include &lt;QString&gt;
+ 4
+ 5  // 此文件统一存放一些QSS样式代码
+ 6
+ 7  // 播放中的按钮样式
+ 8  inline QString PlayingStyle()
+ 9  {
+10      return
+11      "#btnPlay"
+12      "{"
+13      "image:url(:/Assets/Icon/playing.png);"
+14      "background-repeat:no-repeat;"
+15      "background-color:transparent;"
+16      "background-position:center center;"
+17      "border:transparent;"
+18      "}";
+19  }
+21  inline QString PauseStyle()  { ... "image:url(:/Assets/Icon/pause.png);" ... }
+35  inline QString VolStyle()    { ... "image:url(:/Assets/Icon/vol.png);"    ... }
+48  inline QString MuteStyle()   { ... "image:url(:/Assets/Icon/mute.png);"   ... }
+63  inline QString RandomStyle() { ... "image:url(:/Assets/Icon/random.png);" ... }
+76  inline QString LoopStyle()   { ... "image:url(:/Assets/Icon/loop.png);"   ... }
+89  inline QString Loop41Style() { ... "image:url(:/Assets/Icon/loop41.png);" ... }
+102 inline QString ScrollBarStyle() { ... "QScrollBar:vertical" ... }
+148 #endif
+</pre>
+
+<table class="cols-3a">
+  <caption>表 3-2　<code>MyQSS.h</code> 里的样式函数与对应 QSS 选择器</caption>
+  <thead>
+    <tr><th>函数</th><th>选择器</th><th>作用与知识点</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>PlayingStyle()</code></td><td><code>#btnPlay</code></td><td>播放中 → 显示「播放中」图标。<b><code>#名字</code> = 按 objectName 匹配的 ID 选择器</b>，只影响 <code>btnPlay</code> 一个按钮。</td></tr>
+    <tr><td><code>PauseStyle()</code></td><td><code>#btnPlay</code></td><td>未播放 → 显示「播放」三角图标。与上面同选择器、不同图片，靠 <code>setStyleSheet</code> 互相切换（<code>:212-217</code>）。</td></tr>
+    <tr><td><code>VolStyle()</code></td><td><code>#btnVol</code></td><td>有音量 → 喇叭图标。音量滑到 0 时换成 <code>MuteStyle()</code>（<code>:416-421</code>）。</td></tr>
+    <tr><td><code>MuteStyle()</code></td><td><code>#btnVol</code></td><td>静音 → 划线喇叭图标。</td></tr>
+    <tr><td><code>RandomStyle()</code></td><td><code>#btnPlayMode</code></td><td>随机播放模式图标。</td></tr>
+    <tr><td><code>LoopStyle()</code></td><td><code>#btnPlayMode</code></td><td>列表循环模式图标（默认）。</td></tr>
+    <tr><td><code>Loop41Style()</code></td><td><code>#btnPlayMode</code></td><td>单曲循环模式图标。</td></tr>
+    <tr><td><code>ScrollBarStyle()</code></td><td><code>QScrollBar:vertical</code></td><td>自定义垂直滚动条（80px 宽、粉色滑块、上下箭头用图片）。<b><code>QScrollBar:vertical</code> 是「类型 + 子控件」选择器</b>，与 <code>#id</code> 用法不同。本项目定义了但在 x86 版没被调用（☆ 死代码）。</td></tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 3-②　<code>inline</code> 与「头文件里的函数定义」</strong></p>
+  <p>正常规则是「函数定义放 <code>.cpp</code>，声明放 <code>.h</code>」。如果把函数定义直接写进头文件，而这个头文件被多个 <code>.cpp</code> <code>#include</code>，那么链接时就会出现「同一个函数被定义了好几次」的<b>重复定义错误</b>。</p>
+  <p><code>inline</code> 就是给编译器的许可：<b>「这个函数可以有多个完全相同的副本，随便挑一个用」</b>。于是头文件里的小函数可以用 <code>inline</code> 安全地定义。本项目 7 个 QSS 函数全是 <code>#include "MyQSS.h"</code> 直接调用的，就靠这个 <code>inline</code> 生效。</p>
+  <p><b>补充：</b>类成员函数如果<b>写在类定义内部</b>（如 <code>MyMusic.h:27</code> 的 <code>QUrl get_url() const {return url;}</code>），会<b>自动</b>具备 <code>inline</code> 性质，不用手写。这就是为什么 <code>MyQSS.h</code> 里必须显式写、而类内函数不用写。</p>
+</div>
+
+<div class="note">
+  <p><strong>为什么不直接用 <code>.qss</code> 文件？</strong>用文件就要处理「文件路径找不到」「编译时不会报错」等问题；写成 <code>inline</code> 函数，编译期就能检查、还能带参数（本项目的 <code>ScrollBarStyle()</code> 就带了颜色等常量）。<b>代价是改样式要重新编译</b>。两者各有场景，小项目用函数更顺手。</p>
+</div>
+
+<h2 class="pgbreak">4. 站点④：init_play() —— 播放器、播放列表与 5 个 connect</h2>
+
+<p>这 15 行是整个播放器的「心脏」：建对象、设模式、连信号。后面所有的播放行为，都靠这里连出去的 5 根线驱动。</p>
+
+<pre>
+文件：x86/MusicPlayerWW/MainWidget.cpp
+70  void MainWidget::init_play()
+71  {
+72      //播放器初始化
+73      player= new QMediaPlayer(this);
+74      playlist=new QMediaPlaylist;
+75      playlist-&gt;setPlaybackMode(QMediaPlaylist::Loop);
+76      player-&gt;setPlaylist(playlist);
+77      player-&gt;setVolume(volRecord);
+78      // 连接播放有关的信号与槽
+79      connect(player, &amp;QMediaPlayer::stateChanged, this, &amp;MainWidget::update_btn_play);        // 播放状态改变
+80      connect(ui-&gt;sliderProgress, &amp;QAbstractSlider::valueChanged, this, &amp;MainWidget::set_position);  // 滑槽拖动带动播放跳转
+81      connect(player, &amp;QMediaPlayer::positionChanged, this, &amp;MainWidget::update_duration);     // 歌曲播放时间变化
+82      connect(player, &amp;QMediaPlayer::durationChanged, this, &amp;MainWidget::update_position);     // 滑槽位置随播放进度变化
+83      connect(player, &amp;QMediaPlayer::metaDataAvailableChanged, this, &amp;MainWidget::update_info); // 切歌更换元数据
+84  }
+</pre>
+
+<table class="cols-4a">
+  <caption>表 4-1　播放相关的 Qt 接口详解</caption>
+  <thead>
+    <tr><th>接口</th><th>写法</th><th>参数 / 返回</th><th>作用与注意事项</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>QMediaPlayer</code> ★★★</td>
+      <td><code>new QMediaPlayer(this)</code></td>
+      <td>参数：父对象 <code>QObject*</code></td>
+      <td>播放器本体，内部走多媒体后端（Linux 下是 GStreamer）。★ 传 <code>this</code> 就是「认爹」：主窗口销毁时它会自动被删，不用手动 <code>delete</code>。</td>
+    </tr>
+    <tr>
+      <td><code>QMediaPlaylist</code> ★★</td>
+      <td><code>new QMediaPlaylist</code></td>
+      <td>无参数</td>
+      <td>播放列表（歌单）。<b>这里没传父对象</b> —— 见下面的红框。★ 来自 <code>QtMultimedia</code> 模块，<code>.pro</code> 里必须写 <code>QT += multimedia</code>（<code>MusicPlayerWW.pro:2</code>）。</td>
+    </tr>
+    <tr>
+      <td><code>setPlaybackMode</code> ★★</td>
+      <td><code>setPlaybackMode(QMediaPlaylist::Loop)</code></td>
+      <td>枚举 <code>PlaybackMode</code></td>
+      <td>设置播放模式。5 种模式：<code>CurrentItemOnce</code>（播一次停）、<code>CurrentItemInLoop</code>（单曲循环）、<code>Sequential</code>（顺序播完停）、<code>Loop</code>（列表循环）、<code>Random</code>（随机）。本项目初始为 <code>Loop</code>。</td>
+    </tr>
+    <tr>
+      <td><code>setPlaylist</code> ★★★</td>
+      <td><code>player-&gt;setPlaylist(playlist)</code></td>
+      <td>参数：<code>QMediaPlaylist*</code></td>
+      <td>把歌单交给播放器。★ <b>播放器不持有它的所有权</b>（不负责 delete），两者的生命周期要自己保证。之后 <code>player-&gt;play()</code> 播的就是歌单当前项。</td>
+    </tr>
+    <tr>
+      <td><code>setVolume</code> ★</td>
+      <td><code>setVolume(volRecord)</code></td>
+      <td>0～100 的整数</td>
+      <td>音量百分比，不是分贝。<code>volRecord</code> 是全局变量（<code>:20</code>），所以「上次退出时的音量」能被沿用（<code>:164</code>、<code>:169</code> 会更新它）。</td>
+    </tr>
+    <tr>
+      <td><code>QMediaPlayer::state()</code></td>
+      <td><code>player-&gt;state()</code></td>
+      <td>返回 <code>State</code> 枚举</td>
+      <td>当前状态：<code>StoppedState</code> / <code>PlayingState</code> / <code>PausedState</code>。本项目到处用它做判断（<code>:214</code>、<code>:376-385</code>）。</td>
+    </tr>
+    <tr>
+      <td><code>play()</code> / <code>pause()</code> / <code>stop()</code></td>
+      <td><code>player-&gt;play()</code></td>
+      <td>无参、无返回</td>
+      <td>播放 / 暂停 / 停止。<b>它们是「异步」的</b>：调用后不会立刻变状态，而是过一会儿发出 <code>stateChanged</code>。所以要靠信号回调（<code>update_btn_play</code>）去更新界面。</td>
+    </tr>
+    <tr>
+      <td><code>QMediaPlaylist::previous()/next()</code></td>
+      <td><code>playlist-&gt;previous()</code></td>
+      <td>无参、返回 <code>bool</code></td>
+      <td>上一首 / 下一首（<code>:396</code>、<code>:403</code>）。返回是否成功切换（到头了会返回 <code>false</code>）。</td>
+    </tr>
+    <tr>
+      <td><code>addMedia</code> / <code>clear</code> / <code>mediaCount</code> / <code>currentIndex</code></td>
+      <td><code>playlist-&gt;addMedia(url)</code></td>
+      <td>参数 <code>QUrl</code></td>
+      <td>往歌单加歌 / 清空 / 数歌 / 当前第几首。见 <code>MusicList::add_to_playlist()</code>（§9.3）和 <code>:271-277</code>。</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="cols-4a">
+  <caption>表 4-2　5 根 connect 逐条：谁在什么时候叫谁</caption>
+  <thead>
+    <tr><th>行号</th><th>信号（发送者）</th><th>槽（接收者）</th><th>什么时候触发 / 干什么</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>:79</code></td>
+      <td><code>QMediaPlayer::stateChanged</code></td>
+      <td><code>MainWidget::update_btn_play</code>（<code>:212</code>）</td>
+      <td>播放状态一变就换播放按钮的图标（播放中 ↔ 暂停）。★ 这就是「界面跟着状态走」的典型写法。</td>
+    </tr>
+    <tr>
+      <td><code>:80</code></td>
+      <td><code>QAbstractSlider::valueChanged</code></td>
+      <td><code>MainWidget::set_position</code>（<code>:219</code>）</td>
+      <td><b>用户拖动进度条</b>时触发，把播放位置跳到新值。<code>QSlider</code> 继承自 <code>QAbstractSlider</code>，所以信号写在基类名下 <code>&amp;QAbstractSlider::valueChanged</code>。</td>
+    </tr>
+    <tr>
+      <td><code>:81</code></td>
+      <td><code>QMediaPlayer::positionChanged</code></td>
+      <td><code>MainWidget::update_duration</code>（<code>:225</code>）</td>
+      <td><b>播放进度变化</b>（默认每秒几次）时触发：更新进度条位置、更新「00:12/03:45」文字、让歌词滚动（<code>:229</code>）。</td>
+    </tr>
+    <tr>
+      <td><code>:82</code></td>
+      <td><code>QMediaPlayer::durationChanged</code></td>
+      <td><code>MainWidget::update_position</code>（<code>:232</code>）</td>
+      <td><b>歌曲总长确定后</b>触发：设置进度条范围 <code>0～duration</code>。换歌时也会触发。<b>注意函数名叫反了</b>（<code>update_duration</code> 干的是 position 的活，<code>update_position</code> 干的是 duration 的活），读代码时以信号为准。</td>
+    </tr>
+    <tr>
+      <td><code>:83</code></td>
+      <td><code>QMediaPlayer::metaDataAvailableChanged</code></td>
+      <td><code>MainWidget::update_info</code>（<code>:249</code>）</td>
+      <td><b>歌曲元数据（作者/歌名/专辑/封面）可读之后</b>触发：刷新封面、标题、歌手、专辑，并解析这首歌的歌词文件（<code>:286</code>）。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 4-①　成员函数指针：<code>&amp;QMediaPlayer::stateChanged</code> 是什么</strong></p>
+  <p><code>&amp;QMediaPlayer::stateChanged</code> 取的不是某个对象的成员，而是<b>「这个信号在类里是第几个成员」这种「类级别的地址」</b>。C++ 里叫「成员指针」（pointer to member）。它不能单独调用，必须配一个对象：</p>
+  <pre>
+void (QMediaPlayer::*p)() = &amp;QMediaPlayer::stop;   // 类的成员函数指针
+QMediaPlayer player;
+(player.*p)();                                      // 配上对象才可调用（.* 运算符）</pre>
+  <p>Qt5 的 <code>connect</code> 新语法正是利用这个特性：<b>信号和槽的类型在编译期就能被检查</b>，参数不匹配直接编译报错。对比 Qt4 的字符串写法 <code>connect(player, SIGNAL(stateChanged(QMediaPlayer::State)), ...)</code> —— 写错了要等到<b>运行时</b>才在终端打印警告，程序却不崩，非常难查。</p>
+  <p><b>为什么传的是「基类的信号」？</b>例如 <code>&amp;QAbstractSlider::valueChanged</code>：<code>QSlider</code> 自己没重定义这个信号，它继承自 <code>QAbstractSlider</code>。C++ 允许用「基类名」来指代继承来的成员，所以这么写完全合法。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 4-②　枚举（enum）与作用域</strong></p>
+  <p>本项目里到处出现 <code>QMediaPlayer::PlayingState</code> 这种「类名::值」的写法，原因是 C++ 的<b>普通枚举值会泄漏到外层作用域</b>：</p>
+  <pre>
+enum State { StoppedState, PlayingState, PausedState };   // 传统 C 风格 enum
+// 直接用 PlayingState 也行，但很容易和别处的同名值冲突
+player-&gt;state() == QMediaPlayer::PlayingState             // 本项目这种写法更清楚、也避免冲突</pre>
+  <p><b>C++11 的改进：</b><code>enum class</code>（作用域枚举）强制要求写全名，不再泄漏。本项目里的 <code>enum COMPARE{DEFAULT, TITLE, AUTHOR, DURATION, EQUALITY}</code>（<code>MyMusic.h:38</code>）就是<b>传统的、会泄漏的</b>写法 —— 这也是为什么 <code>MusicList::sort_by(AUTHOR)</code> 里能直接写 <code>AUTHOR</code> 而不用加前缀。☆ 知道有这个差异即可。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 4-①　<code>playlist</code> 没有父对象，也没被 delete。</strong><code>:74 playlist = new QMediaPlaylist;</code> 后面<b>再也找不到 <code>delete playlist</code></b>（析构函数 <code>:47-50</code> 只删了 <code>ui</code>）。所以这个对象会一直活到进程结束，属于<b>内存泄漏</b>。本进程整个生命周期只 <code>new</code> 一次，泄漏量很小，但习惯不对。</p>
+  <p><strong>正确写法有两种：</strong>① <code>new QMediaPlaylist(this)</code>（认主窗口当爹，自动回收）；② 在 <code>~MainWidget()</code> 里 <code>delete playlist;</code>。★ 判断标准永远是那句老话：<b>有父对象 → Qt 管；没父对象 → 自己管。</b></p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 4-②　<code>stateChanged</code> 是 Qt5 的写法。</strong>从 Qt 5.15 起该信号已标记废弃，改名 <code>playbackStateChanged</code>（同时 <code>state()</code> → <code>playbackState()</code>），Qt6 里彻底移除。本项目用 Qt 5.12.8 所以没问题，但迁移时会踩。☆ 知道即可。</p>
+</div>
+
+<div class="note">
+  <p><strong>为什么 <code>positionChanged</code> 不会「自己套自己」死循环？</strong>因为 <code>:81</code> 和 <code>:80</code> 是<b>两个方向</b>的连线：<code>:80</code> 是「用户拖滑块 → 跳播放位置」，<code>:81</code> 是「播放位置变了 → 移动滑块」。当 <code>:81</code> 把滑块值改了，会再触发 <code>:80</code> 的 <code>set_position</code> —— 但 <code>:219-223</code> 里有一道判断：</p>
+  <pre>
+void MainWidget::set_position(int pos)
+{
+    if (qAbs(player-&gt;position() - pos) &gt; 99)   // 差得不够多就不理它
+        player-&gt;setPosition(pos);
+}</pre>
+  <p>只有「差值超过 99 毫秒」才真的去跳转。这样「播放器 → 滑块 → 播放器」的回环就被自动掐断了。★ 这叫<b>防抖/去回环</b>，是 GUI 编程里非常常用的手法。</p>
+</div>
+
+<h2 class="pgbreak">5. 站点⑤：init_sqlite() —— 歌单落盘（SQLite）</h2>
+
+<pre>
+文件：x86/MusicPlayerWW/MainWidget.cpp
+86  void MainWidget::init_sqlite()
+87  {
+88      QSqlDatabase database;
+89      if(QSqlDatabase::contains("qt_sql_default_connection"))  // 检查是否建立过连接了
+90      {
+91          database = QSqlDatabase::database("qt_sql_default_connection");
+92      }
+93      else
+94      {
+95          database = QSqlDatabase::addDatabase("QSQLITE");
+96          database.setDatabaseName("Music.db");
+97          database.setUserName("WW");
+98          database.setPassword("123456");
+99          qDebug() &lt;&lt; "数据库建立连接";  // 测试用
+100         if(!database.open())
+101         {
+102             QMessageBox::critical(this,"无法打开数据库文件：Music.db",database.lastError().databaseText());
+103             exit(-1);
+104         }
+105     }
+112     QSqlQuery querySql;
+113     querySql.exec(QString("select count(*) from sqlite_master where type='table' and name='%1'").arg("MusicInfo"));
+114     if(querySql.next())
+115     {
+116         if(querySql.value(0).toInt() == 0)
+117         {
+118             QSqlQuery query;
+119             QString createSql = "create table MusicInfo (url varchar(200), author varchar(50), title varchar(50), duration bigint, albumTitle varchar(50), bitRate int)";
+120             query.prepare(createSql);
+121             if(query.exec()) qDebug() &lt;&lt; "表建立";  // 测试用
+122         }
+123     }
+124 }
+</pre>
+
+<table class="cols-4a">
+  <caption>表 5-1　数据库相关 Qt 接口详解</caption>
+  <thead>
+    <tr><th>接口</th><th>写法</th><th>参数 / 返回</th><th>作用与注意事项</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>QSqlDatabase::addDatabase</code> ★★</td>
+      <td><code>addDatabase("QSQLITE")</code></td>
+      <td>驱动名；返回连接对象</td>
+      <td>注册一个数据库连接。★ 必须先在 <code>.pro</code> 里写 <code>QT += sql</code>（<code>MusicPlayerWW.pro:1</code>），否则编译期就找不到头文件。SQLite 是「一个文件就是一个库」，不需要装服务器。</td>
+    </tr>
+    <tr>
+      <td><code>contains()</code> / <code>database()</code></td>
+      <td><code>QSqlDatabase::contains("qt_sql_default_connection")</code></td>
+      <td>名字；返回 <code>bool</code> / 连接</td>
+      <td>查「这个连接名是否已注册」/「按名字取回连接」。★ 这两个是<b>静态函数</b>（属于类，不需要对象），所以用 <code>类名::函数()</code> 调用。<code>"qt_sql_default_connection"</code> 是 <code>addDatabase</code> 不传名字时的默认连接名。</td>
+    </tr>
+    <tr>
+      <td><code>setDatabaseName</code> ★</td>
+      <td><code>setDatabaseName("Music.db")</code></td>
+      <td>文件名</td>
+      <td>指定数据库文件。<b>这里是相对路径</b> —— 相对的是「进程的当前工作目录」，而不是 exe 所在目录。★ 这是个经典坑，见下面的红框。要稳妥应该用 <code>QCoreApplication::applicationDirPath() + "/Music.db"</code>。</td>
+    </tr>
+    <tr>
+      <td><code>setUserName</code> / <code>setPassword</code></td>
+      <td><code>setUserName("WW")</code></td>
+      <td>字符串</td>
+      <td>SQLite 不使用用户名/密码，这里设置了也无效（属于「换个数据库也能用」的写法惯性）。☆</td>
+    </tr>
+    <tr>
+      <td><code>open()</code> / <code>lastError()</code> ★★</td>
+      <td><code>if(!database.open()) {...}</code></td>
+      <td>返回 <code>bool</code> / <code>QSqlError</code></td>
+      <td>打开数据库，返回是否成功。<code>lastError().databaseText()</code> 取数据库层的错误文本。★ <b>任何 I/O 都要检查返回值</b>，这是好习惯。</td>
+    </tr>
+    <tr>
+      <td><code>QMessageBox::critical</code> ★</td>
+      <td><code>QMessageBox::critical(this, 标题, 内容)</code></td>
+      <td>父窗口、标题、正文</td>
+      <td>弹一个「红叉」模态对话框。<b>静态函数</b>，一行就够。★ 在嵌入式设备上弹窗可能没人看，实际产品里更常见的是写日志。</td>
+    </tr>
+    <tr>
+      <td><code>QSqlQuery</code> ★★</td>
+      <td><code>QSqlQuery querySql;</code></td>
+      <td>可传数据库连接</td>
+      <td>执行 SQL 的对象。<code>exec()</code> 执行语句（增删改查都行）；<code>next()</code> 把结果集游标移到下一行并返回是否有效；<code>value(i)</code> 取第 i 列（返回 <code>QVariant</code>）。</td>
+    </tr>
+    <tr>
+      <td><code>prepare()</code> ★★</td>
+      <td><code>query.prepare(createSql)</code></td>
+      <td>SQL 字符串</td>
+      <td>预编译 SQL。<b>建表语句里的表名/列名不能用参数占位符</b>，所以只能拼字符串（这也是 <code>:113</code> 用 <code>.arg()</code> 拼表名的原因）。真正的<b>数据</b>才用 <code>?</code> 占位 + <code>addBindValue</code>（见 §9.5），那才防注入。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 5-①　RAII：栈对象自动析构</strong></p>
+  <p>注意 <code>:88 QSqlDatabase database;</code> 和 <code>:112 QSqlQuery querySql;</code> 都是<b>在栈上直接定义对象</b>，没有 <code>new</code>，也没有 <code>delete</code>。函数一返回，它们就<b>自动</b>析构。这个「把资源的释放交给析构函数」的做法有个专门名字：<b>RAII</b>（Resource Acquisition Is Initialization，资源获取即初始化）。</p>
+  <p>本项目里到处都是 RAII 的影子：</p>
+  <ul>
+    <li><code>MyMusic.cpp:29 QMediaPlayer tmpPlayer;</code> —— 临时播放器，用完自动销毁。</li>
+    <li><code>LyricWidget.cpp:26 QFile lyricFile(filePath);</code> —— 文件对象，出作用域自动关文件。</li>
+    <li><code>MusicList.cpp:19 QProgressDialog proDialog(...);</code> —— 进度对话框，函数结束自动消失。</li>
+    <li><code>main.cpp:8 MainWidget w;</code> —— 主窗口也一样。</li>
+  </ul>
+  <p><b>对比 <code>new</code>：</b><code>new</code> 出来的对象必须有人负责 <code>delete</code>（要么你自己，要么 Qt 父子关系）。<b>能用栈对象就别用 <code>new</code></b>，这是 C++ 最重要的一条经验。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 5-②　<code>QVariant</code>：Qt 的「万能类型」</strong></p>
+  <p><code>querySql.value(0).toInt()</code> 里的 <code>value(0)</code> 返回的是 <code>QVariant</code> —— 一个能装下 <code>int</code>/<code>double</code>/<code>QString</code>/<code>QImage</code>… 任意类型的「盒子」。SQL 的列类型在运行时才知道，所以必须有个万能盒子来装。</p>
+  <p>用法就三步：<b>存</b>（构造函数或 <code>QVariant::fromValue</code>）、<b>取</b>（<code>toInt()</code>/<code>toString()</code>/<code>toLongLong()</code>）、<b>强类型取</b>（<code>value&lt;QImage&gt;()</code> 模板函数）。本项目 <code>:266</code> 就是这么拿封面的：</p>
+  <pre>
+QImage picImage = player-&gt;metaData(QStringLiteral("ThumbnailImage")).value&lt;QImage&gt;();</pre>
+  <p>★ 记住「<code>.value&lt;T&gt;()</code> = 从盒子里按 T 类型取」。C++17 的 <code>std::any</code> 是标准库里的同类东西。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 5-①　<code>"Music.db"</code> 是相对路径。</strong>相对的是<b>进程的当前工作目录</b>。从 Qt Creator 里运行，工作目录通常是「构建目录」；双击 exe 运行，工作目录是 exe 所在目录；从主菜单用 <code>QProcess</code> 拉起，工作目录又可能是主菜单的目录。结果是：<b>同一个程序在不同启动方式下，可能读写到两个不同的 <code>Music.db</code></b>，表现为「我加的歌不见了」。</p>
+  <p><strong>改法：</strong><code>database.setDatabaseName(QCoreApplication::applicationDirPath() + "/Music.db");</code> —— 锚定到 exe 所在目录。（这与上一篇 §2 里「子进程路径要用 <code>QDir::currentPath()</code> 去拼导致找不到」是同一类问题。）</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 5-②　<code>exit(-1)</code> 太粗暴。</strong><code>:103</code> 在数据库打不开时直接 <code>exit(-1)</code>：这会<b>立刻终止进程，不执行任何析构函数</b>、不弹任何后续提示。调试期图省事可以，正式产品里至少要让用户看到「为什么退出」。☆</p>
+</div>
+
+<div class="note">
+  <p><strong>为什么要自己 <code>create table</code>？</strong>SQLite 的 <code>open()</code> 在文件不存在时会<b>自动创建一个空库文件</b>，但库里面是空的、没有任何表。所以程序必须自己判断「表在不在，不在就建」。<code>:113</code> 那句 SQL 查的是 SQLite 的内置系统表 <code>sqlite_master</code>（记录所有表/索引的信息），数出名字叫 <code>MusicInfo</code> 的表有几张：0 张 = 还没建。</p>
+</div>
+
+<h2 class="pgbreak">6. 站点⑥：init_musiclist_widget() —— 歌单控件与数据恢复</h2>
+
+<pre>
+文件：x86/MusicPlayerWW/MainWidget.cpp
+126 void MainWidget::init_musiclist_widget()
+127 {
+128     ui-&gt;musicListWidget-&gt;clear();  // 先清空
+129     ui-&gt;musicListWidget-&gt;setFrameShape(QListWidget::NoFrame);  // 去除边框
+130     ui-&gt;musicListWidget-&gt;setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+131     ui-&gt;musicListWidget-&gt;setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+132     // 设置字体
+133     QFont font;
+134     font.setPointSize(14);
+135     font.setBold(true);
+136     ui-&gt;musicListWidget-&gt;setFont(font);
+137     ui-&gt;musicListWidget-&gt;setIconSize(QSize(30, 30));
+138     ui-&gt;musicListWidget-&gt;setVerticalScrollMode(QListWidget::ScrollPerPixel);  // 设置为像素滚动
+139     QScroller::grabGesture(ui-&gt;musicListWidget, QScroller::LeftMouseButtonGesture);  // 设置鼠标左键拖动
+140     // 从数据库恢复
+141     ui-&gt;musicListWidget-&gt;musicList.read_from_sql();
+142     ui-&gt;musicListWidget-&gt;refresh();
+143 }
+</pre>
+
+<table class="cols-4a">
+  <caption>表 6-1　歌单控件相关 Qt 接口详解</caption>
+  <thead>
+    <tr><th>接口</th><th>写法</th><th>参数 / 返回</th><th>作用与注意事项</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>QListWidget::clear</code> ★</td>
+      <td><code>clear()</code></td>
+      <td>无参</td>
+      <td>清空列表里所有「行」。★ 注意它清的是<b>显示出来的行</b>（<code>QListWidgetItem</code>），跟数据库、跟 <code>MusicList</code> 里的 <code>vector</code> 数据是三份不同的东西。</td>
+    </tr>
+    <tr>
+      <td><code>setFrameShape</code> ☆</td>
+      <td><code>setFrameShape(QListWidget::NoFrame)</code></td>
+      <td>枚举 <code>QFrame::Shape</code></td>
+      <td>去掉列表框自带的凹陷边框。<code>QListWidget</code> 继承自 <code>QFrame</code>，所以有「边框形状」这个属性。</td>
+    </tr>
+    <tr>
+      <td><code>setVerticalScrollBarPolicy</code> ★</td>
+      <td><code>setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff)</code></td>
+      <td>枚举 <code>Qt::ScrollBarPolicy</code></td>
+      <td>强制隐藏滚动条（横向纵向都关）。★ 滚动条关掉了，但列表仍然可以滚动 —— 靠自己写的手势或 <code>QScroller</code>。★ 枚举值 <code>ScrollBarAlwaysOff</code> 在 <code>Qt</code> 命名空间下，所以要写 <code>Qt::</code>。</td>
+    </tr>
+    <tr>
+      <td><code>QFont</code> / <code>setFont</code> ★</td>
+      <td><code>QFont font; font.setPointSize(14); setFont(font);</code></td>
+      <td>—</td>
+      <td><code>QFont</code> 是「值类型」：先在栈上配置好，再按值传给控件（内部会拷贝一份）。<code>setPointSize(14)</code> 单位是「磅」，14 磅在 1024×600 屏幕上大概 19px。</td>
+    </tr>
+    <tr>
+      <td><code>setIconSize(QSize)</code> ★</td>
+      <td><code>setIconSize(QSize(30, 30))</code></td>
+      <td><code>QSize</code></td>
+      <td>每行图标显示为 30×30 像素。<code>QSize</code> 是「宽+高」的小值类，常这样临时构造并传参。</td>
+    </tr>
+    <tr>
+      <td><code>setVerticalScrollMode</code> ☆</td>
+      <td><code>setVerticalScrollMode(QListWidget::ScrollPerPixel)</code></td>
+      <td>枚举 <code>ScrollMode</code></td>
+      <td>滚动方式：<code>ScrollPerItem</code>（一格一格跳）/ <code>ScrollPerPixel</code>（逐像素平滑滚）。触摸屏上必须用后者，否则体验很差。</td>
+    </tr>
+    <tr>
+      <td><code>QScroller::grabGesture</code> ★</td>
+      <td><code>QScroller::grabGesture(widget, QScroller::LeftMouseButtonGesture)</code></td>
+      <td>目标控件、手势类型</td>
+      <td>给控件装上「左手势引擎」，让它能像手机一样<b>按住拖动</b>（带惯性）。嵌入式触摸屏上非常常用。★ 静态函数，不用建对象。</td>
+    </tr>
+    <tr>
+      <td><code>read_from_sql()</code></td>
+      <td><code>ui-&gt;musicListWidget-&gt;musicList.read_from_sql()</code></td>
+      <td>无参</td>
+      <td><b>自定义函数</b>（<code>MusicList.cpp:110-130</code>）：把数据库里的歌读回 <code>vector&lt;MyMusic&gt;</code>。★ 这里能看到「<code>MainWidget</code> 直接访问 <code>musicListWidget</code> 的私有成员 <code>musicList</code>」—— 靠的是友元（下面蓝框）。</td>
+    </tr>
+    <tr>
+      <td><code>refresh()</code></td>
+      <td><code>ui-&gt;musicListWidget-&gt;refresh()</code></td>
+      <td>无参</td>
+      <td><b>自定义函数</b>（<code>MusicListWidget.cpp:8-12</code>）：<code>clear()</code> + 把 <code>vector</code> 里的歌重新铺成列表行。<b>「数据改了 → 调 refresh()」是本项目的固定套路</b>（排序、去重、添加、清空之后都要调）。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 6-①　<code>friend</code> 友元：给别人的私有成员开一扇后门</strong></p>
+  <p><code>MusicList</code> 的 <code>musicArr</code> 是 <code>private</code>（<code>MusicList.h:15</code>），按封装原则外面谁都不能碰。但本项目里 <code>MainWidget</code> 直接写了 <code>ui-&gt;musicListWidget-&gt;musicList.musicArr[index]</code>（<code>MainWidget.cpp:286</code>）—— 能这么写，是因为两个类里都提前打了招呼：</p>
+  <pre>
+// MusicListWidget.h:25
+friend class MainWidget;   //「MainWidget 是我朋友，可以看我私有成员」
+
+// MusicList.h:53
+friend class MainWidget;
+
+// MyMusic.h:32-34
+friend class MusicCompare;  // 让比较器直接读 author/title/duration，不用走 getter
+friend class MusicList;
+friend class MainWidget;</pre>
+  <p><b>要点：</b>① 友元关系<b>不被继承、不可传递</b>（A 是 B 的友元，B 是 C 的友元，不代表 A 能看 C）；② 友元是<b>单方向</b>的（你把我当朋友，不代表我能看你）；③ 友元<b>破坏封装</b>，用得越多代码越难维护 —— 本项目的用法属于「图方便」，能改用公开 getter 更好。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 6-②　值语义、拷贝与 Qt 的隐式共享（COW）</strong></p>
+  <p><code>:136 ui-&gt;musicListWidget-&gt;setFont(font);</code> 这里 <code>font</code> 是<b>按值传递</b>的：函数参数是 <code>const QFont &amp;</code>，但控件内部会存一份自己的拷贝。也就是说「你改了外面的 <code>font</code>，控件不会跟着变」—— 这就是<b>值语义</b>。</p>
+  <p>那会不会很慢？不会。因为 <code>QFont</code>、<code>QString</code>、<code>QImage</code>、<code>QList</code> 这些 Qt 类型都实现了<b>隐式共享（copy-on-write，写时复制）</b>：拷一份只是把「引用计数 +1」，真正复制数据要等到某一边<b>要改</b>的时候。</p>
+  <pre>
+QImage a = bigImage;   // 只是引用计数 +1，几乎零成本
+a.setPixel(...);       // a 要改了 → 这时才真正拷贝一份数据</pre>
+  <p>★ 记住：<b>Qt 的值类型「传起来不贵」，该按值用就按值用，不要为了「省拷贝」到处写指针</b>。这跟 <code>std::vector&lt;MyMusic&gt;</code> 那种「拷贝就是真拷贝」的类型不一样（§9.3 会讲）。</p>
+</div>
+
+<div class="note">
+  <p><strong>为什么关掉滚动条还让 <code>QScroller</code> 接管？</strong>因为目标是「像手机歌单那样滑」。系统滚动条又粗又丑（占 80px），而且拖动体验不适合触摸。关掉它、用 <code>QScroller</code> 实现「按住拖动 + 松手惯性滑动」，是嵌入式 Qt UI 的标准做法。<b>代价：鼠标用户会觉得不好用</b>，因为普通滚轮和拖动都被手势抢走了。</p>
+</div>
+
+<h2 class="pgbreak">§7　站点⑦ init_shm()：和主菜单进程「打电话」</h2>
+
+<p>播放器是被主菜单 <code>QProcess</code> 拉起来的<b>独立进程</b>。两个进程各自有自己的内存空间，谁也看不见谁的变量。要让「菜单上的音量键」能控制「播放器里的音量」，必须借助操作系统的<b>共享内存</b>。本项目用的方案是：</p>
+
+<pre>
+全局变量（MainWidget.cpp:17-20）
+  QString     nameFile;      // 扫描到的音乐文件名列表
+  QString     openDir;       // 音乐目录
+  int         preNum = 0;    // 上一次的命令字（防重复执行）
+  int         volRecord = 50;// 音量记忆值（初始 50）
+
+void MainWidget::init_shm()          // MainWidget.cpp:189-210
+{
+191    shmMenuToMusic.setKey(QStringLiteral("shm_for_music"));  //「菜单→播放器」信箱
+192    shmMusicToMenu.setKey(QStringLiteral("shm_for_menu"));   //「播放器→菜单」信箱
+193    switchAppTimer = new QTimer(this);
+194    detachTimer    = new QTimer(this);
+195    // 定时监测共享内存并读数据
+196    readTimer = new QTimer(this);
+197    connect(readTimer, &amp;QTimer::timeout, [&amp;]()      // ← lambda 匿名函数
+198    {
+199        qDebug() &lt;&lt; "等待";
+200        if(shmMenuToMusic.attach())                  // 尝试「挂上」信箱
+201        {
+202            int* sharedData = static_cast&lt;int*&gt;(shmMenuToMusic.data());
+203            int currentNum = *sharedData;            // 读出命令字
+204            qDebug() &lt;&lt; "MusicPlayer:" &lt;&lt; currentNum;
+205            exec_by_num(currentNum);                 // 执行命令
+206            shmMenuToMusic.detach();                 // 挂断
+207        }
+208    });
+209    readTimer-&gt;start(1000);                          // 每秒查一次
+}
+</pre>
+
+<table class="cols-4a">
+  <caption>表 7-1　QSharedMemory 相关 Qt 接口详解</caption>
+  <thead>
+    <tr><th>接口</th><th>写法</th><th>参数 / 返回</th><th>作用与注意事项</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>setKey</code> ★</td>
+      <td><code>shm.setKey("shm_for_music")</code></td>
+      <td>字符串键名</td>
+      <td>给这块共享内存起个<b>全局名字</b>。★ 两个进程要通信，靠的就是<b>同一个键名</b>：菜单进程用这个键名 <code>create</code>，播放器进程用同样键名 <code>attach</code>，操作系统就把同一块物理内存映射给两边。</td>
+    </tr>
+    <tr>
+      <td><code>create</code> ★</td>
+      <td><code>shm.create(sizeof(int), QSharedMemory::ReadWrite)</code></td>
+      <td>字节数、访问模式</td>
+      <td><b>创建</b>共享内存段。<b>谁写谁 create，谁读谁 attach</b>。★ 如果同名的已经存在会返回 <code>false</code>（所以 <code>on_btnQuit_clicked</code> 里先 <code>detach</code> 再 <code>create</code>，见 §12）。</td>
+    </tr>
+    <tr>
+      <td><code>attach</code> ★</td>
+      <td><code>shm.attach()</code></td>
+      <td>返回 <code>bool</code></td>
+      <td><b>挂载</b>到已有的共享内存段。返回 <code>true</code> 表示「这次真读到东西了」。★ 本项目把它当作「有没有新命令」的<b>探针</b>：attach 成功 = 对方写东西了。这是<b>偷懒用法</b>，正规做法见下面 note。</td>
+    </tr>
+    <tr>
+      <td><code>data</code> ★</td>
+      <td><code>shm.data()</code></td>
+      <td>返回 <code>void*</code></td>
+      <td>拿到共享内存的<b>首地址</b>。类型是 <code>void*</code>（无类型指针），必须自己转成 <code>int*</code> 才能用（蓝框 7-②）。</td>
+    </tr>
+    <tr>
+      <td><code>detach</code> ★</td>
+      <td><code>shm.detach()</code></td>
+      <td>返回 <code>bool</code></td>
+      <td><b>挂断</b>。detach 之后本进程就不再映射这块内存。★ 如果本进程是<b>最后一个</b>挂着的，内核会销毁这段共享内存 —— 所以读的一方 detach 得太早，会把写的一方的东西一起弄没，<b>时序很关键</b>。</td>
+    </tr>
+    <tr>
+      <td><code>isAttached</code></td>
+      <td><code>shm.isAttached()</code></td>
+      <td>返回 <code>bool</code></td>
+      <td>问「我现在挂着吗」，用于 detach 前先判断，避免重复 detach。</td>
+    </tr>
+    <tr>
+      <td><code>lock</code> / <code>unlock</code> ★</td>
+      <td><code>shm.lock(); ... shm.unlock();</code></td>
+      <td>—</td>
+      <td>给共享内存加/解锁，防止两个进程<b>同时读写</b>导致读到「写一半」的脏数据。★ 属于操作系统里「信号量」的用法，对应 <code>QSystemSemaphore</code> 那套概念。</td>
+    </tr>
+    <tr>
+      <td><code>QTimer::start</code> ★</td>
+      <td><code>readTimer-&gt;start(1000)</code></td>
+      <td>毫秒</td>
+      <td>启动定时器，每 1000ms 触发一次 <code>timeout</code>。★ <code>new QTimer(this)</code> 传了 <code>this</code>，所以定时器归窗口管，窗口销毁时自动回收（§2 的父子对象）。</td>
+    </tr>
+    <tr>
+      <td><code>connect</code> + lambda ★</td>
+      <td><code>connect(readTimer, &amp;QTimer::timeout, [&amp;](){...})</code></td>
+      <td>—</td>
+      <td>第三、四个参数<b>合并</b>成了一个 lambda：没有接收者对象，只写一个匿名函数体（蓝框 7-①）。<b>不写接收者时，没有「自动断开」的保护</b>，这点要小心。</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="cols-4a">
+  <caption>表 7-2　六个命令字（MainWidget.h:17-22）与 exec_by_num 的分支</caption>
+  <thead>
+    <tr><th>宏</th><th>值</th><th>含义</th><th>exec_by_num 里干了什么</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>SWITCH_VISIBILITY</code></td><td>1</td><td>切换窗体可见性</td><td><code>this-&gt;show()</code> → 把播放器窗口重新显示出来</td></tr>
+    <tr><td><code>VOL_DOWN</code></td><td>2</td><td>音量减小</td><td>若当前音量 &gt; 20 就强制设为 20（← 逻辑可疑，见坑 8-①）</td></tr>
+    <tr><td><code>VOL_UP</code></td><td>3</td><td>音量增大</td><td><code>sliderVol-&gt;setValue(volRecord)</code> → 恢复到记忆音量</td></tr>
+    <tr><td><code>MUSIC_PLAY</code></td><td>4</td><td>播放音乐</td><td><code>player-&gt;play()</code></td></tr>
+    <tr><td><code>MUSIC_PAUSE</code></td><td>5</td><td>暂停音乐</td><td><code>player-&gt;pause()</code></td></tr>
+    <tr><td><code>CLOSE_APP</code></td><td>6</td><td>关闭应用</td><td><code>this-&gt;close()</code></td></tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 7-①　lambda 表达式：就地写一个「匿名函数」</strong></p>
+  <p>C++11 引入的 lambda，让你不用专门写一个函数就地把代码块当参数传过去。完整语法：</p>
+  <pre>
+[捕获列表](参数列表) -&gt; 返回类型 { 函数体 }
+   ↑ 必写     ↑ 可省    ↑ 通常可省（编译器自动推导）
+
+// 本项目这一句拆开看：
+connect(readTimer, &amp;QTimer::timeout, [&amp;]() { ...do something... });
+                                        ↑↑↑  ↑
+                                    捕获列表 空参数
+</pre>
+  <p><b>捕获列表 = 「这个匿名函数要用到外面的哪些变量」</b>，几种写法：</p>
+  <table class="cols-3b">
+    <thead><tr><th>写法</th><th>含义</th><th>风险</th></tr></thead>
+    <tbody>
+      <tr><td><code>[]</code></td><td>什么都不捕获，只能用参数和自己的局部变量</td><td>无</td></tr>
+      <tr><td><code>[&amp;]</code>（本项目用的）</td><td><b>按引用</b>捕获所有用到的外部变量</td><td>★ 引用的变量若比 lambda 先死 → 悬垂引用</td></tr>
+      <tr><td><code>[=]</code></td><td><b>按值</b>捕获（拷贝一份）</td><td>拷贝有成本；且 <code>this</code> 仍是按值捕获指针</td></tr>
+      <tr><td><code>[this]</code></td><td>只捕获当前对象指针，用于访问成员</td><td>对象先死则悬垂</td></tr>
+      <tr><td><code>[x, &amp;y]</code></td><td>混用：x 按值、y 按引用</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <p>★ 关键点：在<b>成员函数</b>里写 <code>[&amp;]</code> 或 <code>[=]</code>，其实都<b>顺带捕获了 <code>this</code> 指针</b>（C++20 起 <code>[=]</code> 捕获 this 被废弃，要显式写 <code>[=, this]</code>）。lambda 里能直接写 <code>shmMenuToMusic</code>，就是因为 <code>this-&gt;shmMenuToMusic</code>。<b>lambda 体质上是一个「带 operator() 的匿名类对象」，所以它也叫「闭包」</b>（跟 §9.2 的仿函数是同族，只是 lambda 由编译器自动生成）。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 7-②　<code>void*</code> 无类型指针与 <code>static_cast</code> 强制转换</strong></p>
+  <p><code>shm.data()</code> 的返回类型是 <code>void*</code> —— 「一块内存的首地址，但我不知道里面装的是什么类型」。要用它，得先<b>告诉编译器</b>里面是 <code>int</code>：</p>
+  <pre>
+int* sharedData = static_cast&lt;int*&gt;(shmMenuToMusic.data());
+//  ↑ 转成 int 指针          ↑ C++ 的「显式类型转换」写法
+int currentNum = *sharedData;   // 解引用：读出那个 int
+</pre>
+  <p>C++ 有四种「显式转换」，本项目/日常最常遇到两种：</p>
+  <table class="cols-3a">
+    <thead><tr><th>写法</th><th>用途</th><th>备注</th></tr></thead>
+    <tbody>
+      <tr><td><code>static_cast&lt;T&gt;(x)</code></td><td>相关类型之间的转换（void*↔对象指针、数值↔数值、基类↔派生类引用）</td><td>★ 编译期完成，不检查运行时；本项目大量用它把 <code>qint64</code> 转 <code>int</code></td></tr>
+      <tr><td><code>(T)x</code> C 风格</td><td>什么都行</td><td>粗暴、不区分意图，<b>新代码不推荐</b></td></tr>
+      <tr><td><code>reinterpret_cast&lt;T&gt;(x)</code></td><td>纯粹重新解释二进制位，最危险</td><td>底层编程才用；<code>void*</code>→<code>int*</code> 也允许</td></tr>
+      <tr><td><code>dynamic_cast&lt;T&gt;(x)</code></td><td>多态类型的安全向下转型，失败返回空指针/抛异常</td><td>运行时检查，有性能开销</td></tr>
+    </tbody>
+  </table>
+  <p>★ <code>void*</code> 是 C++ 里唯一的「万能指针」：任何对象指针都能<b>隐式</b>转成 <code>void*</code>，但反过来<b>必须显式</b>转换 —— 这是语言在提醒你「你在丢类型信息，出事自己负责」。<code>malloc</code> 返回的也是 <code>void*</code>，所以 C 代码里到处是 <code>(int*)malloc(...)</code>。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 7-①　<code>[&amp;]</code> 捕获 + 长命对象 = 悬垂</strong></p>
+  <p>本项目的 lambda 只捕获 <code>this</code>（没捕获局部变量），而 <code>readTimer</code> 又是 <code>this</code> 的子对象，<b>活一样长</b>，所以这里侥幸安全。但如果写成下面这样就会炸：</p>
+  <pre>
+void MainWidget::bad_example()
+{
+    int localFlag = 1;                       // 局部变量，函数返回就没
+    connect(readTimer, &amp;QTimer::timeout, [&amp;](){
+        qDebug() &lt;&lt; localFlag;               // ✗ 函数一返回，localFlag 已销毁
+    });                                      //   定时器 1 秒后才触发，读到的是野内存
+}
+// 正确做法：按值捕获 [localFlag]，或干脆别捕获局部变量</pre>
+  <p><b>记忆口诀：lambda 活得比变量的作用域长时，绝不用 <code>[&amp;]</code> 捕获局部变量。</b></p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 7-②　每秒硬轮询 + attach/detach 当探针，既不优雅也不好查错</strong></p>
+  <p>① <code>readTimer-&gt;start(1000)</code> 意味着每条命令<b>平均要等半秒</b>才被执行 —— 按一下音量键，要愣一下才响应。② <code>qDebug() &lt;&lt; "等待"</code> 在没命令时也每秒打一行，<b>串口/终端会被刷屏</b>，真出问题时反而看不见有用日志。③ 用「<code>attach</code> 成功与否」当「有没有新命令」的探针是很脆弱的：只要对端 <code>create</code> 过又没销毁，attach 就一直成功，可能<b>反复执行同一条旧命令</b>。</p>
+  <p><b>更正规的做法</b>：① 用真正的事件通知（<code>QLocalSocket</code>/<code>QLocalServer</code> 或 D-Bus），有数据才醒，不用轮询；② 共享内存方案里，读方读完后<b>主动把值清 0</b>（本项目 <code>shm_to_zero()</code> 就是在干这件事），并配合 <code>QSystemSemaphore</code> 做真正的同步，而不是靠 <code>attach</code> 的成败。</p>
+</div>
+
+<div class="note">
+  <p><strong>为什么不干脆用「一个进程 + 多个窗口」？</strong>因为作者想让播放器<b>独立可执行</b>（<code>MusicPlayerWW</code> 能单独双击运行调试），又想被主菜单「收养」。于是用 <code>QProcess</code> 拉起 + <code>-hide</code> 参数控制初始可见性（§1），再用共享内存代替「函数调用」。<b>代价</b>：两个进程的通信协议（六个宏的值）必须<b>严格一致</b> —— 改了一边忘了另一边，就会出现「点了没反应」这种极难查的 bug。所以宏定义在两个工程的 <code>MainWidget.h</code> 里各写了一份，务必同步修改。</p>
+</div>
+
+<h2 class="pgbreak">§8　站点⑧ exec_by_num()：一个 <code>switch</code> 把命令分发出去</h2>
+
+<p>上一站每秒读出一个数字，这一站就负责「按数字办事」：</p>
+
+<pre>
+void MainWidget::shm_to_zero()        // MainWidget.cpp:145-153
+{
+148    shmMenuToMusic.lock();
+149    int* sharedData = static_cast&lt;int*&gt;(shmMenuToMusic.data());
+150    *sharedData = 0;                  // 读完把信箱清 0，避免重复执行
+151    shmMenuToMusic.unlock();
+152    shmMenuToMusic.detach();          // 挂断
+}
+
+void MainWidget::exec_by_num(int num)// MainWidget.cpp:155-187
+{
+157    switch(num)
+158    {
+159    case SWITCH_VISIBILITY:
+160        this-&gt;show();
+161        shm_to_zero();
+162        break;                        // ← 每个分支都要 break
+163    case VOL_UP:
+164        ui-&gt;sliderVol-&gt;setValue(volRecord);
+165        shm_to_zero();
+166        break;
+167    case VOL_DOWN:
+168        if(ui-&gt;sliderVol-&gt;value() &gt; 20) ui-&gt;sliderVol-&gt;setValue(20);
+169        volRecord = ui-&gt;sliderVol-&gt;value();
+170        shm_to_zero();
+171        break;
+172    case MUSIC_PLAY:
+173        player-&gt;play();
+174        shm_to_zero();
+175        break;
+176    case MUSIC_PAUSE:
+177        player-&gt;pause();
+178        shm_to_zero();
+179        break;
+180    case CLOSE_APP:
+181        this-&gt;close();
+182        shm_to_zero();
+183        break;
+184    default:                          // ← 兜底：不认识的命令什么都不干
+185        break;
+186    }
+}
+</pre>
+
+<div class="cpp">
+  <p><strong>C++ 知识 8-①　<code>switch</code> 语句：本质是一张「跳转表」</strong></p>
+  <p><code>switch(num)</code> 先算出 <code>num</code> 的值，再<b>直接跳到</b>匹配的 <code>case</code> 标签处 —— 它不是一串 <code>if-else</code> 依次比较，而是编译成「跳转表」，所以分支很多时比 <code>if-else</code> 快。三条铁律：</p>
+  <ul>
+    <li><b>① <code>case</code> 后面必须是「编译期常量」</b>：整数或枚举。<b>不能是变量、<code>float</code>、<code>QString</code></b>。本项目用的 <code>SWITCH_VISIBILITY</code> 等宏，预处理后就是常量 <code>1..6</code>，合法。</li>
+    <li><b>② <code>break</code> 不能忘</b>：忘了 <code>break</code>，程序会「贯穿」到下一个 <code>case</code> 继续执行（<b>fallthrough</b>）。本项目每个分支都规规矩矩写了 <code>break</code>。偶尔「故意贯穿」是有用的技巧，但要加注释说明，否则会被当成 bug。</li>
+    <li><b>③ <code>default</code> 兜底</b>：所有 <code>case</code> 都不匹配时执行。本项目写成「空 + break」，即「不认识的命令就忽略」，这是最稳妥的默认策略。</li>
+  </ul>
+  <p>对比 <code>if-else</code>：<code>if</code> 擅长范围判断（<code>x &gt; 20 &amp;&amp; x &lt; 60</code>），<code>switch</code> 擅长「一堆离散等值」。<b>用错场景不会报错，但可读性和性能都差</b>。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 8-②　<code>#define</code> 宏 vs <code>const</code> / <code>constexpr</code></strong></p>
+  <p>本项目用 <code>#define SWITCH_VISIBILITY 1</code> 定义命令字。宏是<b>预处理器</b>做的「纯文本替换」，在编译器看到代码之前就完成了，所以：</p>
+  <table class="cols-3a">
+    <thead><tr><th>对比项</th><th><code>#define</code> 宏</th><th><code>const</code> / <code>constexpr</code></th></tr></thead>
+    <tbody>
+      <tr><td>谁处理</td><td>预处理器（文本替换）</td><td>编译器（真正的变量/常量）</td></tr>
+      <tr><td>有类型吗</td><td><b>没有</b>，就是个文本</td><td>有类型，会做类型检查</td></tr>
+      <tr><td>调试器能看到吗</td><td>看不到（已消失）</td><td>能看到名字和值</td></tr>
+      <tr><td>作用域</td><td>从定义处到文件末尾，<b>污染全局</b></td><td>遵守 <code>{}</code> 作用域</td></tr>
+      <tr><td>易错点</td><td><code>#define SQR(x) x*x</code> → <code>SQR(1+2)</code> 展开成 <code>1+2*1+2</code></td><td>无此问题</td></tr>
+    </tbody>
+  </table>
+  <p><b>现代 C++ 建议</b>：常量优先用 <code>constexpr int kVolMax = 100;</code>（编译期常量、有类型、有作用域），宏只留给「必须由预处理器处理」的场景（如头文件守卫、条件编译）。本项目这些命令字改成 <code>enum class Cmd : int { SwitchVisibility = 1, VolDown = 2, ... };</code> 会更安全（还能顺带避免 §8 里 <code>int num</code> 和枚举混用的问题）。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 8-③　<code>this</code> 指针：成员函数怎么知道「是哪个对象在调我」</strong></p>
+  <p><code>:160 this-&gt;show();</code> 里的 <code>this</code> 是编译器偷偷塞给每个<b>非静态成员函数</b>的一个隐藏参数，类型是 <code>MainWidget*</code>，指向「正在执行这个函数的那个对象」。</p>
+  <pre>
+// 你写的：
+void MainWidget::on_btnPlay_clicked() { player-&gt;play(); }
+// 编译器心里想的（示意）：
+void MainWidget::on_btnPlay_clicked(MainWidget* this) { this-&gt;player-&gt;play(); }
+</pre>
+  <p>所以 <code>this-&gt;show()</code> 和直接写 <code>show()</code> 完全等价。什么时候<b>必须</b>写 <code>this</code>？① 成员变量和参数重名时（<code>this-&gt;num = num;</code>）；② 在 lambda 里访问成员（要捕获 <code>this</code>，见 7-①）；③ 需要把「自己」传给别人时（<code>connect(..., this, ...)</code>）。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 8-①　<code>VOL_UP</code> 和 <code>VOL_DOWN</code> 逻辑不对称，音量行为很怪</strong></p>
+  <p>看这两行（<code>MainWidget.cpp:164</code> 与 <code>:168-169</code>）：</p>
+  <pre>
+case VOL_UP:                                   // 音量增大
+    ui-&gt;sliderVol-&gt;setValue(volRecord);        // 直接把滑块设成「记忆值」
+    break;
+
+case VOL_DOWN:                                 // 音量减小
+    if(ui-&gt;sliderVol-&gt;value() &gt; 20) ui-&gt;sliderVol-&gt;setValue(20);  // 只允许降到 20？
+    volRecord = ui-&gt;sliderVol-&gt;value();
+    break;</pre>
+  <p><b>问题</b>：① <code>VOL_UP</code> 是「恢复记忆音量」，根本不是「在当前基础上 +1」；② <code>VOL_DOWN</code> 更奇怪 —— 当前音量大于 20 就<b>直接跳到 20</b>，小于等于 20 就<b>什么都不做</b>，这不是「减小」，是「设上限」。③ 两者的行为完全不对称（一个用 <code>volRecord</code>，一个不用），说明这段逻辑是<b>没写完/写错</b>的占位代码。</p>
+  <p><b>正确写法应是</b>对称的步进，例如：</p>
+  <pre>
+case VOL_UP:   ui-&gt;sliderVol-&gt;setValue(ui-&gt;sliderVol-&gt;value() + 5); break;
+case VOL_DOWN: ui-&gt;sliderVol-&gt;setValue(ui-&gt;sliderVol-&gt;value() - 5); break;
+//（setValue 内部会自动裁剪到 sliderVol 的 [minimum, maximum] 范围）</pre>
+</div>
+
+<div class="note">
+  <p><strong>为什么读完后要 <code>shm_to_zero()</code>？</strong>因为共享内存不会自己「消费掉」数据。如果不清零，下一次 <code>readTimer</code> 的 <code>attach()</code> 仍会成功、仍读到同一个旧数字，于是<b>同一条命令被无限重复执行</b>（比如 <code>CLOSE_APP</code> 会一直触发 <code>close()</code>）。<code>shm_to_zero()</code> 就是「把信箱掏空」的手工确认机制 —— 属于「手动 ACK」，这是很多嵌入式进程通信里常见的土办法：<b>能跑，但要靠人守规矩</b>。</p>
+</div>
+
+<h2 class="pgbreak">§9　站点⑨ 数据模型三件套：<code>MyMusic</code> / <code>MusicCompare</code> / <code>MusicList</code></h2>
+
+<p>前面八站都在「搭界面、连信号、开信箱」。但界面上那一行行歌名是从哪儿来的？答案是三个自己写的类，它们构成了本项目的<b>数据层</b>：</p>
+
+<table class="cols-3a">
+  <caption>表 9-0　数据层三件套分工</caption>
+  <thead><tr><th>类</th><th>文件</th><th>职责</th></tr></thead>
+  <tbody>
+    <tr><td><code>MyMusic</code></td><td>MyMusic.h / .cpp</td><td><b>一条记录</b>：一首歌的所有信息（地址、歌名、歌手、时长、封面、比特率），以及「解析元数据、写数据库、找歌词」这几个动作。</td></tr>
+    <tr><td><code>MusicCompare</code></td><td>MyMusic.h / .cpp</td><td><b>一把尺子</b>：给 <code>std::sort</code> / <code>std::unique</code> 用的比较器，决定「谁排在前面」「谁算重复」。</td></tr>
+    <tr><td><code>MusicList</code></td><td>MusicList.h / .cpp</td><td><b>一个容器</b>：持有 <code>std::vector&lt;MyMusic&gt;</code>，负责增删改查、排序、去重、与数据库同步。</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <p><b>一句话抓住三者关系：</b><code>MusicList</code> 里装着一堆 <code>MyMusic</code>，要排序/去重时把 <code>MusicCompare</code> 交给 STL 算法当「裁判」。所以 §9.3 讲容器与迭代器，§9.4 讲算法，都围绕这三者展开。</p>
+</div>
+
+<h3>9.1　<code>MyMusic</code>：一首歌的「档案卡」</h3>
+
+<pre>
+// MyMusic.h:8-35
+class MyMusic
+{
+private:                                  // ← 默认 private（class 与 struct 的唯一区别）
+11    QUrl url;              // 歌曲地址
+12    QString author;        // 作者
+13    QString title;         // 歌名
+14    QString albumTitle;    // 唱片集
+15    qint64 duration;       // 时长（毫秒）
+16    int bitRate;           // 比特率
+17    QImage picImg;         // 专辑封面
+19    void init_from_url();                  // 私有：靠 QMediaPlayer 解析
+20    void init_from_name(QString musicName); // 私有：拼出绝对路径再解析
+
+public:
+23    MyMusic() {}                           // 默认构造：空函数体！
+24    MyMusic(QUrl iurl);                    // 构造重载 ①
+25    MyMusic(QString musicName);            // 构造重载 ②
+27    QUrl get_url() const {return url;}      // const 成员函数
+28    QString get_brief_info() const;
+29    QString get_lyric();
+30    void insert_sql();
+32    friend class MusicCompare;              // 友元（§6 已讲）
+33    friend class MusicList;
+34    friend class MainWidget;
+};
+</pre>
+
+<table class="cols-4a">
+  <caption>表 9-1　关键成员逐条说明</caption>
+  <thead><tr><th>成员</th><th>类型</th><th>为什么用这个类型</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td><code>url</code></td><td><code>QUrl</code></td><td>多媒体统一用 <code>QUrl</code></td><td><code>QMediaPlayer::setMedia</code> 要的就是 <code>QUrl</code>。本地路径→<code>QUrl</code> 用 <code>QUrl::fromLocalFile</code>，反着用 <code>toLocalFile()</code>（<code>get_lyric()</code> 里用了）。</td></tr>
+    <tr><td><code>duration</code></td><td><code>qint64</code></td><td>毫秒数可能很大</td><td><code>qint64</code> 就是 <code>long long</code>（64 位有符号）。★ Qt 为了跨平台统一宽度，专门造了 <code>qint8/16/32/64</code>、<code>quint32</code> 这些别名。</td></tr>
+    <tr><td><code>bitRate</code></td><td><code>int</code></td><td>32 位够用</td><td>从元数据 <code>AudioBitRate</code> 取。★ 注意项目里<b>从没用过它</b>（写了不读）。</td></tr>
+    <tr><td><code>picImg</code></td><td><code>QImage</code></td><td>要能被缩放绘制</td><td>封面图。<code>QImage</code> 是「像素缓冲」，适合处理；显示时再 <code>QPixmap::fromImage</code> 转成「绘制优化版」。</td></tr>
+    <tr><td><code>get_url() const</code></td><td>—</td><td>只读，不改对象</td><td>★ <code>const</code> 写在函数后面，表示「我保证不修改本对象」，这样 <code>const MyMusic</code> 对象也能调它。</td></tr>
+    <tr><td><code>get_lyric()</code></td><td>—</td><td>没有 <code>const</code></td><td>★ 其实它<b>也没改对象</b>，本该加 <code>const</code> —— 这是「漏加」，属于常见疏漏（加了才能被 const 对象调用）。</td></tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-①　<code>class</code> 与 <code>struct</code>、封装与访问控制</strong></p>
+  <p>C++ 里 <code>class</code> 和 <code>struct</code> <b>唯一的区别</b>是默认访问权限：<code>class</code> 默认 <code>private</code>，<code>struct</code> 默认 <code>public</code>。本项目 <code>MyMusic</code> 用 <code>class</code>，所以字段不写修饰符就是私有的。</p>
+  <p><b>封装</b>的意义：<code>url/title/author...</code> 都是 <code>private</code>，外部只能用 <code>get_url()</code>、<code>get_brief_info()</code> 这些「公开接口」。好处是<b>以后想改内部结构（比如把 7 个字段合成一个结构体）时，只要公开接口不变，用这个类的地方一行都不用改</b>。</p>
+  <pre>
+// 对外部而言，只能这样用：
+MyMusic m(url);
+QString info = m.get_brief_info();   // ✓ 走上公开接口
+// m.title = "xxx";                  // ✗ 编译报错：private
+</pre>
+  <p>★ 本项目为了图方便，用 <code>friend</code> 给 <code>MainWidget</code>/<code>MusicList</code>/<code>MusicCompare</code> 开了后门（§6），实际绕过了封装 —— 学习时要知道「封装本来是为了拦住这种操作」。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-②　构造函数、重载与「成员初始化列表」</strong></p>
+  <p>一个类可以有很多构造函数，参数不同即可（<b>函数重载</b>）。本项目三个：</p>
+  <pre>
+MyMusic() {}                       // 默认构造：什么都不做
+MyMusic(QUrl iurl);                // 用「文件地址」造
+MyMusic(QString musicName);        // 用「文件名」造（内部拼成路径）
+</pre>
+  <p>构造函数的正规写法有<b>两处</b>能初始化成员：<b>成员初始化列表</b>（冒号后面）和<b>函数体</b>。本项目两个带参构造都只用了函数体赋值：</p>
+  <pre>
+// 本项目写法（赋值）：
+MyMusic::MyMusic(QUrl iurl) { url = iurl; init_from_url(); }
+
+// 更推荐的写法（初始化列表）：
+MyMusic::MyMusic(QUrl iurl) : url(iurl) { init_from_url(); }
+//                            ↑ 冒号后是初始化列表
+</pre>
+  <p><b>两者差别（新手必知）：</b></p>
+  <table class="cols-3a">
+    <thead><tr><th>—</th><th>初始化列表</th><th>函数体内赋值</th></tr></thead>
+    <tbody>
+      <tr><td>本质</td><td>「<b>构造</b>」该成员</td><td>先默认构造，再「<b>赋值</b>」</td></tr>
+      <tr><td>性能</td><td>少一次默认构造</td><td>多一次无用构造 + 赋值</td></tr>
+      <tr><td>能否用于 <code>const</code>/引用成员</td><td><b>只能</b>用它</td><td>不行（它们不能赋值）</td></tr>
+      <tr><td>初始化顺序</td><td colspan="2">★ 只按<b>成员在类里的声明顺序</b>初始化，跟你在列表里的书写顺序无关！写错顺序编译器会警告。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-③　<code>const</code> 成员函数：承诺「我只读不写」</strong></p>
+  <pre>
+QUrl get_url() const { return url; }        // 我保证不改对象
+QString get_brief_info() const;             // 同上
+void insert_sql();                          // 没写 const（会改数据库，但不改本对象…）
+</pre>
+  <p>写在参数列表后面的 <code>const</code> 是给「<code>this</code> 指针」加锁：函数体内<b>不能修改任何成员变量</b>，否则编译报错。带来的最大好处是：<b><code>const MyMusic&amp;</code> 也能调用它</b>。</p>
+  <pre>
+void foo(const MyMusic&amp; m) {
+    m.get_url();        // ✓ 有 const 的能调
+    m.get_brief_info(); // ✓
+    // m.insert_sql();  // ✗ 没 const，编译器不许（怕你改）
+}
+</pre>
+  <p>★ 这就是为什么 §4 表里的 <code>connect</code> 参数、容器遍历常写成 <code>const MyMusic&amp;</code>：只读传递，既不拷贝又不可能被改坏。而 <code>get_lyric()</code>、<code>insert_sql()</code> 忘了加 <code>const</code>，属于<b>能改正的小毛病</b>。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 9-①　内置类型成员不初始化 = 垃圾值（本项目的定时炸弹）</strong></p>
+  <p>看 <code>MyMusic.h:23</code>：<code>MyMusic() {}</code> —— 空函数体，什么都没做。而 <code>duration</code>（<code>qint64</code>）、<code>bitRate</code>（<code>int</code>）是<b>内置类型</b>（不是 <code>QString</code>/<code>QImage</code> 这种有构造函数的类）。C++ 规则是：</p>
+  <ul>
+    <li><code>QString title;</code> → 会调用 <code>QString</code> 的默认构造，得到一个<b>空字符串</b>（安全）。</li>
+    <li><code>qint64 duration;</code> → <b>什么都不做</b>，值是「这块内存里原来是什么就是什么」，也就是<b>随机垃圾值</b>。</li>
+  </ul>
+  <p><b>本项目为什么没炸？</b>因为 <code>MusicList::read_from_sql()</code> 里（<code>MusicList.cpp:119-125</code>）创建 <code>MyMusic tempMusic;</code> 之后<b>立刻把 6 个字段全部赋了值</b>，所以垃圾值马上被覆盖。但这是「靠后面的代码自觉」—— 只要哪天有人</p>
+  <pre>
+MyMusic m;                                  // 默认构造
+qDebug() &lt;&lt; my_format_time(m.duration);     // ✗ 用垃圾值算时间，输出莫名其妙
+</pre>
+  <p>就会得到一个看不懂的乱码时长。<b>正确写法</b>（二选一）：</p>
+  <pre>
+qint64 duration = 0;     // 方案 A：类内默认值（C++11 NSDMI）
+int    bitRate   = 0;
+// 或者 方案 B：
+MyMusic() : duration(0), bitRate(0) {}   // 放进初始化列表
+</pre>
+</div>
+
+<div class="warn">
+  <p><strong>坑 9-②　<code>init_from_url()</code> 里的忙等：一整颗 CPU 核在空转</strong></p>
+  <pre>
+// MyMusic.cpp:29-32
+QMediaPlayer tmpPlayer;
+tmpPlayer.setMedia(url);
+// 元数据的解析需要时间，所以这里需要循环等待
+while(!tmpPlayer.isMetaDataAvailable()) QCoreApplication::processEvents();
+</pre>
+  <p><code>setMedia</code> 是<b>异步</b>的：它交完任务就立刻返回，元数据要等底层解码器读出来才可用。作者用了一个「<b>忙等（busy wait）</b>」：不停问 <code>isMetaDataAvailable()</code>，没好就 <code>processEvents()</code> 转一圈事件循环再问。</p>
+  <p><b>问题</b>：① 这个 <code>while</code> 循环期间<b>CPU 100% 空转</b>（一次添加几十首歌，界面会明显卡住/发烫）；② 如果文件损坏或格式不支持，<code>isMetaDataAvailable()</code> 可能<b>永远为 false</b> → <b>程序死循环卡死</b>，没有任何超时保护。</p>
+  <p><b>正确做法</b>：改用信号 —— <code>connect(&amp;tmpPlayer, &amp;QMediaPlayer::metaDataAvailableChanged, ...)</code>，或用 <code>QEventLoop</code> 配合 <code>QTimer::singleShot(超时时间, &amp;loop, &amp;QEventLoop::quit)</code> 做一个「最多等 2 秒」的等待。<b>核心原则：Qt 里凡是「等某个东西」，优先用信号，而不是 <code>while</code> 轮询。</b></p>
+</div>
+
+<h3 class="pgbreak">9.2　<code>MusicCompare</code>：给 STL 算法用的「一把尺子」</h3>
+
+<pre>
+// MyMusic.h:38-49
+enum COMPARE{DEFAULT, TITLE, AUTHOR, DURATION, EQUALITY};  // 0,1,2,3,4
+
+class MusicCompare
+{
+43    COMPARE key;                       // 默认 private，记录「按哪个字段比」
+public:
+45    MusicCompare(){key=DEFAULT;}
+46    MusicCompare(COMPARE ikey){key=ikey;}
+47    bool operator()(const MyMusic&amp; A, const MyMusic&amp; B);   // ← 重载小括号
+48    bool operator()(const QString&amp; strA, const QString&amp; strB);
+};
+
+// MyMusic.cpp:101-114（真正在用的那个）
+bool MusicCompare::operator()(const MyMusic&amp; A, const MyMusic&amp; B)
+{
+103    switch (key) {
+104    case TITLE:     return A.title    &lt; B.title;
+106    case AUTHOR:    return A.author   &lt; B.author;
+108    case DURATION:  return A.duration &lt; B.duration;
+110    case EQUALITY:  return A.get_url() == B.get_url();
+112    default:        return A.get_brief_info() &lt; B.get_brief_info();
+114    }
+}
+</pre>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-④　运算符重载与「仿函数」（函数对象）</strong></p>
+  <p><code>operator()</code> 是 C++ 允许重载的运算符之一，意思是「让这个<b>对象</b>也能像<b>函数</b>一样被调用」：</p>
+  <pre>
+MusicCompare cmp(DURATION);      // 造一个「按 DURATION 比」的尺子
+bool r = cmp(musicA, musicB);    // ← 对象后面加括号，就是调用 operator()
+// 完全等价于 cmp.operator()(musicA, musicB);
+</pre>
+  <p>这种「长得像函数、其实是对象」的东西叫 <b>仿函数 / 函数对象</b>。它比普通函数强的地方在于：<b>能带状态</b>。本项目 <code>key</code> 就是状态 —— 同一把尺子，换个 <code>key</code> 就变成「按歌名比」或「按时长比」，<b>一份代码不用写三个函数</b>，这正是 <code>sort_by(COMPARE key)</code> 能用一个参数切换排序方式的原理。</p>
+  <p><b>和 lambda 的关系（呼应 §7 蓝框 7-①）</b>：lambda <code>[&amp;](const MyMusic&amp;A, const MyMusic&amp;B){...}</code> 本质上就是编译器替你生成的一个类似的仿函数类。<b>能写 lambda 的地方就能手写仿函数，反之亦然</b>：</p>
+  <pre>
+// 用 lambda 实现「按 DURATION 降序」，可以不写 MusicCompare 类：
+sort(musicArr.begin(), musicArr.end(),
+     [](const MyMusic&amp;A, const MyMusic&amp;B){ return A.duration &gt; B.duration; });
+</pre>
+  <p>另外看 <code>enum COMPARE{DEFAULT, TITLE, ...}</code>：这叫<b>传统 enum</b>，它的名字会「泄漏」到外层作用域（<code>TITLE</code> 这个符号在整个 <code>MyMusic.h</code> 后面都能直接用，不需要写 <code>COMPARE::TITLE</code>）。<b>现代 C++ 推荐 <code>enum class COMPARE { Default, Title, ... };</code></b>，必须写 <code>COMPARE::Title</code>，不会污染，也不允许随便跟 <code>int</code> 混算（对比 §4 蓝框 4-②）。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 9-③　<code>operator()(QString, QString)</code> 这个重载是「性能炸弹 + 死代码」</strong></p>
+  <pre>
+// MyMusic.cpp:83-99
+bool MusicCompare::operator()(const QString& strA, const QString& strB)
+{
+85    MyMusic A(strA);      // ✗✗ 为了取一个字符串，把整首歌的元数据全解析一遍！
+86    MyMusic B(strB);
+    ...
+}
+</pre>
+  <p><b>问题</b>：① <code>MyMusic(strA)</code> 走的是 <code>init_from_name</code> → <code>init_from_url</code> → <b>打开 <code>QMediaPlayer</code>、忙等元数据、读封面图</b>（坑 9-② 那一整套）。而 <code>sort</code>/<code>unique</code> 一次排序要比较<b>几百上千次</b>，每次还解析两首歌 → 简直不可想象。② 好在它<b>根本没被调用过</b>（<code>sort_by</code>/<code>neaten</code> 操作的是 <code>vector&lt;MyMusic&gt;</code>，走的都是 <code>MyMusic</code> 版本），属于<b>死代码</b>。</p>
+  <p><b>教学价值</b>：重载了一个「不该存在」的版本，编译器不会报错，但它会在你需要时安静地毁掉性能。<b>写重载/仿函数时，一定想清楚「这个版本会被谁调用、代价多大」。</b>值得直接删掉。</p>
+</div>
+
+<h3 class="pgbreak">9.3　<code>MusicList</code>：<code>std::vector</code> 容量管理 + 迭代器</h3>
+
+<pre>
+// MusicList.h:6-15
+#include &lt;vector&gt;
+using namespace std;              // ✗ 放头文件里的坏习惯（蓝框 9-⑥）
+
+class MusicList
+{
+14    vector&lt;MyMusic&gt; musicArr;      // ← 核心数据：一个「会自增长」的数组
+public:
+    MusicList() {}
+    MusicList(const QList&lt;QUrl&gt;&amp; urls);
+    void add_music(const QList&lt;QUrl&gt;&amp; urls);
+    void add_music(const MyMusic&amp; iMusic);   // 重载
+    MyMusic get_music(int pos);
+    void add_to_playlist(QMediaPlaylist* playlist);
+    void add_to_listwidget(MusicListWidget* listWidget);
+    void sort_by(COMPARE key);
+    void neaten();
+    void clear();
+    void remove_sql_all();
+    void insert_sql_all();
+    void read_from_sql();
+53    friend class MainWidget;
+};
+</pre>
+
+<pre>
+// MusicList.cpp 里的四种「遍历/容器」写法，一次看全
+// ① 迭代器遍历（add_to_playlist，:55-58）
+55  for(auto i=musicArr.begin(); i!=musicArr.end(); i++)
+57      playlist-&gt;addMedia(i-&gt;get_url());      // i 是「迭代器」，用 -&gt; 取元素成员
+
+// ② Qt 的 foreach 宏（add_to_listwidget，:63）
+63  foreach(const MyMusic &amp;i, musicArr)
+67      item-&gt;setText(i.get_brief_info());
+
+// ③ 迭代器 + push_back 追加（add_music，:36-37）
+36  musicArr.push_back(MyMusic(i));            // 在尾部追加
+37  musicArr[musicArr.size() - 1].insert_sql(); // [n-1] 取最后一个
+
+// ④ C++11 范围 for（等价于 ②，本项目没用但你应该会）
+    for (const MyMusic &amp;i : musicArr) { ... }
+</pre>
+
+<table class="cols-4a">
+  <caption>表 9-2　<code>std::vector</code> 常用接口（对照本项目）</caption>
+  <thead><tr><th>接口</th><th>写法</th><th>复杂度和行为</th><th>本项目用例</th></tr></thead>
+  <tbody>
+    <tr><td><code>push_back</code> ★</td><td><code>v.push_back(x)</code></td><td>尾部追加。均摊 O(1)。★「均摊」是指满了会成倍扩容（拷贝到新内存），偶尔一次比较慢。</td><td><code>MusicList.cpp:36 / :45 / :126</code></td></tr>
+    <tr><td><code>size</code> ★</td><td><code>v.size()</code></td><td>返回元素个数，类型是 <code>size_t</code>（<b>无符号</b>）。</td><td>全程使用，注意坑 9-④</td></tr>
+    <tr><td><code>operator[]</code> ★</td><td><code>v[i]</code></td><td>O(1) 直接取。★ <b>不做越界检查</b>，<code>v[999]</code> 不报错，只是读到野内存。</td><td><code>:37</code>、<code>:50</code>、<code>:286</code></td></tr>
+    <tr><td><code>at</code></td><td><code>v.at(i)</code></td><td>同 <code>[]</code>，但<b>会检查越界</b>，越界抛 <code>std::out_of_range</code>。</td><td>本项目没用（可考虑替换 <code>[]</code>，调试更安全）</td></tr>
+    <tr><td><code>begin/end</code> ★</td><td><code>v.begin(), v.end()</code></td><td>返回「迭代器」：<code>begin</code> 指第一个，<code>end</code> 指<b>最后一个的后面一格</b>（不是最后一个！）。</td><td><code>:55</code>、<code>:77</code>、<code>:85</code>、<code>:106</code></td></tr>
+    <tr><td><code>erase</code> ★</td><td><code>v.erase(first, last)</code></td><td>删除 <code>[first, last)</code> 区间，后面元素整体前移，O(n)。</td><td><code>neaten()</code>：<code>:85</code></td></tr>
+    <tr><td><code>clear</code></td><td><code>v.clear()</code></td><td>清空所有元素（容量 capacity 通常保留）。</td><td><code>MusicList::clear()</code> <code>:92</code></td></tr>
+    <tr><td><code>front/back</code></td><td><code>v.front(), v.back()</code></td><td>取首/末元素的<b>引用</b>。★ 空容器上调用是未定义行为。</td><td>本项目没用</td></tr>
+  </tbody>
+</table>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-⑤　迭代器与 <code>auto</code>：容器的「通用游标」</strong></p>
+  <p>数组用下标 <code>a[i]</code>，但链表没有下标，只能在节点间「走」。为了让所有容器都能用同一套遍历代码，STL 抽象出<b>迭代器</b> —— 一个「类指针」的东西：</p>
+  <pre>
+for(auto i = musicArr.begin(); i != musicArr.end(); i++)
+{                        //  ↑ 让编译器自动推导类型（就是 vector&lt;MyMusic&gt;::iterator）
+    i-&gt;get_url();        // ✗ 用「箭头」：i 像指针一样被解引用
+    (*i).get_url();      // ✓ 完全等价
+}
+</pre>
+  <p><b>三个必须记住的点：</b></p>
+  <ul>
+    <li><b>① <code>end()</code> 指向「最后一个元素的后面」</b>，所以循环条件是 <code>!= end()</code> 而不是 <code>&lt; end()</code>（虽然 vector 恰好能用 <code>&lt;</code>，但链表迭代器不支持比较大小）。</li>
+    <li><b>② <code>auto</code> 是「类型自动推导」</b>（C++11），不是「动态类型」。它写起来省事，编译后跟手写完整类型完全一样，<b>零性能开销</b>。</li>
+    <li><b>③ 迭代器会「失效」</b>：<code>push_back</code> 触发扩容、或 <code>erase</code> 之后，之前的迭代器<b>全部作废</b>，继续用就是野指针。<b>本项目在 <code>add_music</code> 里边 <code>push_back</code> 边用 <code>[size()-1]</code> 而不是迭代器，恰好躲过了这个坑。</b></li>
+  </ul>
+  <p>Qt 的 <code>QList</code>/<code>QVector</code> 也提供同样的 <code>begin/end</code>，还有更方便的 <b><code>foreach</code> 宏</b>（本项目 <code>MusicList.cpp:25</code>、<code>:63</code> 用了它）。<code>foreach</code> 是拷贝遍历，处理自定义类型时最好写 <code>const MyMusic &amp;i</code> 避免拷贝（本项目 <code>:63</code> 写对了，<code>:25</code> 的 <code>QUrl i</code> 是拷贝但 QUrl 很轻，无妨）。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-⑥　为什么 <code>using namespace std;</code> 不该放头文件里</strong></p>
+  <p><code>MusicList.h:7</code> 写了一句 <code>using namespace std;</code>。它让这个头文件后面 <code>vector</code>、<code>sort</code>、<code>string</code> 不用写 <code>std::</code>，看着省事。但 <code>#include</code> 是<b>文本插入</b> —— 任何包含了 <code>MusicList.h</code> 的 .cpp 文件，都会<b>被迫</b>进入 <code>std</code> 命名空间：</p>
+  <pre>
+// 假设你写了这样一个函数名：
+void sort();            // ✗ 一旦 using namespace std 生效，就跟 std::sort 撞名
+                        //   编译器不知道你指哪个 → 报错或选错
+// 假如某个库里有个函数叫 count / distance / swap —— 全是 std 里已有的名字，冲突风险极高
+</pre>
+  <p><b>规则</b>：<code>using namespace std;</code> 只写在 <code>.cpp</code> 里，永远不要写在 <code>.h</code> 里。头文件里要用就老老实实写 <code>std::vector</code>。这是被无数项目血泪教训总结出的规范（Google C++ Style Guide 明令禁止）。</p>
+</div>
+
+<h3 class="pgbreak">9.4　<code>sort_by()</code> / <code>neaten()</code>：STL 算法与 erase-remove 惯用法</h3>
+
+<pre>
+// MusicList.cpp:75-88
+void MusicList::sort_by(COMPARE key)
+{
+77    sort(musicArr.begin(), musicArr.end(), MusicCompare(key));  // 排序
+78    remove_sql_all();                                           // 清空数据库表
+79    insert_sql_all();                                           // 按新顺序重写
+}
+
+void MusicList::neaten()
+{
+84    sort(musicArr.begin(), musicArr.end(), MusicCompare(DEFAULT));   // 先排序
+85    musicArr.erase(unique(musicArr.begin(), musicArr.end(), MusicCompare(EQUALITY)),
+86                   musicArr.end());                                   // 再去重
+87    remove_sql_all();
+88    insert_sql_all();
+}
+</pre>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-⑦　<code>sort</code> / <code>unique</code> / 仿函数，以及 erase-remove 惯用法</strong></p>
+  <p><b>① <code>std::sort</code></b>（<code>&lt;algorithm&gt;</code>）：把 <code>[first, last)</code> 排成「升序」。第三个参数是「小于比较器」—— 传 <code>MusicCompare(key)</code>，就按 <code>key</code> 指定的字段排。★ 两点：</p>
+  <ul>
+    <li>比较器必须满足「<b>严格弱序</b>」：即不能用 <code>&lt;=</code> 当「小于」，必须用 <code>&lt;</code>。写成 <code>A.duration &lt;= B.duration</code> 会让排序行为错乱甚至崩溃。</li>
+    <li><code>sort</code> 是<b>不稳定</b>排序（相等元素的前后顺序可能被打乱）。要保证稳定用 <code>stable_sort</code>。</li>
+  </ul>
+  <p><b>② <code>std::unique</code> 的一半真相</b>：它<b>不删除</b>元素！它只把「相邻的」重复元素往后挪，返回「新的逻辑结尾」：</p>
+  <pre>
+[1,1,2,2,2,3]  ──unique──&gt;  [1,2,3,?,?,?]
+                              ↑ 返回这里   ↑ 后面是「待清理的垃圾」
+</pre>
+  <p>所以<b>必须先排序</b>（让重复的挤到一起），再用 <b>erase-remove 惯用法</b>把尾巴剪掉：<code>v.erase(unique(v.begin(), v.end()), v.end())</code>。本项目 <code>:84-86</code> 正是这个套路，写得很标准。</p>
+  <p><b>③ 完整对照</b>：</p>
+  <table class="cols-3a">
+    <thead><tr><th>算法</th><th>功能</th><th>前提 / 返回值</th></tr></thead>
+    <tbody>
+      <tr><td><code>sort(b,e,cmp)</code></td><td>升序排列</td><td>不要求有序；无返回</td></tr>
+      <tr><td><code>stable_sort</code></td><td>稳定排序</td><td>相等元素保持原相对顺序</td></tr>
+      <tr><td><code>unique(b,e,pred)</code></td><td>把「相邻重复」挪到尾部</td><td>★ <b>必须先排序</b>；返回新结尾迭代器</td></tr>
+      <tr><td><code>find / count / max_element</code></td><td>查找 / 计数 / 求最大</td><td>同样吃迭代器区间，本项目未用</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="warn">
+  <p><strong>坑 9-④　去重用的判据和排序用的判据不一致</strong></p>
+  <p><code>neaten()</code> 里：<b>排序</b>用 <code>MusicCompare(DEFAULT)</code>，即按 <code>get_brief_info()</code>（歌手 + 歌名 + 时长）<b>去重</b>用 <code>MusicCompare(EQUALITY)</code>，即按 <code>url</code> 判等。而 <code>unique</code> 只能删<b>相邻</b>的重复项，所以「靠 url 判出来的重复」必须恰好也是「相邻的」才行。</p>
+  <p>目前<b>侥幸成立</b>，因为同一个 <code>url</code> 解析出来的歌手/歌名/时长必然相同，所以同 url 的两条记录在 <code>brief_info</code> 上必然相等、排序后必然相邻。但这是一个<b>隐含的巧合</b>：只要 <code>get_brief_info()</code> 以后改成包含 <code>bitRate</code>、或加入「播放次数」，同 url 记录就可能不再相邻，去重会<b>悄悄漏掉</b>。更稳的写法是<b>两个判据一致</b> —— 排序也用 <code>EQUALITY</code> 对应的字段（<code>url</code>）。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 9-⑤　<code>remove_sql_all()</code> + <code>insert_sql_all()</code>：每次排序都「全表删除重建」</strong></p>
+  <p><code>sort_by</code>/<code>neaten</code>/<code>clear</code> 之后都是「把数据库里的歌<b>全部删掉</b>，再把内存里的 <code>vector</code> <b>全部重新插一遍</b>」（<code>:78-79</code>、<code>:86-88</code>、<code>:93</code>）。三个问题：① <b>慢</b>：几百首歌就是几百条 <code>INSERT</code>，且每条都重新 prepare；② <b>中途崩溃就丢数据</b>：删除已经提交、插入还没完，程序一挂歌单就空了；③ 顺序本来只是「显示顺序」，完全可以只改内存、加一个 <code>order</code> 字段存序号，不必整表重写。</p>
+  <p><b>正确做法</b>：用<b>事务</b>把删除和插入包起来（<code>db.transaction()</code> / <code>commit()</code> / <code>rollback()</code>），要么全成功要么全回滚；或者干脆不在排序时动数据库。</p>
+</div>
+
+<h3 class="pgbreak">9.5　写数据库：<code>insert_sql()</code> 与参数化查询</h3>
+
+<pre>
+// MyMusic.cpp:69-81
+void MyMusic::insert_sql()
+{
+71    QSqlQuery sqlQuery;
+72    QString insertSql = "insert into MusicInfo values (?, ?, ?, ?, ?, ?)";
+73    sqlQuery.prepare(insertSql);          // 预编译
+74    sqlQuery.addBindValue(url.toString()); // 逐个「绑定」参数
+75    sqlQuery.addBindValue(author);
+76    sqlQuery.addBindValue(title);
+77    sqlQuery.addBindValue(duration);
+78    sqlQuery.addBindValue(albumTitle);
+79    sqlQuery.addBindValue(bitRate);
+80    if(sqlQuery.exec()) qDebug() &lt;&lt; "插入数据库";
+}
+</pre>
+
+<div class="cpp">
+  <p><strong>C++ 知识 9-⑧　为什么用 <code>?</code> 占位符，而不是拼字符串</strong></p>
+  <p>新手最容易写出的「拼接版」是这样：</p>
+  <pre>
+// ✗ 危险写法
+QString sql = "insert into MusicInfo values ('" + url.toString() + "', '"
+              + title + "', ...)";        // 直接把内容拼进 SQL 文本
+</pre>
+  <p>只要歌名里带一个<b>单引号</b>（比如 <code>Don't Stop.mp3</code>），SQL 就被「拆断」，轻则报错，重则被注入恶意语句。<b>参数化查询</b>把「SQL 结构」和「数据」彻底分开：</p>
+  <pre>
+prepare("... values (?, ?, ?, ?)");   // ① 先把「骨架」交给数据库预编译
+addBindValue(x);                        // ② 再把数据单独塞进去，数据永远不会被当成 SQL 语法
+</pre>
+  <p>★ 两个要点：<b>①</b> <code>prepare</code> 一次、可以 <code>exec</code> 多次（改绑参数即可），本项目因为每条 SQL 都一样其实可以复用 Query 对象来提速；<b>②</b> 绑定和取值都是通过 <code>QVariant</code> 这个「万能类型盒子」完成的，所以 <code>qint64</code>、<code>QString</code>、<code>int</code> 能塞进同一个接口（呼应 §5 蓝框 5-②）。</p>
+</div>
+
+<div class="note">
+  <p><strong>读回来为什么要逐字段赋值？</strong><code>read_from_sql()</code>（<code>MusicList.cpp:110-130</code>）不能直接用「带参构造」（那是从文件解析元数据的），因为它的目的是<b>从数据库恢复</b>，不该再去重新解析一遍音频文件。所以它 <code>MyMusic tempMusic;</code> 之后靠 <code>friend</code> 权限<b>直接写私有字段</b>。缺点是没走构造函数、字段得靠人一个不落。★ 更规范的写法是给 <code>MyMusic</code> 加一个「从数据库行构造」的构造函数或静态工厂函数 <code>MyMusic::fromSqlRecord(rec)</code>。</p>
+</div>
+
+<h2 class="pgbreak">§10　歌词控件 LyricWidget：解析 .lrc 并同步滚动</h2>
+
+<p>歌词显示是「读一个 <code>.lrc</code> 文本文件 → 解析成 (时间, 文字) 列表 → 按播放进度高亮相应行」的过程。它包含两个类：<code>LyricLine</code>（一行歌词）和 <code>LyricWidget</code>（整个控件）。</p>
+
+<h3>10.1　<code>LyricLine</code>：一个「小到可以当结构体」的类</h3>
+
+<pre>
+// LyricWidget.h:4-20
+#include &lt;QWidget&gt;
+#include &lt;vector&gt;
+using namespace std;                  // ✗ 又是头文件里放 using（同坑 9-⑥）
+
+class LyricLine                       // 只装数据，几乎等于 struct
+{
+public:
+14    qint64  time;                   // 这一行歌词出现的时间（毫秒）
+15    QString text;                   // 这一行歌词的文字
+16    LyricLine(qint64 time, QString text):time(time), text(text) {}
+                                 //     ↑ 成员    ↑ 参数（同名！）
+};
+
+bool operator &lt;(const LyricLine&amp; A, const LyricLine&amp; B);  // 非成员比较函数
+</pre>
+
+<div class="cpp">
+  <p><strong>C++ 知识 10-①　初始化列表里「成员(参数)」同名的猫腻</strong></p>
+  <p><code>LyricLine(qint64 time, QString text) : time(time), text(text) {}</code> 这一行很容易看晕。规则是：<b>冒号后面小括号<b>左边</b>一定是「成员」，<b>右边</b>是「参数」</b>：</p>
+  <pre>
+LyricLine(qint64 time, QString text)   // 参数也叫 time、text
+    : time(time),  //  ← 成员 time  =  参数 time
+      text(text)   //  ← 成员 text  =  参数 text
+{}
+// 编译器的查找顺序：初始化列表里，先找「成员」，再找「参数」。
+// 所以左边必是成员；右边因为左边已占据成员位置的解释，会去找外层的参数。
+</pre>
+  <p>★ 如果觉得绕，就把参数改名 <code>LyricLine(qint64 t, QString s) : time(t), text(s) {}</code> —— 立刻可读。本项目能这么写，是因为 <b>C++ 的规定保证了不会有歧义</b>，不是碰运气。</p>
+  <p>另外注意这里 <code>LyricLine</code> 用了初始化列表，而 §9.1 的 <code>MyMusic</code> 用的是函数体赋值 —— <b>两处风格不一致</b>，正是「同一项目里两种写法都存在」的真实样本。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 10-②　非成员 <code>operator&lt;</code> 重载：让「比大小」自然起来</strong></p>
+  <pre>
+bool operator &lt;(const LyricLine&amp; A, const LyricLine&amp; B)   // LyricWidget.cpp:18-21
+{
+    return A.time &lt; B.time;      // 只按时间比
+}
+</pre>
+  <p>这就是 §1 讲过的「运算符重载」，只不过换成了 <code>&lt;</code>，而且写成<b>非成员函数</b>（不写在类里）。写它的唯一目的是：<b>让 <code>stable_sort</code> 不用你传比较器</b>：</p>
+  <pre>
+stable_sort(lines.begin(), lines.end());
+//           ↑ 只需要告诉它「两个 LyricLine 谁小」，它就自动调上面的 operator&lt;
+</pre>
+  <p><b>为什么写成非成员、还要两个参数？</b>因为 <code>a &lt; b</code> 的左右两边都是 <code>LyricLine</code>，没有「主次」之分。写成成员函数的话，语法上会是 <code>a.operator&lt;(b)</code>，左边的 <code>a</code> 被特殊对待，还要处理 <code>const</code> 等细节。写成非成员、两个 <code>const&amp;</code> 参数，<b>左右对称、最干净</b>。其实现（<code>.cpp</code>）需要读 <code>time</code>，而 <code>time</code> 是 <code>public</code> 的，所以不必用 <code>friend</code> —— <b>这也反过来说明：如果成员全设成 private，就得再声明一次 <code>friend bool operator&lt;(...)</code></b>。</p>
+  <p><b>三处呼应：</b>① §4 蓝框讲过「运算符重载」；② §9.2 讲过「<code>sort</code> 要求严格弱序，必须用 <code>&lt;</code> 而不是 <code>&lt;=</code>」—— 这里 <code>return A.time &lt; B.time;</code> 完全符合；③ <code>stable_sort</code> 与 §9.4 的 <code>sort</code> 的区别：<b>同一时间点有多句歌词时，稳定排序能保住文件里原来的顺序</b>，这对 .lrc（同一时刻多行是「对唱」场景）很关键。</p>
+</div>
+
+<h3>10.2　<code>process()</code>：用正则把 .lrc 拆成结构</h3>
+
+<pre>
+// LyricWidget.cpp:23-67（核心流程）
+bool LyricWidget::process(QString filePath)
+{
+26    QFile lyricFile(filePath);
+27    lyricFile.open(QFile::ReadOnly);                             // ← 返回值得检查（坑 10-①）
+28    QString content(QString::fromLocal8Bit(lyricFile.readAll())); // 按本地编码解码
+29    lyricFile.close();
+30    lines.clear();
+
+32    const QRegExp rx("\\[(\\d+):(\\d+(\\.\\d+)?)\\]");  // 匹配 [mm:ss.xx]
+               //  ↑ 匹配 [  ↑分钟  ↑ 秒（含可选小数） ↑ 匹配 ]
+
+35    int pos = rx.indexIn(content);       // 找第一个时间标签的位置
+36    if (pos == -1) return false;         // 没有时间标签 → 解析失败
+        do {
+44            timeLabels &lt;&lt; (rx.cap(1).toInt() * 60 + rx.cap(2).toDouble()) * 1000;
+                          //  分组1=分钟 ×60 + 分组2=秒，转成毫秒
+45            lastPos = pos + rx.matchedLength();      // 跳过这个标签
+46            pos = rx.indexIn(content, lastPos);      // 找下一个标签
+47            if (pos == -1) {
+48                QString text = content.mid(lastPos).trimmed();   // 最后一行歌词
+50                foreach (const int&amp; time, timeLabels) lines.push_back(LyricLine(time, text));
+51                break;
+52            }
+54            QString text = content.mid(lastPos, pos - lastPos);  // 两个标签之间的文字
+55            if (!text.isEmpty()) {
+57                foreach (const int&amp; time, timeLabels) lines.push_back(LyricLine(time, text.trimmed()));
+58                timeLabels.clear();
+59            }
+60        } while (true);
+63        stable_sort(lines.begin(), lines.end());   // 按时间排序
+65    if (lines.size()) return true;
+}
+</pre>
+
+<div class="note">
+  <p><strong>.lrc 的两种格式，解释了上面为什么要用 <code>timeLabels</code> 列表</strong></p>
+  <pre>
+[00:12.34]第一句                ← 一个时间标签，后面跟文字
+[00:20.00][00:40.00]重复的一句   ← 两个时间标签共用一句文字！
+</pre>
+  <p>所以代码先<b>把所有连续的时间标签攒进 <code>timeLabels</code></b>，等遇到文字时，再给每个时间标签各生成一条 <code>LyricLine</code>（<code>:50</code>、<code>:57</code> 的 <code>foreach</code>），然后 <code>timeLabels.clear()</code> 开始攒下一句。这是很地道的解析思路 —— <b>「攒标签，等文字，一起落库」</b>。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 10-③　正则表达式、<code>QRegExp</code> 与 <code>QRegularExpression</code></strong></p>
+  <p><code>\\[(\\d+):(\\d+(\\.\\d+)?)\\]</code> 是本项目的「时间标签」识别器，逐段拆解：</p>
+  <table class="cols-3b">
+    <thead><tr><th>片段</th><th>含义</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>\\[</code> <code>\\]</code></td><td>匹配方括号本身</td><td>C++ 字符串里 <code>\\</code> 才代表正则的一个反斜杠</td></tr>
+      <tr><td><code>\\d+</code></td><td>一个或多个数字</td><td><code>\\d</code> = 数字，<code>+</code> = 至少一个</td></tr>
+      <tr><td><code>( ... )</code></td><td><b>捕获分组</b></td><td>用小括号括起来的部分能用 <code>cap(1)</code>、<code>cap(2)</code> 取出来</td></tr>
+      <tr><td><code>(\\.\\d+)?</code></td><td>可选的「.<b>小数</b>」</td><td><code>?</code> = 0 或 1 次，所以 <code>[00:12]</code> 和 <code>[00:12.34]</code> 都能匹配</td></tr>
+    </tbody>
+  </table>
+  <p>三个用到的接口：<code>rx.indexIn(content, from)</code>（从 <code>from</code> 处往后找，返回位置或 <code>-1</code>）、<code>rx.cap(n)</code>（取第 n 个分组的内容，<code>cap(0)</code> 是整体）、<code>rx.matchedLength()</code>（本次匹配吃掉了多少字符，用来算 <code>lastPos</code>）。</p>
+  <p><b>★ 版本陷阱（重要）：</b><code>QRegExp</code> 是 Qt 的「老正则」，语法是<b>自己的一套</b>，<b>Qt 6 已彻底移除</b>，Qt 5 里也已经不推荐。替代品是 <code>QRegularExpression</code>（基于 PCRE，语法和 <code>std::regex</code>、Python 更接近）：</p>
+  <pre>
+// 现代写法（Qt5.15+ / Qt6 通用）
+QRegularExpression rx("\\[(\\d+):(\\d+(\\.\\d+)?)\\]");
+QRegularExpressionMatch m = rx.match(content, from);
+if (m.hasMatch()) { int p = m.capturedStart(); int len = m.capturedLength(); ... }
+</pre>
+  <p>本项目用的 <code>QRegExp</code> 在 Qt 5.12（本工程版本）还能跑，但<b>迁移到 Qt6 时会直接编译失败</b>，属于要提前知道的「技术债」。另外 <code>LyricWidget.cpp:5</code> 还 <code>#include &lt;QTextCodec&gt;</code>，但整篇<b>根本没用到</b> —— 多余的 include 会拖慢编译。</p>
+</div>
+
+<h3 class="pgbreak">10.3　<code>get_index()</code> / <code>get_lyric_text()</code>：边界处理与那条真实编译警告</h3>
+
+<pre>
+// LyricWidget.cpp:69-116
+int LyricWidget::get_index(qint64 position)
+{
+71    if(!lines.size()){ return -1; }              // 空歌词：返回 -1
+74    if(lines[0].time &gt;= position){ return 0; }    // 还没唱到第一句：显示第 0 句
+78    int i=1;
+79    for(i=1; i&lt;lines.size(); i++){                // ★ 编译警告在这行！
+80        if(lines[i-1].time&lt;position &amp;&amp; lines[i].time&gt;=position){
+82            return i-1;                          // position 落在第 i-1 句的区间里
+83        }
+84    }
+    return lines.size()-1;                           // 唱到最后：返回最后一句
+}
+
+void LyricWidget::show(qint64 position)             // ★ 与 QWidget::show() 同名（10-④）
+{
+89    int index=get_index(position);
+90    if(index==-1){  // 没歌词：中间显示「当前歌曲无歌词」，上下六行清空
+        ui-&gt;lyricCenter-&gt;setText(u8"当前歌曲无歌词"); ...
+98    }else{         // 有歌词：以第 index 行为中心，上下各显示 3 行
+99        ui-&gt;lyricP3-&gt;setText(get_lyric_text(index-3));   // P = Previous（上一句）
+100       ui-&gt;lyricP2-&gt;setText(get_lyric_text(index-2));
+101       ui-&gt;lyricP1-&gt;setText(get_lyric_text(index-1));
+102       ui-&gt;lyricCenter-&gt;setText(get_lyric_text(index));  // 当前句（高亮大字）
+103       ui-&gt;lyricN1-&gt;setText(get_lyric_text(index+1));   // N = Next（下一句）
+104       ui-&gt;lyricN2-&gt;setText(get_lyric_text(index+2));
+105       ui-&gt;lyricN3-&gt;setText(get_lyric_text(index+3));
+    }
+}
+
+QString LyricWidget::get_lyric_text(int index)
+{
+111   if(index&lt;0 || index&gt;=lines.size()){ return ""; }   // ★ 另一条编译警告
+113   else return lines[index].text;
+}
+</pre>
+
+<div class="cpp">
+  <p><strong>C++ 知识 10-④　有符号 / 无符号比较：全项目仅有的两条编译警告就出在这</strong></p>
+  <p>编译本项目时，唯一的两条警告是：</p>
+  <pre>
+LyricWidget.cpp:79:  warning: comparison of integer expressions of different signedness:
+                     'int' and 'std::vector&lt;LyricLine&gt;::size_type'  [-Wsign-compare]
+LyricWidget.cpp:111: warning: comparison of integer expressions of different signedness:
+                     'int' and 'std::vector&lt;LyricLine&gt;::size_type'  [-Wsign-compare]
+</pre>
+  <p><b>原因</b>：<code>lines.size()</code> 的返回类型是 <code>size_type</code>（就是 <code>size_t</code>），它是<b>无符号</b>的 <code>unsigned long</code>；而 <code>i</code>、<code>index</code> 是<b>有符号</b>的 <code>int</code>。C++ 比较两个不同符号的数时，会把 <code>int</code> <b>隐式转成无符号</b>再比 —— 这会导致经典陷阱：</p>
+  <pre>
+int i = -1;
+if (i &lt; vec.size())   // ✗ -1 被转成 0xFFFFFFFF，比 size() 还大 → 条件为 false！
+                      //   你以为「-1 小于任何长度」，实际得到相反结果
+</pre>
+  <p><b>本项目为什么没出 bug？</b>因为 <code>i</code> 从 1 开始（不会负），<code>index</code> 在 <code>index&lt;0</code> 时已经 <code>||</code> 短路、不会再算右边。但<b>写法上仍然危险</b>。三种正确改法：</p>
+  <table class="cols-3a">
+    <thead><tr><th>改法</th><th>写法</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>① 把循环变量改成无符号</td><td><code>for (size_t i = 1; i &lt; lines.size(); i++)</code></td><td>最直接，但要小心 <code>i-1</code> 在 <code>i==0</code> 时回绕</td></tr>
+      <tr><td>② 先转成有符号</td><td><code>const int n = static_cast&lt;int&gt;(lines.size());</code></td><td>★ 本项目最推荐，一行搞定，之后全程用 <code>n</code></td></tr>
+      <tr><td>③ 用迭代器</td><td><code>for (auto it = lines.begin(); ...)</code></td><td>彻底避开下标与符号问题</td></tr>
+    </tbody>
+  </table>
+  <p>★ <b>为什么这是「重要的」C++ 知识？</b>因为 <code>-Wsign-compare</code> 是嵌入式/系统编程里<b>最高频</b>的警告之一，而且「<code>size()-1</code> 在空容器上回绕成天文数字」是导致缓冲区溢出的经典成因：<code>vector</code> 为空时 <code>size()-1</code> 不是 <code>-1</code>，而是 <code>0xFFFFFFFFFFFFFFFF</code>。<b>永远不要对可能为空的容器做 <code>size()-1</code> 而不先判空</b>（本项目 <code>:71</code> 先判了空，做对了）。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 10-⑤　名字隐藏：<code>show(qint64)</code> 把基类的 <code>show()</code> 挡住了</strong></p>
+  <p><code>LyricWidget</code> 继承自 <code>QWidget</code>，而 <code>QWidget::show()</code> 是个无参函数。本项目又定义了一个 <code>void show(qint64 position)</code>。C++ 规则是：<b>派生类里只要出现同名的函数，基类里所有同名函数都会被「隐藏」</b>（注意不是重载、不是覆盖，是隐藏）：</p>
+  <pre>
+LyricWidget* w = ...;
+w-&gt;show();          // ✗ 编译错误：找不到「无参的 show」
+                    //   因为基类 QWidget::show() 被派生类的 show(qint64) 藏起来了
+w-&gt;show(12345);     // ✓ 调用自己的版本
+</pre>
+  <p>本项目里没人对 <code>LyricWidget</code> 调无参 <code>show()</code>（他们调的是 <code>MainWidget::show()</code>），所以侥幸没报错。要解决的话加一句 <code>using QWidget::show;</code> 就能把基类版本「重新请回来」。</p>
+  <p><b>教训</b>：给派生类的函数取名时，避开基类已有的名字。Qt 控件里 <code>show</code>、<code>close</code>、<code>update</code>、<code>resize</code>、<code>move</code>、<code>paintEvent</code> 都是高频「禁区」名。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 10-①　<code>QFile::open()</code> 的返回值没检查，失败时静默</strong></p>
+  <pre>
+QFile lyricFile(filePath);
+lyricFile.open(QFile::ReadOnly);        // ✗ 返回 bool 被无视
+QString content(QString::fromLocal8Bit(lyricFile.readAll()));
+</pre>
+  <p>如果 <code>.lrc</code> 不存在（很常见 —— 大部分歌没歌词）或没权限，<code>open</code> 返回 <code>false</code>、<code>readAll()</code> 返回空，最后 <code>indexIn</code> 找不到标签、返回 <code>false</code>，界面上显示「当前歌曲无歌词」。<b>结果正确，但过程是「蒙对的」</b>：真正的原因（文件不存在？编码不对？格式不支持？）被吞掉了，调试时无从下手。</p>
+  <p><b>改法</b>：<code>if (!lyricFile.open(QFile::ReadOnly)) return false;</code>，或至少 <code>qWarning() &lt;&lt; lyricFile.errorString();</code> 打一行日志。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 10-②　编码写死了「本地编码」，中文歌词换台机器就乱码</strong></p>
+  <pre>
+QString content(QString::fromLocal8Bit(lyricFile.readAll()));
+</pre>
+  <p><code>fromLocal8Bit</code> 的意思是「按<b>当前系统</b>的本地编码解释这些字节」。宿主机 <code>zh_CN.UTF-8</code> 时是 UTF-8，开发板上如果是 GBK 环境，同一份 UTF-8 歌词就会变乱码。<b>正确做法</b>：.lrc 文件大多带 BOM 或明确是 UTF-8，直接用 <code>QString::fromUtf8(...)</code>；或者用 <code>QTextStream</code> 并显式 <code>setCodec("UTF-8")</code>；更稳的是先探测 BOM。★ 顺带说明：<code>#include &lt;QTextCodec&gt;</code>（<code>:5</code>）引了却没用，正是作者当初想处理编码、后来没写完的痕迹。</p>
+</div>
+
+<h2 class="pgbreak">§11　15 个槽函数总览：界面上的每次点击都去哪了</h2>
+
+<p>站点③ <code>init_ui()</code> 里的 <code>connectSlotsByName(this)</code>（§3）会自动把 <code>.ui</code> 里的控件和这些「<code>on_&lt;控件名&gt;_&lt;信号&gt;</code>」命名的槽连起来。<code>MainWidget.h:54-88</code> 里一共声明了 15 个槽，就是玩家能做的全部操作：</p>
+
+<table class="cols-4b">
+  <caption>表 11-1　全部槽函数（按 <code>MainWidget.h</code> 声明顺序）</caption>
+  <thead><tr><th>槽（触发方式）</th><th>做的一件事</th><th>关键 Qt 接口 / 调用的自定义函数</th><th>要点 / 隐患</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>on_btnVol_clicked</code><br>（点音量图标）</td>
+      <td>弹跳动画 + 显示/隐藏音量滑块</td>
+      <td><code>zoom()</code>、<code>setVisible()</code></td>
+      <td>用 <code>isVisible()</code> 取反做「开关」，写法简洁；但滑块没自动隐藏，占屏幕空间。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnQuit_clicked</code><br>（点退出）</td>
+      <td>写共享内存通知菜单 + 隐藏自己</td>
+      <td><code>QSharedMemory::create/lock/data/detach</code>、<code>QTimer</code>、lambda</td>
+      <td>★ 详细走读见 §12；<code>connect</code> 写在槽里会<b>重复累加</b>。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnList_clicked</code><br>（点歌单）</td>
+      <td>在「播放页 / 歌单页」之间切换</td>
+      <td><code>QStackedWidget::currentIndex/setCurrentIndex</code></td>
+      <td><code>index != 1 ? 1 : 0</code> 是自己的「两页互切」写法，页数多了要改。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnPlay_clicked</code><br>（播放/暂停）</td>
+      <td>按当前状态在三态间切换</td>
+      <td><code>QMediaPlayer::state/play/pause</code>、<code>QMediaPlaylist::isEmpty/setCurrentIndex</code></td>
+      <td>★ 用 <code>if / else if</code> 穷举 <code>PlayingState/PausedState/StoppedState</code> 三种情况，逻辑完整，是本项目写得较好的一个槽。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnPre_clicked</code></td>
+      <td>上一首</td>
+      <td><code>QMediaPlaylist::previous</code>、<code>isEmpty</code>、<code>player-&gt;play()</code></td>
+      <td>先切再判空；<code>previous()</code> 在列表首会按模式回绕。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnNext_clicked</code></td>
+      <td>下一首</td>
+      <td><code>QMediaPlaylist::next</code></td>
+      <td>同上。</td>
+    </tr>
+    <tr>
+      <td><code>on_sliderVol_valueChanged</code><br>（拖音量条）</td>
+      <td>设置音量 + 换图标（静音/有声）</td>
+      <td><code>QMediaPlayer::setVolume</code>、<code>setStyleSheet(MuteStyle()/VolStyle())</code></td>
+      <td>★ 这是 Qt 的「数据驱动 UI」：改数据（滑块值）→ 信号 → 自动改界面，不需要手写「拖动监听」。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnPlayMode_clicked</code></td>
+      <td>循环 → 随机 → 单曲 三种模式轮换</td>
+      <td><code>QMediaPlaylist::playbackMode/setPlaybackMode</code>、<code>setStyleSheet</code></td>
+      <td>三个 <code>if-else if</code> 构成环形状态机；换模式同时换图标。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnAdd_clicked</code><br>（添加音乐）</td>
+      <td>弹文件对话框选歌，写入歌单+数据库</td>
+      <td><code>QFileDialog</code> 系列、<code>MusicList::add_music(QList&lt;QUrl&gt;)</code>、<code>refresh()</code></td>
+      <td>★ 用 <code>setMimeTypeFilters({"application/octet-stream"})</code> 反而「什么都不过滤」，真正的过滤在 <code>add_music</code> 里靠 <code>QMimeDatabase</code> 做（§9.3）。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnNeaten_clicked</code><br>（整理）</td>
+      <td>排序去重 + 刷新显示</td>
+      <td><code>MusicList::neaten()</code>、<code>refresh()</code></td>
+      <td>★ 去重判据隐患见坑 9-④。</td>
+    </tr>
+    <tr>
+      <td><code>on_musicListWidget_clicked</code><br>（点某一首歌）</td>
+      <td>重建播放列表并播这首</td>
+      <td><code>playlist-&gt;clear()</code>、<code>add_to_playlist</code>、<code>setCurrentIndex(index.row())</code>、<code>play()</code></td>
+      <td>★ <code>const QModelIndex &amp;index</code> 参数由 <code>QListWidget</code> 的 <code>clicked</code> 信号传来，<code>index.row()</code> 就是行号。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnSortSinger_clicked</code></td>
+      <td>按歌手排序</td>
+      <td><code>sort_by(AUTHOR)</code> + <code>refresh()</code></td>
+      <td>三个排序按钮共用一个 <code>sort_by</code>，靠枚举参数区分（§9.2）。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnSortTitle_clicked</code></td>
+      <td>按歌名排序</td>
+      <td><code>sort_by(TITLE)</code></td>
+      <td>同上。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnSortDuration_clicked</code></td>
+      <td>按时长排序</td>
+      <td><code>sort_by(DURATION)</code></td>
+      <td>同上。</td>
+    </tr>
+    <tr>
+      <td><code>on_btnSweep_clicked</code><br>（清空歌单）</td>
+      <td>清空内存 + 数据库 + 刷新</td>
+      <td><code>MusicList::clear()</code>、<code>refresh()</code></td>
+      <td>★ 没有二次确认框，误触即清空（数据不可恢复），建议加 <code>QMessageBox::question</code>。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <p><strong>发现规律了吗？</strong>凡是要「改歌单数据」的槽，最后都跟一句 <code>ui-&gt;musicListWidget-&gt;refresh()</code>（<code>clear() + 重新铺行</code>）。这就是本项目最核心的一条约定：<b>内存里的 <code>vector&lt;MyMusic&gt;</code> 是唯一真相，界面只是它的「照片」，数据一变就重拍一张。</b>这个思想在 Qt 里叫 <b>Model/View</b>；本项目没用 <code>QListView + QAbstractListModel</code> 那套正规框架，而是用「<code>QListWidget</code> + 手动 refresh」模拟了一个简化版 —— <b>数据量小的时候够用，数据一多就会卡（每次刷新都重建所有行）</b>，这也是将来优化的入手点（改用 Model/View）。</p>
+</div>
+
+<h2 class="pgbreak">§12　链路收束：点「退出」，把主菜单叫回来</h2>
+
+<p>播放器的「退出」按钮<b>不是把进程关掉，而是把窗口藏起来，并且告诉主菜单「我让位了，你出来吧」</b>。这一步把 §1~§11 串成一个闭环：菜单启动播放器（§1）→ 播放器干活（§4/§8/§9/§10）→ 播放器把控制权交还菜单（§12）。</p>
+
+<p>整个过程只发生在一个槽里：<code>on_btnQuit_clicked()</code>（<code>MainWidget.cpp:336-364</code>）。</p>
+
+<h3>12.1　代码走读：<code>on_btnQuit_clicked()</code></h3>
+
+<pre>
+336 void MainWidget::on_btnQuit_clicked()
+337 {
+338     zoom(ui-&gt;btnQuit);                             // ① 按钮弹跳动画
+339
+340     // ② 向「菜单」的共享内存写命令
+341     if(shmMusicToMenu.isAttached()) shmMusicToMenu.detach();
+342     if(!shmMusicToMenu.create(sizeof(int), QSharedMemory::ReadWrite))
+343     {
+344         qDebug() &lt;&lt; "Failed to create shared memory!";
+345         return;
+346     }
+347     // ③ 开始写
+348     shmMusicToMenu.lock();
+349     int* sharedData = static_cast&lt;int*&gt;(shmMusicToMenu.data());
+350     *sharedData = SWITCH_VISIBILITY;               // 命令字 = 1
+351     shmMusicToMenu.unlock();
+352
+353     // ④ 延时 detach 内存
+354     detachTimer-&gt;start(1000);
+355     connect(detachTimer, &amp;QTimer::timeout, [&amp;]()
+356     {
+357         detachTimer-&gt;stop();
+358         shmMusicToMenu.detach();
+359     });
+360
+361     // ⑤ 延时隐藏进程
+362     this-&gt;hide();
+363     //close();
+364 }
+</pre>
+
+<table class="cols-4c">
+  <caption>表 12-1　「退出」按钮逐行：代码 → Qt 接口 → 讲解</caption>
+  <thead>
+    <tr><th>行号</th><th>做的事</th><th>用到的 Qt 接口</th><th>讲解</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>:338</code></td>
+      <td>播放按钮弹跳动画</td>
+      <td><code>zoom()</code>（内部用 <code>QPropertyAnimation</code>）</td>
+      <td>所有按钮点击都先来这一下，见 12.3 的坑 12-②。</td>
+    </tr>
+    <tr>
+      <td><code>:341</code></td>
+      <td>若上次没 detach 干净，先脱开</td>
+      <td><code>QSharedMemory::isAttached / detach</code></td>
+      <td>★ 关键：<b>一个 <code>QSharedMemory</code> 对象已经 attach 时，再调 <code>create()</code> 会失败</b>。所以必须先 detach，才能重新建。</td>
+    </tr>
+    <tr>
+      <td><code>:342</code></td>
+      <td>创建 4 字节的共享内存段</td>
+      <td><code>QSharedMemory::create(size, AccessMode)</code></td>
+      <td>失败就 <code>qDebug</code> + <code>return</code>：说明别的进程还 attach 着这段（<code>shm_for_menu</code>）。</td>
+    </tr>
+    <tr>
+      <td><code>:348-351</code></td>
+      <td>加锁 → 取裸指针 → 写值 → 解锁</td>
+      <td><code>lock / data / unlock</code></td>
+      <td>★ <b>写共享内存必须加锁</b>，否则另一个进程可能正好读到「写一半」的值。这是多进程编程的通用铁律，不只是 Qt。</td>
+    </tr>
+    <tr>
+      <td><code>:349</code></td>
+      <td>把 <code>void*</code> 转成 <code>int*</code></td>
+      <td><code>static_cast</code>（C++ 语言特性）</td>
+      <td><code>data()</code> 返回 <code>void*</code>，必须告诉编译器「这里存的是 int」，见 §7-②。</td>
+    </tr>
+    <tr>
+      <td><code>:350</code></td>
+      <td>写入命令字 <code>1</code></td>
+      <td>本项目自定义的 <code>#define SWITCH_VISIBILITY 1</code></td>
+      <td>主菜单进程轮询读到 <code>1</code>，就执行 <code>this-&gt;show()</code> 把自己显示出来。</td>
+    </tr>
+    <tr>
+      <td><code>:354</code></td>
+      <td>启动一个 1 秒的定时器</td>
+      <td><code>QTimer::start(1000)</code></td>
+      <td>★ 为什么不当场 detach？因为主菜单是<b>每秒轮询一次</b>（§7 的 <code>readTimer</code>）。立刻 detach 有可能赶在主菜单读到之前，把段「撤走」。等 1 秒，给对端留出读取窗口 —— <b>这是「用一个 sleep 解决竞态」的土办法</b>。</td>
+    </tr>
+    <tr>
+      <td><code>:355-359</code></td>
+      <td>定时器超时后 detach</td>
+      <td><code>QTimer::timeout</code> + lambda</td>
+      <td>★ 隐患所在：<b>这个 <code>connect</code> 写在槽函数体里</b>，见坑 12-①。</td>
+    </tr>
+    <tr>
+      <td><code>:362</code></td>
+      <td>隐藏自己的窗口</td>
+      <td><code>QWidget::hide()</code></td>
+      <td>注意是 <code>hide()</code> 不是 <code>close()</code>（下一行注释掉了 <code>close()</code>）。<b>进程一点没退出，只是看不见了</b>，随时可以被主菜单叫回来。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>12.2　「退出」的进程间时序</h3>
+
+<p>两个进程各自有一个「每秒响一次」的 <code>QTimer</code>，共享内存就是它们之间唯一的信箱。下表按时间顺序列出点下「退出」之后发生的事。</p>
+
+<table class="cols-3a">
+  <caption>表 12-2　点「退出」之后，两个进程各做了什么</caption>
+  <thead>
+    <tr><th>时刻</th><th>播放器进程（MusicPlayerWW）</th><th>主菜单进程（CarPlayMainWW）</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>T0</td>
+      <td>用户点「退出」→ 进入 <code>on_btnQuit_clicked()</code></td>
+      <td>后台运行，<code>readTimer</code> 每秒 <code>attach("shm_for_menu")</code> 探一次</td>
+    </tr>
+    <tr>
+      <td>T1</td>
+      <td><code>detach</code> 旧段 → <code>create</code> 新段 → <code>lock</code> → <code>*data = 1</code> → <code>unlock</code></td>
+      <td>（还没读到）</td>
+    </tr>
+    <tr>
+      <td>T2</td>
+      <td><code>detachTimer-&gt;start(1000)</code>；<code>this-&gt;hide()</code> —— 窗口消失</td>
+      <td><code>readTimer</code> 触发 → <code>attach</code> 成功 → 读到 <code>1</code> → <code>exec_by_num(1)</code> → <code>this-&gt;show()</code> —— 菜单窗口出现</td>
+    </tr>
+    <tr>
+      <td>T3</td>
+      <td>1 秒到 → lambda 执行 <code>detach</code>，播放器不再持有该段</td>
+      <td><code>shm_to_zero()</code>：<code>lock</code> → 写 <code>0</code> → <code>unlock</code> → <code>detach</code>（相当于「回执/ACK」，表示命令已处理）</td>
+    </tr>
+    <tr>
+      <td>结果</td>
+      <td>窗口隐藏，<b>进程仍然活着</b>，随时能被再次唤醒</td>
+      <td>窗口重新出现在最前，用户感觉「切回来了」</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <p><strong>两张「信箱」的分工（务必分清）：</strong></p>
+  <p>① <code>shm_for_music</code> —— 主菜单写给播放器（菜单→播放器），播放器用 <code>shmMenuToMusic</code> 这个对象去读；<br>
+     ② <code>shm_for_menu</code> —— 播放器写给主菜单（播放器→菜单），播放器用 <code>shmMusicToMenu</code> 这个对象去写。</p>
+  <p>两个进程里这两个对象的名字完全一样、键名也完全一样，<b>只是「谁读谁写」相反</b>。所以读这段代码时，永远先问自己：<b>这个 <code>QSharedMemory</code> 对象是「我收信的」还是「我发信的」？</b></p>
+  <p>另外注意：<code>shm_to_zero()</code> 在播放器里清的是 <code>shmMenuToMusic</code>（自己的收信箱），在菜单里清的是 <code>shmMusicToMenu</code>（自己的收信箱）—— <b>各自清各自的收件箱</b>，这就是这个项目「手动 ACK」的协议。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 12-①　<code>connect()</code> 写在槽函数里，会发生什么？</strong></p>
+  <p>一般写法是把 <code>connect</code> 放在构造函数（或 <code>init_*()</code>）里，<b>整个对象生命周期只执行一次</b>。而这里 <code>:355</code> 的 <code>connect</code> 写在 <code>on_btnQuit_clicked()</code> 里 —— <b>每点一次「退出」，就多建立一条同样的连接</b>。</p>
+  <p>于是第 N 次点退出后，<code>detachTimer</code> 超时一次会回调 <b>N 次</b> lambda：第一次已经 <code>detach()</code>，后面几次对一个「没有 attach 的 QSharedMemory」再 <code>detach()</code>，会打印 <code>QSharedMemory::detach: not attached</code> 之类的警告。</p>
+  <p>Qt 提供了一个开关来防这件事：</p>
+  <pre>
+connect(detachTimer, &amp;QTimer::timeout, this, [&](){ ... },
+        Qt::UniqueConnection);   // 同名同类型的连接只保留一条
+  </pre>
+  <p>但 <b><code>Qt::UniqueConnection</code> 对 lambda 形式的连接是无效的</b>（因为每次写的 lambda 类型都不同，Qt 没法判定「这是同一条」）。所以正解是：<b>把连接建到构造函数 / <code>init_shm()</code> 里，只建一次</b>。这是「在哪初始化，就在哪连接」的原则。</p>
+  <p>顺带一个 C++ 细节：lambda <code>[&amp;](){ ... }</code> 本身是一个<b>匿名类的临时对象（闭包）</b>，<code>connect</code> 会把它的<b>副本</b>存进内部的连接记录里。所以只要这条连接还在（<code>detachTimer</code> 还活着），这个闭包副本就活着 —— 这就是「lambda 的寿命由连接决定」，也正是 §7 坑 7-① 里 <code>[&amp;]</code> 悬垂问题的另一半真相：<b>引用捕获 + 长命连接 = 悬垂引用</b>。</p>
+</div>
+
+<div class="cpp">
+  <p><strong>C++ 知识 12-②　<code>new</code> 出来的对象，到底谁来 <code>delete</code>？</strong></p>
+  <p>C++ 里没有垃圾回收，<code>new</code> 必须配对 <code>delete</code>。Qt 给了一个省事的替代品：<b>父子对象树（parent-child）</b>。规则是：</p>
+  <pre>
+QTimer* t = new QTimer(this);   // 传了 this 当 parent
+// 当 this 被 delete 时，Qt 会自动 delete t —— 不用自己写 delete
+  </pre>
+  <p>所以本项目里 <code>switchAppTimer / readTimer / detachTimer</code> 都带 <code>this</code>，是安全的。但有三类 <code>new</code> 逃过了这棵树的保护：</p>
+  <p>① <code>playlist = new QMediaPlaylist;</code>（§4 坑 4-①，没传 parent）；<br>
+     ② <code>new QPropertyAnimation(btn, "geometry")</code>（见坑 12-②，第一个参数是「动画目标」，<b>不是 parent</b>！）；<br>
+     ③ 各种 <code>new QListWidgetItem</code>（由 <code>QListWidget</code> 接管所有权，这条其实安全）。</p>
+  <p>C++ 的标准答案是用<b>智能指针</b>把「谁 delete」写进类型里：</p>
+  <pre>
+std::unique_ptr&lt;QMediaPlaylist&gt; playlist;   // 离开作用域自动 delete
+QScopedPointer&lt;QPropertyAnimation&gt; anim;    // Qt 版，语义同上
+  </pre>
+  <p><b>一句话记法：<code>new</code> 的时候，要么给 parent，要么交给智能指针，要么自己 <code>delete</code>。三样都没有 = 泄漏。</b></p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 12-①　<code>connect</code> 写在槽里 → 每点一次「退出」就多连一条。</strong><code>MainWidget.cpp:355</code> 的 <code>connect(detachTimer, &amp;QTimer::timeout, ...)</code> 写在 <code>on_btnQuit_clicked()</code> 函数体内。第一次点没问题；第二次点，<code>detachTimer</code> 上就有两条一模一样的连接，超时会执行两次；第三次点变三条……功能上看不出大问题（重复 detach 只是打警告），但这是<b>典型的「连接越积越多」缺陷</b>，代码评审一定会被指出来。<b>改法</b>：把这段 <code>connect</code> 挪到 <code>init_shm()</code>（或构造函数）里只连一次。</p>
+</div>
+
+<div class="warn">
+  <p><strong>坑 12-②　<code>zoom()</code> 每次点按钮都泄漏一个动画对象。</strong><code>MainWidget.cpp:314-327</code>：</p>
+  <pre>
+314 void MainWidget::zoom(QPushButton* btn)
+315 {
+316     QPropertyAnimation* animation = new QPropertyAnimation(btn, "geometry");
+317     ...                                              // 设置时长/起止值/曲线
+326     animation-&gt;start();                              // 启动
+327 }                                                    // ← 函数结束，指针丢了，对象还在！
+  </pre>
+  <p>★ <code>QPropertyAnimation(btn, "geometry")</code> 的第一个参数是<b>被动画的对象</b>，第二个参数是<b>属性名</b>，<b>并没有第二个「parent」参数</b>。所以这个 <code>animation</code> 没有被挂到任何父对象上，函数一返回，<code>animation</code> 这个局部指针就没了 —— <b>对象却还活着</b>，而且没人能再 <code>delete</code> 它。</p>
+  <p>由于 <code>zoom()</code> 被 <code>on_btnVol / on_btnQuit / on_btnList / on_btnPlay / on_btnPre / on_btnNext / ...</code> <b>每个按钮的槽</b>都调用了一次，<b>车机上每按一个按钮就泄漏一个动画对象</b>。演示几十次看不出来，长时间运行会慢慢吃内存。</p>
+  <p><b>改法（两种都行）：</b><br>
+     ① 加一行 <code>animation-&gt;setParent(btn);</code> —— 让它跟着按钮一起被回收；<br>
+     ② 更推荐：<code>animation-&gt;deleteLater();</code> 或者干脆用 <code>QPropertyAnimation anim(btn, "geometry");</code>（<b>栈对象</b>，函数返回即析构，动画已经 <code>start()</code> 了、Qt 内部会自己接管播放，寿命不受影响）。</p>
+</div>
+
+<h3 class="pgbreak">12.3　整条链路闭合图</h3>
+
+<pre>
+   ┌───────────────────────────── 主菜单进程 CarPlayMainWW ─────────────────────────────┐
+   │                                                                                   │
+   │  readTimer(1s) ──attach "shm_for_menu"──► 读到 1 ──► exec_by_num(1) ──► show()     │
+   │      ▲                                                                    │         │
+   │      │ 写 1 到 "shm_for_music"                                            │ 显示菜单 │
+   └──────┼────────────────────────────────────────────────────────────────────┼────────┘
+          │                                                                    │
+   ┌──────┼─────────────────────────── 播放器进程 MusicPlayerWW ───────────────┼────────┐
+   │      │                                                                    ▼        │
+   │  readTimer(1s) ──attach "shm_for_music"──► exec_by_num(num)          on_btnQuit_clicked()
+   │      │                                        │                            │        │
+   │      │  §8 分发 6 种命令                       └── 处理完写 0 回去（ACK）    │        │
+   │      │                                                                     │        │
+   │  §4 init_play（播放器/歌单）  §9 数据模型  §10 歌词                   写 1 到        │
+   │                                            "shm_for_menu" ────────────────┘        │
+   │  §1 main() 由菜单启动                          §12 交给菜单              hide()      │
+   └────────────────────────────────────────────────────────────────────────────────────┘
+</pre>
+
+<div class="note">
+  <p><strong>一句话记住整条链路：</strong>菜单是「东家」，播放器是「长工」。长工被叫出来干活（§1 启动、§8 接命令），干完活<b>不是下班回家（<code>exit</code>），而是回屋休息（<code>hide()</code>），并留张纸条（写共享内存）告诉东家「我回屋了」</b>。真正的「辞退」命令是命令字 <code>6</code>（<code>CLOSE_APP</code>），它对应的分支是 <code>this-&gt;close()</code>（<code>MainWidget.cpp:180-183</code>）。</p>
+  <p><strong>但请注意一个事实：</strong>全项目搜一遍就会发现，<code>CLOSE_APP</code> 只有「接收方」（播放器 <code>case CLOSE_APP</code>），<b>没有任何发送方</b> —— 主菜单里根本没写「发 6 给播放器」的代码。也就是说 <b>这个分支目前是死代码</b>：播放器进程在本项目里一旦启动就再也不会退出（只能整机重启或命令行 kill）。这属于「设计留了接口但没接完」，学习时知道就好。</p>
+</div>
+
+<h2 class="pgbreak">§13　索引与待改进清单</h2>
+
+<h3>13.1　Qt 接口索引（本篇出现过的全部接口）</h3>
+
+<table class="cols-3a">
+  <caption>表 13-1　按「类 :: 接口」排列，出现章节可回跳复习</caption>
+  <thead>
+    <tr><th>类 :: 接口</th><th>出现位置（章节）</th><th>一句话作用</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>QApplication(argc, argv)</code></td><td>§1 main()</td><td>创建整个应用的唯一实例，管理事件循环。</td></tr>
+    <tr><td><code>QApplication::exec()</code></td><td>§1 main()</td><td>进入事件循环，此后一切交互都靠信号/槽驱动。</td></tr>
+    <tr><td><code>QWidget::show() / hide()</code></td><td>§1、§8、§12</td><td>显示 / 隐藏窗口（不销毁、不退出进程）。</td></tr>
+    <tr><td><code>QStringLiteral("...")</code></td><td>§1、§7</td><td>编译期构造 <code>QString</code>，比 <code>QString("...")</code> 少一次运行期分配。</td></tr>
+    <tr><td><code>QWidget(parent)</code> / <code>setupUi(this)</code></td><td>§2 构造函数</td><td>从 .ui 生成的界面装配到当前窗口。</td></tr>
+    <tr><td><code>QObject::connect(sender, &amp;Sig, receiver, &amp;Slot)</code></td><td>§4、§7、§12</td><td>Qt 5 新式连接：编译期检查的成员函数指针写法。</td></tr>
+    <tr><td><code>QMediaPlayer::setMedia / setPlaylist</code></td><td>§4</td><td>指定播放内容（单曲 / 播放列表）。</td></tr>
+    <tr><td><code>QMediaPlayer::play / pause / stop</code></td><td>§4、§8、§11</td><td>播放控制。</td></tr>
+    <tr><td><code>QMediaPlayer::setVolume / volume</code></td><td>§8、§11</td><td>音量 0~100。</td></tr>
+    <tr><td><code>QMediaPlayer::state()</code></td><td>§11</td><td>取三态之一（Stopped/Paused/Playing）。</td></tr>
+    <tr><td><code>QMediaPlayer::position / duration / setPosition</code></td><td>§4、§11</td><td>当前进度 / 总时长（毫秒）/ 跳转。</td></tr>
+    <tr><td><code>QMediaPlayer::metaData / availableMetaData / isMetaDataAvailable</code></td><td>§9.1、§11</td><td>读取歌曲元信息（标题/歌手/时长/封面图）。</td></tr>
+    <tr><td><code>QMediaPlayer::stateChanged / positionChanged / durationChanged / metaDataAvailableChanged</code></td><td>§4</td><td>四条「状态变化」信号，驱动界面刷新。</td></tr>
+    <tr><td><code>QMediaPlaylist::setPlaybackMode / playbackMode</code></td><td>§4、§11</td><td>循环 / 随机 / 单曲三种模式。</td></tr>
+    <tr><td><code>QMediaPlaylist::addMedia / clear / mediaCount / isEmpty</code></td><td>§9.3、§11</td><td>维护播放列表内容与数量。</td></tr>
+    <tr><td><code>QMediaPlaylist::previous / next / setCurrentIndex / currentIndex</code></td><td>§11</td><td>切歌。</td></tr>
+    <tr><td><code>QSqlDatabase::addDatabase / database / setDatabaseName / open / lastError</code></td><td>§5</td><td>打开 / 获取 SQLite 数据库连接。</td></tr>
+    <tr><td><code>QSqlQuery::exec / prepare / addBindValue / value / next</code></td><td>§5、§9.5、§9.3</td><td>执行 SQL；<code>?</code> 占位符防注入。</td></tr>
+    <tr><td><code>QMessageBox::critical</code></td><td>§5</td><td>弹错误框（数据库打不开时）。</td></tr>
+    <tr><td><code>QSharedMemory::setKey / attach / isAttached / create / detach / lock / data / unlock</code></td><td>§7、§8、§12</td><td>跨进程共享内存的全套动作。</td></tr>
+    <tr><td><code>QSystemSemaphore</code></td><td>§7（提及）</td><td>跨进程信号量，本项目只在主菜单里声明未真正使用。</td></tr>
+    <tr><td><code>QTimer::start / stop</code>、信号 <code>timeout</code></td><td>§7、§11、§12</td><td>轮询共享内存 / 延时 detach。</td></tr>
+    <tr><td><code>QPropertyAnimation(目标, "属性")</code> + <code>setDuration / setStartValue / setEndValue / setEasingCurve / start</code></td><td>§12.3</td><td>按钮弹跳动画（<code>QEasingCurve::OutBounce</code>）。</td></tr>
+    <tr><td><code>QListWidget::clear / addItem / item</code></td><td>§6、§9.3</td><td>歌单控件的行管理。</td></tr>
+    <tr><td><code>QListWidgetItem::setIcon / setText / setTextAlignment / setSizeHint / setForeground</code></td><td>§9.3</td><td>设置每一行的外观。</td></tr>
+    <tr><td><code>QStackedWidget::currentIndex / setCurrentIndex</code></td><td>§3、§11</td><td>在「播放页 / 歌单页」之间切换。</td></tr>
+    <tr><td><code>QLabel::setPixmap / setText</code>、<code>QPixmap::scaled</code></td><td>§3、§10.3</td><td>显示封面图 / 歌词文字。</td></tr>
+    <tr><td><code>QPushButton::clicked</code>、<code>QSlider::valueChanged</code></td><td>§11</td><td>按钮 / 滑块的用户输入信号。</td></tr>
+    <tr><td><code>QFileDialog::setAcceptMode / setFileMode / setMimeTypeFilters / setDirectory / selectedUrls / exec</code></td><td>§11</td><td>选歌对话框。</td></tr>
+    <tr><td><code>QProgressDialog::setValue / wasCanceled / setWindowModality</code></td><td>§9.3</td><td>批量添加时的进度条 + 取消。</td></tr>
+    <tr><td><code>QMimeDatabase / QMimeType::name</code></td><td>§9.3</td><td>按真实文件类型（而非后缀）筛选音频。</td></tr>
+    <tr><td><code>QFile::open / readAll / close</code></td><td>§10.2</td><td>读 .lrc 歌词文件。</td></tr>
+    <tr><td><code>QRegExp::indexIn / cap / matchedLength</code></td><td>§10.2</td><td>用正则拆解 <code>[mm:ss.xx]</code> 时间标签。</td></tr>
+    <tr><td><code>QString::fromLocal8Bit / mid / trimmed / toInt / toDouble / replace / arg / join</code></td><td>§9.1、§10</td><td>字符串解码、切分、格式化（时间 <code>mm:ss</code>）。</td></tr>
+    <tr><td><code>QIcon</code> / <code>QFont</code> / <code>QSize</code> / <code>QRect</code></td><td>§3、§4、§12</td><td>图标 / 字体 / 尺寸 / 矩形（动画起止位置）。</td></tr>
+    <tr><td><code>QVariant::value&lt;T&gt;()</code>、<code>isValid()</code></td><td>§5、§9.1</td><td>从元数据里取出具体类型的值。</td></tr>
+    <tr><td><code>QCoreApplication::applicationDirPath / processEvents</code></td><td>§5、§9.1</td><td>程序所在目录；<code>processEvents</code> 用于忙等「泵」事件。</td></tr>
+    <tr><td><code>QScroller::grabGesture</code></td><td>§3</td><td>触摸屏「惯性拖拽」装到 <code>QListWidget</code> 上。</td></tr>
+    <tr><td><code>QWidget::setStyleSheet</code> + QSS</td><td>§3、§11</td><td>用样式表换按钮图标/外观（<code>#id</code> 选择器）。</td></tr>
+    <tr><td><code>QObject::deleteLater</code></td><td>§12.3（建议）</td><td>安全延迟删除（等回到事件循环再删）。</td></tr>
+  </tbody>
+</table>
+
+<h3>13.2　C++ 知识点索引</h3>
+
+<table class="cols-4a">
+  <caption>表 13-2　本篇讲到的 C++ 语言知识，按出现顺序编号</caption>
+  <thead>
+    <tr><th>编号</th><th>知识点</th><th>在哪一节</th><th>一句话要点</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1-①</td><td><code>argc</code> / <code>argv</code>、命令行参数</td><td>§1</td><td><code>argv[0]</code> 是程序自己，<code>argc</code> 是参数个数，取值前先判个数。</td></tr>
+    <tr><td>1-②</td><td>运算符重载、<code>==</code> 比较字符串</td><td>§1</td><td><code>QString == QString</code> 比的是内容，不是地址。</td></tr>
+    <tr><td>2-①</td><td>成员初始化列表 vs 函数体赋值</td><td>§2</td><td>初始化列表「构造时就赋值」，函数体是「先默认构造再赋值」。</td></tr>
+    <tr><td>2-②</td><td><code>new</code> / <code>delete</code>、<code>Ui::MainWidget</code> 不是 QObject</td><td>§2</td><td><code>Ui::*</code> 是普通 C++ 类，必须手动 <code>delete</code>。</td></tr>
+    <tr><td>3-①</td><td><code>-&gt;</code> 与 <code>.</code></td><td>§3</td><td><code>a-&gt;b</code> 就是 <code>(*a).b</code>，指针用箭头、对象用点。</td></tr>
+    <tr><td>3-②</td><td><code>inline</code> 与头文件里的函数定义</td><td>§3.1</td><td>头文件里的非模板函数要写 <code>inline</code>，否则多处 include 会重复定义。</td></tr>
+    <tr><td>4-①</td><td>成员函数指针 <code>&amp;Class::signal</code></td><td>§4</td><td>新式 connect 的核心；带 <code>&amp;</code> 和类名，和普通函数指针不同。</td></tr>
+    <tr><td>4-②</td><td><code>enum</code> 与 <code>enum class</code></td><td>§4、§9.2</td><td>传统 enum 的枚举值会「泄漏」到外层作用域，<code>enum class</code> 不会。</td></tr>
+    <tr><td>5-①</td><td>RAII（栈对象自动析构）</td><td>§5</td><td>资源放进对象，离开作用域自动释放，是 C++ 资源管理的核心思想。</td></tr>
+    <tr><td>5-②</td><td><code>QVariant</code>「万能类型」</td><td>§5、§9.1</td><td>能装任意类型，取出时用 <code>value&lt;T&gt;()</code> 并检查 <code>isValid()</code>。</td></tr>
+    <tr><td>6-①</td><td><code>friend</code> 友元</td><td>§6</td><td>给指定类开「后门」访问私有成员，破坏封装，慎用。</td></tr>
+    <tr><td>6-②</td><td>值语义、拷贝、Qt 隐式共享（COW）</td><td>§6</td><td><code>QString</code> 等传值不贵，因为内部是「写时复制」。</td></tr>
+    <tr><td>7-①</td><td>lambda 表达式与捕获列表 <code>[&amp;]</code></td><td>§7</td><td><code>[]</code> 空、<code>[&amp;]</code> 引用捕获、<code>[=]</code> 值捕获；引用捕获活不过对象寿命。</td></tr>
+    <tr><td>7-②</td><td><code>void*</code> 无类型指针与 <code>static_cast</code></td><td>§7</td><td><code>void*</code> 丢了类型信息，用前必须转回正确类型。</td></tr>
+    <tr><td>8-①</td><td><code>switch</code> / <code>case</code> / <code>break</code> / <code>default</code></td><td>§8</td><td>忘写 <code>break</code> 会「贯穿」到下一个 case。</td></tr>
+    <tr><td>8-②</td><td><code>#define</code> vs <code>const</code> / <code>constexpr</code></td><td>§8</td><td>宏是纯文本替换、无类型检查；常量有类型、能调试。</td></tr>
+    <tr><td>8-③</td><td><code>this</code> 指针</td><td>§8</td><td>成员函数隐藏的第一个参数，指向「当前对象」。</td></tr>
+    <tr><td>9-①</td><td>封装、<code>class</code> vs <code>struct</code></td><td>§9.1</td><td>唯一技术差别是默认访问权限：class 私有、struct 公有。</td></tr>
+    <tr><td>9-②</td><td>构造函数重载与初始化列表</td><td>§9.1</td><td>初始化顺序按<b>声明顺序</b>，不是列表里写的顺序。</td></tr>
+    <tr><td>9-③</td><td><code>const</code> 成员函数</td><td>§9.1</td><td>承诺「只读」；const 对象只能调 const 成员函数。</td></tr>
+    <tr><td>9-④</td><td>运算符重载与仿函数 <code>operator()</code></td><td>§9.2</td><td>函数对象能「带状态」（如这里的比较字段 <code>key</code>）。</td></tr>
+    <tr><td>9-⑤</td><td>迭代器 <code>begin/end</code>、<code>auto</code>、范围 for</td><td>§9.3</td><td><code>end()</code> 指向「末元素后一格」，不是最后一个元素。</td></tr>
+    <tr><td>9-⑥</td><td><code>using namespace std;</code> 不该放头文件</td><td>§9.3</td><td>会把整个 <code>std</code> 名字空间污染到所有 include 它的文件。</td></tr>
+    <tr><td>9-⑦</td><td><code>sort</code> / <code>unique</code> / erase-remove 惯用法</td><td>§9.4</td><td><code>unique</code> 只删「相邻」重复，必须先 <code>sort</code>；删完要 <code>erase</code> 缩容。</td></tr>
+    <tr><td>9-⑧</td><td>参数化查询 / SQL 注入</td><td>§9.5</td><td><code>?</code> 占位符把「数据」与「语句」分开，避免注入与转义错误。</td></tr>
+    <tr><td>10-①</td><td>初始化列表里「成员(参数)」同名</td><td>§10.1</td><td><code>time(time)</code> 是合法的：括号外是成员、括号内是参数。</td></tr>
+    <tr><td>10-②</td><td>非成员 <code>operator&lt;</code> 重载</td><td>§10.1</td><td>让自定义类型能被 STL 排序算法直接使用。</td></tr>
+    <tr><td>10-③</td><td>正则表达式、<code>QRegExp</code> vs <code>QRegularExpression</code></td><td>§10.2</td><td><code>QRegExp</code> 已过时，Qt6 移除；新代码用 <code>QRegularExpression</code>。</td></tr>
+    <tr><td>10-④</td><td>有符号 / 无符号比较（<code>-Wsign-compare</code>）</td><td>§10.3</td><td><code>int</code> 与 <code>size_t</code> 比较会隐式转无符号，负数会变成巨大正数。</td></tr>
+    <tr><td>10-⑤</td><td>名字隐藏（name hiding）</td><td>§10.3</td><td>派生类同名函数会「挡住」基类所有同名重载，可用 <code>using 基类::函数;</code> 放开。</td></tr>
+    <tr><td>12-①</td><td><code>connect</code> 的时机、闭包副本的生命周期、<code>Qt::UniqueConnection</code></td><td>§12</td><td>连接应该在初始化时只建一次；引用捕获 + 长命连接的组合最危险。</td></tr>
+    <tr><td>12-②</td><td>父子对象树 vs 智能指针，谁负责 <code>delete</code></td><td>§12</td><td><code>new</code> 了三件套：给 parent、交给智能指针、自己 delete —— 三选一。</td></tr>
+  </tbody>
+</table>
+
+<h3 class="pgbreak">13.3　待改进清单（学习笔记，不改代码）</h3>
+
+<table class="cols-4c">
+  <caption>表 13-3　本项目里「能跑但不够好」的地方，按优先级从高到低</caption>
+  <thead>
+    <tr><th>级别</th><th>问题</th><th>位置</th><th>建议</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>★★★</td>
+      <td><code>playlist</code> 与 <code>zoom()</code> 里的 <code>QPropertyAnimation</code> 内存泄漏</td>
+      <td><code>MainWidget.cpp:74</code> / <code>:316</code></td>
+      <td>给 parent，或改栈对象 / 智能指针（§12 坑 12-②）。</td>
+    </tr>
+    <tr>
+      <td>★★★</td>
+      <td><code>connect</code> 写在槽函数里，反复点击会累积连接</td>
+      <td><code>MainWidget.cpp:355</code></td>
+      <td>移到 <code>init_shm()</code>，只连一次（§12 坑 12-①）。</td>
+    </tr>
+    <tr>
+      <td>★★★</td>
+      <td>数据库路径写死为相对路径 <code>"Music.db"</code></td>
+      <td><code>MainWidget.cpp</code> <code>init_sqlite()</code></td>
+      <td>用 <code>QCoreApplication::applicationDirPath()</code> 拼绝对路径（§5 坑 5-①）。</td>
+    </tr>
+    <tr>
+      <td>★★★</td>
+      <td><code>VOL_UP</code> / <code>VOL_DOWN</code> 逻辑不对称，行为不符合直觉</td>
+      <td><code>MainWidget.cpp:163-171</code></td>
+      <td>把两个 case 改成对称的「记录值 ± 步长」（§8 坑 8-①）。</td>
+    </tr>
+    <tr>
+      <td>★★</td>
+      <td><code>MyMusic()</code> 默认构造不初始化 <code>duration</code> / <code>bitRate</code></td>
+      <td><code>MyMusic.h:23</code></td>
+      <td>加成员初始化：<code>qint64 duration = 0; int bitRate = 0;</code>（§9.1 坑 9-①）。</td>
+    </tr>
+    <tr>
+      <td>★★</td>
+      <td><code>init_from_url()</code> 里 <code>while(!isMetaDataAvailable()) processEvents();</code> 忙等</td>
+      <td><code>MyMusic.cpp:32</code></td>
+      <td>改为信号驱动：连 <code>metaDataAvailableChanged</code>，或用局部事件循环。</td>
+    </tr>
+    <tr>
+      <td>★★</td>
+      <td><code>neaten()</code> 用 <code>DEFAULT</code> 排序、却用 <code>EQUALITY</code> 去重，判据不一致</td>
+      <td><code>MusicList.cpp:84-85</code></td>
+      <td>统一成一个明确的「相等」判据（§9.4 坑 9-④）。</td>
+    </tr>
+    <tr>
+      <td>★★</td>
+      <td>排序 / 整理每次都「整表 <code>delete</code> + 全量重插」数据库</td>
+      <td><code>MusicList.cpp:77-79</code></td>
+      <td>只更新变化项，或用事务包裹批量写入（§9.4 坑 9-⑤）。</td>
+    </tr>
+    <tr>
+      <td>★★</td>
+      <td><code>exit(-1)</code> 在数据库打不开时直接杀进程</td>
+      <td><code>MainWidget.cpp:103</code></td>
+      <td>改为提示 + 优雅退出（§5 坑 5-②）。</td>
+    </tr>
+    <tr>
+      <td>★</td>
+      <td><code>QRegExp</code> 已过时；<code>QTextCodec</code> 引了却没用</td>
+      <td><code>LyricWidget.cpp:5/:32</code></td>
+      <td>改用 <code>QRegularExpression</code>；删掉无用 include（§10.2）。</td>
+    </tr>
+    <tr>
+      <td>★</td>
+      <td>歌词文件编码写死 <code>fromLocal8Bit</code>，换机器中文乱码</td>
+      <td><code>LyricWidget.cpp:28</code></td>
+      <td>统一用 UTF-8（§10.3 坑 10-②）。</td>
+    </tr>
+    <tr>
+      <td>★</td>
+      <td>「清空歌单」没有二次确认，误触即不可恢复</td>
+      <td><code>MainWidget.cpp</code> <code>on_btnSweep_clicked</code></td>
+      <td>加 <code>QMessageBox::question</code> 确认（§11）。</td>
+    </tr>
+    <tr>
+      <td>★</td>
+      <td>存在死代码：<code>scan_music()</code> / <code>add_music_to_list()</code> / <code>init_playlist()</code> / <code>CLOSE_APP</code> 分支 / <code>ScrollBarStyle</code></td>
+      <td>多处</td>
+      <td>确认无用后删除，降低阅读负担（§7、§12.3）。</td>
+    </tr>
+    <tr>
+      <td>★</td>
+      <td>两个进程里的命令字宏是「两份拷贝」，靠人工保持一致</td>
+      <td><code>MainWidget.h</code>（两份）</td>
+      <td>抽到一个公共头文件里共享（§7 表 7-2）。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 class="pgbreak">§14　自测与练习</h2>
+
+<h3>14.1　自测题（先别翻上面，凭印象答）</h3>
+
+<ol>
+  <li>播放器进程的「站点」一共有几个？请按执行顺序把它们报出来。</li>
+  <li><code>argc &lt; 2</code> 和 <code>argv[1] == "-hide"</code> 这两条判断，为什么必须按这个顺序写？</li>
+  <li><code>Ui::MainWidget</code> 是不是 <code>QObject</code>？它由谁 <code>delete</code>？</li>
+  <li>新式 <code>connect</code>（Qt 5）和旧式 <code>connect</code>（<code>SIGNAL()/SLOT()</code> 字符串）相比，最大的好处是什么？</li>
+  <li>播放器用哪个共享内存对象「收」命令、哪个「发」命令？对应的键名分别是什么？</li>
+  <li><code>exec_by_num()</code> 处理完一条命令后，为什么要把共享内存写回 <code>0</code>？</li>
+  <li><code>shm_to_zero()</code> 在两个进程里清的分别是谁的「收件箱」？</li>
+  <li><code>sort</code> 和 <code>stable_sort</code> 有什么区别？为什么 <code>neaten()</code> 里的 <code>unique</code> 前面必须先 <code>sort</code>？</li>
+  <li><code>size() - 1</code> 在容器为空时会得到什么？为什么危险？</li>
+  <li>本篇全项目仅有两条编译警告，它们出在哪个函数的哪几行？根因是 C++ 的什么规则？</li>
+  <li>点「退出」之后，播放器进程<b>真的结束</b>了吗？证明你的答案（提示：看 <code>:362</code> 用的是哪个函数）。</li>
+  <li><code>new QPropertyAnimation(btn, "geometry")</code> 里，<code>btn</code> 是父对象吗？</li>
+</ol>
+
+<h3>14.2　动手练习（对着源码改，改完自己编译验证）</h3>
+
+<ol>
+  <li><b>修一个泄漏：</b>在 <code>zoom()</code> 里把 <code>new QPropertyAnimation(...)</code> 改成给按钮设 parent（<code>animation-&gt;setParent(btn);</code>），然后重编译。思考：为什么这样之后，动画依然能正常播完、而且按钮被删除时动画会一起被回收？</li>
+  <li><b>修一个重复连接：</b>把 <code>on_btnQuit_clicked()</code> 里那段 <code>connect(detachTimer, ...)</code> 挪到 <code>init_shm()</code>，只留一次。验证方式：在 lambda 里加一句 <code>qDebug() &lt;&lt; "detach";</code>，连点三次退出，观察每次是否只打印一次。</li>
+  <li><b>让歌单支持去重但保留原顺序：</b>把 <code>neaten()</code> 的 <code>sort + unique</code> 改成「<code>stable_sort</code> + <code>unique</code>」，对比结果差异，理解 <code>stable_sort</code> 的意义。</li>
+  <li><b>加一个安全网：</b>给 <code>on_btnSweep_clicked</code> 加一个 <code>QMessageBox::question</code> 二次确认；取消时直接 <code>return</code>。体会「系统边界要做校验」的原则。</li>
+  <li><b>把宏换成常量：</b>把 <code>#define SWITCH_VISIBILITY 1</code> 等六个宏改成 <code>constexpr int</code>（或一个 <code>enum class Cmd : int</code>），重编译，观察是否有类型检查带来的新报错 —— 这就是「宏 → 常量」的真实收益。</li>
+  <li><b>（进阶）让 <code>CLOSE_APP</code> 真正生效：</b>在主菜单「关机 / 退出」相关位置补上「向 <code>shm_for_music</code> 写 <code>6</code>」的代码，让播放器进程能真正退出。这是本项目留下的一处「接口没接完」，很有代表性。</li>
+</ol>
+
+<div class="note">
+  <p><strong>学习建议：</strong>本篇把「代码 → Qt 接口 → C++ 知识」三条线钉在了一起。真正的检验标准不是「看懂了」，而是<b>「能不能不看文档，自己在源码里指出某个接口为什么出现在这一行」</b>。上面 12 道自测题全部能答出来，就可以进入下一层：改一处小功能（例如给播放器加一个「按专辑排序」按钮），走一遍「改 .ui → 加槽 → 改数据模型 → refresh」的完整流程。</p>
+</div>
+
+<div class="footnote">
+  <p><strong>事实来源：</strong>本篇所有行号、接口名、命令字取值均逐行核对自本项目 <code>x86/MusicPlayerWW/</code> 与 <code>x86/CarPlayMainWW/</code> 下的真实源码（<code>main.cpp</code>、<code>MainWidget.h/.cpp</code>、<code>MyMusic.h/.cpp</code>、<code>MusicList.h/.cpp</code>、<code>MusicListWidget.h/.cpp</code>、<code>LyricWidget.h/.cpp</code>、<code>MyQSS.h</code>、<code>*.pro</code>、<code>*.ui</code>、<code>Resources.qrc</code>）；编译警告信息来自 Qt 5.12.8 + 项目 <code>.pro</code> 配置的真实 <code>make</code> 输出。</p>
+  <p><strong>排版说明：</strong>本页为 A4 打印排版，右上角「打印 / 导出 PDF」按钮在打印时自动隐藏；浏览器「打印 → 目标另存为 PDF」即可得到纸质讲义的布局。</p>
+  <p><strong>配色约定：</strong>蓝框 = C++ 语言知识；灰框 = Qt / 项目补充说明；红框 = 踩坑与缺陷（附修改建议）。</p>
+</div>
+
+</body>
+</html>

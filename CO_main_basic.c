@@ -901,7 +901,7 @@ static void* rt_thread(void* arg) {
 
 #ifdef CO_USE_APPLICATION
         /* Execute optional external application code */
-        app_programRt(CO, epRT.timeDifference_us);
+        app_programRt(CO, epRT.timerLate_us, epRT.timerEvent);
 #endif
 
     }

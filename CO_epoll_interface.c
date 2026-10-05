@@ -120,6 +120,10 @@ CO_ReturnError_t CO_epoll_create(CO_epoll_t *ep, uint32_t timerInterval_us) {
     ep->timerInterval_us = timerInterval_us;
     ep->previousTime_us = clock_gettime_us();
     ep->timeDifference_us = 0;
+    /* Origin of the ideal period grid: timer was armed in timerfd_settime()
+     * above, ticks are expected at timerStart_us + k * timerInterval_us. */
+    ep->timerStart_us = ep->previousTime_us;
+    ep->timerLate_us = 0;
 
     return CO_ERROR_NO;
 }
@@ -186,6 +190,12 @@ void CO_epoll_wait(CO_epoll_t *ep) {
         }
         ep->epoll_new = false;
         ep->timerEvent = true;
+        /* Lateness of this tick relative to the ideal period grid
+         * (timerStart_us + k * timerInterval_us), always in
+         * [0, timerInterval_us). */
+        if (ep->timerInterval_us != 0) {
+            ep->timerLate_us = (uint32_t)((now - ep->timerStart_us) % ep->timerInterval_us);
+        }
     }
 }
 

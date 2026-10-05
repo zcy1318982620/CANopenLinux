@@ -62,6 +62,7 @@
 #define OD_CNT_ARR_6099 2
 #define OD_CNT_ARR_60E3 11
 #define OD_CNT_ARR_60FE 1
+#define OD_CNT_ARR_6FFF 3
 
 
 /*******************************************************************************
@@ -325,6 +326,8 @@ typedef struct {
     uint32_t x6502_supportedDriveModes;
     uint32_t x67FE_versionNumber;
     uint32_t x67FF_singleDeviceType;
+    uint8_t x6FFF_agvOdometry_sub0;
+    float32_t x6FFF_agvOdometry[OD_CNT_ARR_6FFF];
 } OD_RAM_t;
 
 #ifndef OD_ATTR_PERSIST_COMM
@@ -503,6 +506,9 @@ extern OD_ATTR_OD OD_t *OD;
 #define OD_ENTRY_H6502 &OD->list[154]
 #define OD_ENTRY_H67FE &OD->list[155]
 #define OD_ENTRY_H67FF &OD->list[156]
+/* 自定义条目追加在 ODList[] 末尾, 索引 0x6FFF 大于所有既有索引,
+ * 保证 ODList[] 仍按 index 升序 (OD_find 是二分查找). */
+#define OD_ENTRY_H6FFF &OD->list[157]
 
 
 /*******************************************************************************
@@ -665,6 +671,7 @@ extern OD_ATTR_OD OD_t *OD;
 #define OD_ENTRY_H6502_supportedDriveModes &OD->list[154]
 #define OD_ENTRY_H67FE_versionNumber &OD->list[155]
 #define OD_ENTRY_H67FF_singleDeviceType &OD->list[156]
+#define OD_ENTRY_H6FFF_agvOdometry &OD->list[157]
 
 
 /*******************************************************************************

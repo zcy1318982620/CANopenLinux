@@ -101,8 +101,15 @@ typedef struct {
     uint32_t timerNext_us;
     /** True,if timer event is inside @ref CO_epoll_wait() */
     bool_t timerEvent;
-    /** time value from the last process call in microseconds */
+    /** Time value from the last process call in microseconds */
     uint64_t previousTime_us;
+    /** Timerfd start (arm) time in microseconds - origin of the ideal period
+     * grid. Set in @ref CO_epoll_create(). */
+    uint64_t timerStart_us;
+    /** Lateness of the last timer tick in microseconds: (now - timerStart_us)
+     * modulo timerInterval_us. Reflects scheduling delay of this tick only,
+     * always in range [0, timerInterval_us). */
+    uint32_t timerLate_us;
     /** Structure for timerfd */
     struct itimerspec tm;
     /** Structure for epoll_wait */

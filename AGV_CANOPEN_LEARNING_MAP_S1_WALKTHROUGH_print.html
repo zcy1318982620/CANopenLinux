@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 1 站 · 逐行慢读：CAN 总线 &amp; SocketCAN 关键代码（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.6pt; line-height:1.32;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-3b th:nth-child(1),.cols-3b td:nth-child(1){width:19%}
+.cols-3b th:nth-child(2),.cols-3b td:nth-child(2){width:25%}
+.cols-3b th:nth-child(3),.cols-3b td:nth-child(3){width:56%}
+.cols-4c th:nth-child(1),.cols-4c td:nth-child(1){width:9%}
+.cols-4c th:nth-child(2),.cols-4c td:nth-child(2){width:27%}
+.cols-4c th:nth-child(3),.cols-4c td:nth-child(3){width:26%}
+.cols-4c th:nth-child(4),.cols-4c td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #2255a4; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#1a3f7a; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 1 站 · 逐行慢读：CAN 总线 &amp; SocketCAN 关键代码</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode 的 CANopen 从站（Linux 用户态 + SocketCAN）。</p>
+<p><strong>本篇定位：</strong>第 1 站的补充册。只讲<strong>真正关键的几段代码</strong>，每段代码后面跟一张四列表：<strong>行号 / 代码 / 用到的接口 / 变量与说明</strong>。</p>
+<p><strong>怎么读：</strong>① 先扫一眼代码块（首行写了 <code>文件：xxx</code>）；② 再看紧跟的四列表，逐个变量弄懂；③ 蓝/灰/红框是补充、坑、简历话术。</p>
+<p><strong>标记：</strong><code>★★★</code> = 本项目核心、必须会；<code>★★</code> = 重要；<code>★</code> = 知道即可。<span class="star">红框</span>=新手坑，<span class="star">灰框</span>=补充一句，<span class="star">蓝框</span>=简历话术。行号格式 <code>文件:行号</code>。</p>
+</div>
+
+<h2>1. 一页地图：第 1 站只有两条链</h2>
+
+<pre>第 1 站全部内容
+│
+├─ 链 A：开机建 socket    CO_driver.c:270  CO_CANmodule_addInterface()
+│     socket() → bind(can0) → epoll_ctl(ADD) → disableRx()  闭麦
+│
+└─ 链 B：每来一帧走一遍   CO_driver.c:927  CO_CANrxFromEpoll()
+      内核过滤器 → epoll_wait → recvmsg → CO_CANrxMsg 匹配 → 回调
+        ▲
+        └── 分界线：只有先调用过 CO_CANsetNormalMode() 开闸，链 B 才真正工作
+</pre>
+
+<p>CAN 是广播总线，所有节点挂同一对差分线（CAN_H / CAN_L），谁都能看见所有帧。所以"<strong>只收我关心的帧</strong>"必须靠<strong>过滤器</strong>做——这正是链 A 最后要闭麦、链 B 第一跳是过滤器的原因。</p>
+
+<h2 class="pgbreak">2. 链 A：建 socket —— 三次系统调用</h2>
+
+<pre>文件：CO_driver.c
+:307    /* Create socket */
+:308    interface->fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+:309    if(interface->fd &lt; 0){
+:310        log_printf(LOG_DEBUG, DBG_ERRNO, "socket(can)");
+:311        return CO_ERROR_SYSCALL;
+:312    }
+:345    /* bind socket */
+:346    memset(&amp;sockAddr, 0, sizeof(sockAddr));
+:347    sockAddr.can_family  = AF_CAN;
+:348    sockAddr.can_ifindex = can_ifindex;
+:349    ret = bind(interface->fd, (struct sockaddr*)&amp;sockAddr, sizeof(sockAddr));
+:350    if(ret &lt; 0){
+:351        log_printf(LOG_ERR, CAN_BINDING_FAILED, interface->ifName);
+:352        return CO_ERROR_SYSCALL;
+:353    }
+:374    /* Add socket to epoll */
+:375    ev.events  = EPOLLIN;
+:376    ev.data.fd = interface->fd;
+:377    ret = epoll_ctl(CANmodule->epoll_fd, EPOLL_CTL_ADD, ev.data.fd, &amp;ev);
+:378    if(ret &lt; 0){
+:379        log_printf(LOG_DEBUG, DBG_ERRNO, "epoll_ctl(can)");
+:380        return CO_ERROR_SYSCALL;
+:381    }
+:383    /* rx is started by calling #CO_CANsetNormalMode() */
+:384    ret = disableRx(CANmodule);
+</pre>
+
+<table class="cols-4c">
+<caption>表 2-1　链 A 逐行：代码 → 接口 → 变量</caption>
+<thead><tr><th>行号</th><th>代码</th><th>用到的接口</th><th>变量与说明</th></tr></thead>
+<tbody>
+<tr><td><code>:308</code></td><td><code>interface-&gt;fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);</code></td><td><code>socket() ★★★</code></td><td><code>interface</code> = <code>CANmodule-&gt;CANinterfaces[i]</code> 当前项；<code>fd</code> 是内核返回的句柄，后续全用它。三参数 = 协议族 CAN / 原始帧 / 协议固定 CAN。</td></tr>
+<tr><td><code>:347-349</code></td><td><code>can_family=AF_CAN; can_ifindex=can_ifindex; bind(...);</code></td><td><code>bind() ★★</code></td><td><code>sockAddr</code> 是 <code>struct sockaddr_can</code> 地址；<code>can_ifindex</code> 是函数入参——main 里由 <code>if_nametoindex("can0")</code> 得到的网卡编号。</td></tr>
+<tr><td><code>:375-377</code></td><td><code>ev.events=EPOLLIN; ev.data.fd=fd; epoll_ctl(..., EPOLL_CTL_ADD, fd, &amp;ev);</code></td><td><code>epoll_ctl() ★★</code></td><td><code>ev</code> 是 <code>struct epoll_event</code>；<code>events</code>= 关心"有数据可读"；<code>data.fd</code> 贴在事件上，回来时靠它认领；<code>epoll_fd</code> 是事件池。</td></tr>
+<tr><td><code>:384</code></td><td><code>ret = disableRx(CANmodule);</code></td><td>—</td><td>建完<strong>立刻闭麦</strong>，等 <code>CO_CANsetNormalMode()</code> 才开闸（见 §3）。</td></tr>
+<tr><td><code>CO_main_basic.c:407-408</code></td><td><code>CANdevice = argv[optind]; CANptr.can_ifindex = if_nametoindex(CANdevice);</code></td><td><code>if_nametoindex() ★★</code></td><td><code>optind</code> = 解析后的第一个非选项参数下标，<code>argv[optind]</code> 就是命令里的 <code>can0</code>；<code>CANptr</code> 是 main 里传下去的 <code>can_ifindex</code> 载体。</td></tr>
+<tr><td><code>CO_main_basic.c:430-432</code></td><td><code>if(CANptr.can_ifindex == 0){ log_printf(...); exit(EXIT_FAILURE); }</code></td><td>—</td><td>编号 0 = 网卡不存在，直接退出。这就是 <code>Can't find CAN device</code> 的出处。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong>顺带一句：</strong>socket 和 bind 之间还调了 <code>setsockopt(SO_RXQ_OVFL)</code>（:316 开丢帧计数）、<code>setsockopt(SO_TIMESTAMPING)</code>（:324-326 开收帧时间戳）、<code>getsockopt(SO_RCVBUF)</code>（:338-341 只查询缓冲大小）。这两个"开"的选项<strong>第 5 站做实时性时才会用</strong>，现在知道有它就行。</p>
+</div>
+
+<h2>3. 最容易卡住：socket 建好 ≠ 能收帧</h2>
+
+<pre>文件：CO_driver.c
+:113    int ret = setsockopt(CANmodule->CANinterfaces[i].fd, SOL_CAN_RAW,
+:114                         CAN_RAW_FILTER, NULL, 0);        /* 长度为 0 的过滤器 = 闭麦 */
+:184    CANmodule->CANnormal = false;
+:185    ret = setRxFilters(CANmodule);
+:186    if (ret == CO_ERROR_NO) {
+:187        CANmodule->CANnormal = true;                      /* 开闸 */
+:188    }
+:134    struct can_filter rxFiltersCpy[CANmodule->rxSize];
+:136    count = 0;
+:139    if ((CANmodule->rxFilter[i].can_id != 0) || (CANmodule->rxFilter[i].can_mask != 0)) {
+:140        rxFiltersCpy[count] = CANmodule->rxFilter[i];     /* 跳过全 0 项 */
+:141        count ++;
+:142    }
+:149    if (count == 0) { return disableRx(CANmodule); }       /* 无有效项 → 继续闭麦 */
+:155    setsockopt(CANmodule->CANinterfaces[i].fd, SOL_CAN_RAW,
+:156               CAN_RAW_FILTER, rxFiltersCpy, sizeof(struct can_filter) * count);
+</pre>
+
+<table class="cols-4c">
+<caption>表 3-1　闭麦与开闸逐行</caption>
+<thead><tr><th>行号</th><th>代码</th><th>用到的接口</th><th>变量与说明</th></tr></thead>
+<tbody>
+<tr><td><code>:113-114</code></td><td><code>setsockopt(fd, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);</code></td><td><code>setsockopt() ★★</code></td><td><code>SOL_CAN_RAW</code> = CAN 原始套接字层；过滤器传 <code>NULL</code> 且长度 <code>0</code> = 空列表 = 一帧都不放行，即<strong>闭麦</strong>。</td></tr>
+<tr><td><code>:184-188</code></td><td><code>CANnormal=false; ret=setRxFilters(); if(ret==CO_ERROR_NO) CANnormal=true;</code></td><td>—</td><td><code>CANnormal</code> 是模块级开关：闭麦期间为 <code>false</code>，<code>CO_CANrxFromEpoll</code> 会跳过数据帧（见 §4）。</td></tr>
+<tr><td><code>:134-136</code></td><td><code>struct can_filter rxFiltersCpy[CANmodule-&gt;rxSize]; count = 0;</code></td><td>—</td><td><code>rxSize</code> = 已注册接收对象个数；<code>rxFiltersCpy</code> 是拷贝缓冲，<code>count</code> 记有效项数。</td></tr>
+<tr><td><code>:139-142</code></td><td><code>if((rxFilter[i].can_id!=0)||(rxFilter[i].can_mask!=0)){ rxFiltersCpy[count]=...; count++; }</code></td><td>—</td><td>必须剔除"全 0 项"——内核里 <code>can_id=0, can_mask=0</code> 表示<strong>放行全部</strong>，留着就等于没闭麦。<code>can_id</code>/<code>can_mask</code> 是每个过滤项的两个字段。</td></tr>
+<tr><td><code>:149</code></td><td><code>if (count == 0) { return disableRx(CANmodule); }</code></td><td>—</td><td>一个有效项都没有 → 继续闭麦（避免误开全放行）。</td></tr>
+<tr><td><code>:155-156</code></td><td><code>setsockopt(fd, SOL_CAN_RAW, CAN_RAW_FILTER, rxFiltersCpy, sizeof(struct can_filter) * count);</code></td><td><code>setsockopt() ★★</code></td><td>把过滤数组交给内核，长度 = 单项字节数 × 项数。这一步才是真正的"开麦"。</td></tr>
+</tbody>
+</table>
+
+<h3>3.1 内核里到底存了什么：为什么 <code>optlen=0</code> 就是"闭麦"</h3>
+
+<p>只看上面这段用户态代码，很容易怀疑：<strong>"没给过滤器" 不就是 "不过滤" 吗？</strong> 答案藏在内核 <code>socket</code> 的<strong>默认状态</strong>里（Linux v5.15 <code>net/can/raw.c</code>）：</p>
+
+<pre>raw_init()                        /* socket(PF_CAN, SOCK_RAW, CAN_RAW) 建好那一刻 */
+    ro-&gt;dfilter.can_id   = 0;
+    ro-&gt;dfilter.can_mask = 0;     /* MASK_ALL：不分 ID 一律匹配 */
+    ro-&gt;filter = &amp;ro-&gt;dfilter;
+    ro-&gt;count  = 1;               /* 默认就有 1 条全放行过滤器 */
+
+raw_setsockopt(CAN_RAW_FILTER)    /* 我们调 setsockopt 时进的分支 */
+    count = optlen / sizeof(struct can_filter);
+    ...
+    ro-&gt;count = count;            /* optlen=0 → count=0 */
+
+raw_bind() → raw_enable_allfilters()
+    for (i = 0; i &lt; ro-&gt;count; i ++)
+        can_rx_register(..., filter[i].can_id, filter[i].can_mask, ...);  /* 一条条向内核登记 */
+</pre>
+
+<div class="note">
+<p><strong>把这三段连起来，三件事就通了：</strong></p>
+<p><strong>① 默认不是"没有过滤器"，而是"有 1 条全 0 过滤器"。</strong> 内核的匹配写法是 <code>(can_id ^ filt.id) &amp; filt.mask</code>；<code>mask=0</code> 时这个与运算恒为 0，永远算"匹配"。所以刚 <code>socket()</code> 完什么都不设，本来就能收到所有帧——靠的就是那条第 <code>{id:0, mask:0}</code> 的默认项。</p>
+<p><strong>② <code>optlen=0</code> 是把这张表<em>换成空表</em>，不是"不改动"。</strong> 内核按 <code>count = optlen / sizeof(can_filter)</code> 数条数，长度 0 → <code>count=0</code>，登记循环一次都不进 → 内核里<strong>一条过滤器都没有</strong> → 任何帧都不匹配 → 全部丢弃。<code>disableRx()</code> 要的正是这个效果。</p>
+<p><strong>③ 所以 <code>mask=0</code> 的项必须剔除。</strong> <code>rxFilter[]</code> 是 <code>calloc</code> 出来的（<code>CO_driver.c:237</code>），没被登记过的槽位就是 <code>{0,0}</code>；若整张表原样下发，这些 <code>{0,0}</code> 项个个"放行一切"，等于白闭麦。<code>setRxFilters()</code> 里那句 <code>can_id!=0 || can_mask!=0</code>（<code>:139</code>）就是专门把它们丢掉。</p>
+</div>
+
+<div class="warn">
+<p><strong>一个流传很广的说法要纠正：</strong>网上（乃至一些 AI 回答）说 <code>setsockopt(..., CAN_RAW_FILTER, NULL, 0)</code> 是"<strong>清空过滤器 = 接收所有帧</strong>"。这与内核源码和实测都不符：<strong>空列表 = 一条都不收</strong>。之所以容易记反，是把"默认收全部"和"显式设空"混为一谈——默认收全部，是因为默认有一条 <code>{0,0}</code> 项，而不是因为"列表为空"。<strong>真要"什么都要"，是传一条 <code>{can_id:0, can_mask:0}</code>，而不是传长度 0。</strong></p>
+</div>
+
+<div class="warn">
+<p><strong>新手最常踩的坑：</strong><code>CO_CANsetConfigurationMode()</code>（CO_driver.c:171）是<strong>空函数，什么都不做</strong>；唯一开闸入口是 <code>CO_CANsetNormalMode()</code>。若日志有 <code>running ...</code> 却一帧都收不到，先查它有没有被调到、<code>rxFilter[]</code> 是不是空。</p>
+</div>
+
+<table class="cols-3b">
+<caption>表 3-2　五种过滤器设置的实际效果（本机 vcan 实测，发 0x123 与 0x456）</caption>
+<thead><tr><th>怎么设过滤器</th><th>内核放行哪些帧</th><th>实测结果</th></tr></thead>
+<tbody>
+<tr><td>什么都不设（默认）</td><td>全部放行（默认那条第 <code>{0,0}</code> 项）</td><td>0x123、0x456 都收到</td></tr>
+<tr><td><code>CAN_RAW_FILTER, NULL, 0</code></td><td>一条过滤器都没有 → 全都不放行</td><td><strong>一帧都没收到</strong> ← 这就是 <code>disableRx()</code></td></tr>
+<tr><td><code>can_id=0x123, can_mask=0x7FF</code></td><td>只放行 ID 恰为 0x123</td><td>只收到 0x123</td></tr>
+<tr><td><code>can_id=0x123, can_mask=0</code></td><td><code>mask=0</code> 不看 ID → 又变成全放行</td><td>0x123、0x456 都收到 ← 所以必须剔除</td></tr>
+<tr><td><code>can_id=0x123|CAN_INV_FILTER, mask=0x7FF</code></td><td>取反：除 0x123 外全放行</td><td>只收到 0x456</td></tr>
+</tbody>
+</table>
+
+<h2 class="pgbreak">4. 链 B：一帧的旅程（4 跳）</h2>
+
+<pre>文件：CO_driver.c
+:940    if (ev-&gt;data.fd == interface-&gt;fd) {                    /* 是我的 CAN 事件吗 */
+:941        if ((ev-&gt;events &amp; (EPOLLERR | EPOLLHUP)) != 0) {
+:945            recv(ev-&gt;data.fd, &amp;msg, sizeof(msg), MSG_DONTWAIT);
+:949        else if ((ev-&gt;events &amp; EPOLLIN) != 0) {           /* 有数据可读 */
+:955            CO_ReturnError_t err = CO_CANread(CANmodule, interface, &amp;msg, &amp;timestamp);
+:957            if(err == CO_ERROR_NO &amp;&amp; CANmodule-&gt;CANnormal) {
+:971                int32_t idx = CO_CANrxMsg(CANmodule, &amp;msg, buffer);
+:825    struct iovec iov;
+:826    struct msghdr msghdr;
+:844    n = recvmsg(interface-&gt;fd, &amp;msghdr, 0);
+:845    if (n != CAN_MTU) { return CO_ERROR_SYSCALL; }        /* 读不到 16 字节算错 */
+:894    msg-&gt;can_id &amp;= CAN_EFF_MASK;
+:895    rcvMsg = (CO_CANrxMsg_t *)msg;
+:899    for (index = 0; index &lt; CANmodule-&gt;rxSize; index ++) {
+:901        if(((rcvMsg-&gt;ident ^ rcvMsgObj-&gt;ident) &amp; rcvMsgObj-&gt;mask) == 0U){
+:902            msgMatched = true;  break;
+:903        }
+:904        rcvMsgObj++;                                      /* 命中就停 */
+:905    }
+:909    rcvMsgObj-&gt;CANrx_callback(rcvMsgObj-&gt;object, (void *)rcvMsg);
+</pre>
+
+<table class="cols-4c">
+<caption>表 4-1　链 B 逐行：代码 → 接口 → 变量</caption>
+<thead><tr><th>行号</th><th>代码</th><th>用到的接口</th><th>变量与说明</th></tr></thead>
+<tbody>
+<tr><td><code>:940</code></td><td><code>if (ev-&gt;data.fd == interface-&gt;fd)</code></td><td>epoll <code>★</code></td><td><code>ev</code> 是 <code>CO_epoll_wait()</code> 取回的事件；<code>data.fd</code> 就是 §2 注册时贴的那个 fd，用来认领"是不是我的 CAN 事件"。</td></tr>
+<tr><td><code>:941-945</code></td><td><code>EPOLLERR/EPOLLHUP → recv(..., MSG_DONTWAIT)</code></td><td><code>recv() ★</code></td><td>出错 / 挂起时先把事件捞掉，否则 epoll 会一直报同一个错。</td></tr>
+<tr><td><code>:949-955</code></td><td><code>EPOLLIN → CO_CANread(...)</code></td><td><code>CO_CANread() ★★</code></td><td><code>msg</code> 是 <code>struct can_frame</code>（16 字节）；<code>timestamp</code> 是输出参数，存收帧时刻。</td></tr>
+<tr><td><code>:957-971</code></td><td><code>if(err==CO_ERROR_NO &amp;&amp; CANnormal){ ... CO_CANrxMsg(...) }</code></td><td><code>CO_CANrxMsg() ★★★</code></td><td><code>idx</code> = 命中的接收对象下标；<code>CANnormal=false</code>（闭麦）时这一步直接跳过。</td></tr>
+<tr><td><code>:825-844</code></td><td><code>struct iovec iov; struct msghdr msghdr; n = recvmsg(fd, &amp;msghdr, 0);</code></td><td><code>recvmsg() ★★</code></td><td><code>iov</code> 指向存放那 16 字节的缓冲；<code>msghdr</code> 聚合收/发地址与辅助数据；<code>n</code> = 实读字节数，<code>n != CAN_MTU</code> 即出错。</td></tr>
+<tr><td><code>:846-874</code></td><td><code>cmsg</code> 循环取 <code>SO_TIMESTAMPING</code> / <code>SO_RXQ_OVFL</code></td><td>—</td><td><code>cmsg</code> = 辅助数据头；<code>dropped</code> 是累计丢帧数。两个选项都留给第 5 站用。</td></tr>
+<tr><td><code>:894-895</code></td><td><code>msg-&gt;can_id &amp;= CAN_EFF_MASK; rcvMsg = (CO_CANrxMsg_t *)msg;</code></td><td>—</td><td>屏蔽扩展帧标志位取纯 ID；再把内核帧"当成"CANopenNode 自己的帧结构读。</td></tr>
+<tr><td><code>:899-905</code></td><td><code>((rcvMsg-&gt;ident ^ rcvMsgObj-&gt;ident) &amp; rcvMsgObj-&gt;mask) == 0U</code></td><td>—</td><td><code>rcvMsgObj</code> 遍历 <code>rxArray</code>；<code>ident</code>=登记 ID，<code>mask</code>=关心位。先异或找出不同位，再用 mask 只看关心的位，全盖住即命中。</td></tr>
+<tr><td><code>:909</code></td><td><code>rcvMsgObj-&gt;CANrx_callback(rcvMsgObj-&gt;object, (void *)rcvMsg)</code></td><td>回调 <code>★</code></td><td><code>msgMatched</code> = 命中标志；<code>object</code> 是注册时给的上下文（如 NMT / PDO 对象）；<code>CANrx_callback</code> 是上层处理函数。</td></tr>
+</tbody>
+</table>
+
+<p>第 1 跳（内核按 <code>CAN_RAW_FILTER</code> 筛）不匹配的帧直接被丢，压根不通知程序；这层软件匹配是"万一漏进来再兜一次"，思路和内核过滤器完全一样。</p>
+
+<div class="note">
+<p><strong>补一句：</strong><code>CO_epoll_wait()</code>（CO_epoll_interface.c:149）写的是 <code>epoll_wait(fd, &amp;ev, 1, -1)</code>——<strong>一次只取 1 个事件</strong>，所以每轮最多处理一帧，剩下的留给下一轮。这也解释了为什么第 5 站关心"一轮多久"。</p>
+</div>
+
+<h2>5. 发送侧：发一帧其实只有一行</h2>
+
+<pre>文件：CO_driver.c
+:735    errno = 0;
+:736    ssize_t n = send(interface-&gt;fd, buffer, CAN_MTU, MSG_DONTWAIT);
+:738    if (errno == 0 &amp;&amp; n == CAN_MTU) {                     /* 整帧 16 字节都发出去了 */
+:739        if (buffer-&gt;bufferFull) { buffer-&gt;bufferFull = false; CANmodule-&gt;CANtxCount--; }
+:740    }
+:745    else if (errno == EINTR || errno == EAGAIN || errno == ENOBUFS) {
+:746        if (!buffer-&gt;bufferFull) { buffer-&gt;bufferFull = true; CANmodule-&gt;CANtxCount++; }
+:747        err = CO_ERROR_TX_BUSY;                           /* 记一笔，下轮重发 */
+:748    }
+:753    else { log_printf(LOG_DEBUG, DBG_ERRNO, "send()"); err = CO_ERROR_SYSCALL; }
+:794    if (CANmodule-&gt;CANtxCount &gt; 0) {
+:800        if (buffer-&gt;bufferFull) {
+:801            buffer-&gt;bufferFull = false;  CANmodule-&gt;CANtxCount--;
+:802            CO_CANsend(CANmodule, buffer);
+:803            break;                                        /* 一轮只补一帧 */
+:804        }
+:805    }
+</pre>
+
+<table class="cols-4c">
+<caption>表 5-1　发送与重传逐行</caption>
+<thead><tr><th>行号</th><th>代码</th><th>用到的接口</th><th>变量与说明</th></tr></thead>
+<tbody>
+<tr><td><code>:735-736</code></td><td><code>errno=0; n = send(fd, buffer, CAN_MTU, MSG_DONTWAIT);</code></td><td><code>send() ★★★</code></td><td><code>buffer</code> 是 <code>CO_CANtx_t*</code>，本身就是将要发出的 16 字节；<code>MSG_DONTWAIT</code> = 非阻塞；<code>n</code> = 实发字节数。</td></tr>
+<tr><td><code>:738-740</code></td><td><code>if(errno==0 &amp;&amp; n==CAN_MTU){ ...bufferFull=false; CANtxCount--; }</code></td><td>—</td><td>成功判据是"整帧发完"；若之前欠发过，在这里销账（计数减 1）。</td></tr>
+<tr><td><code>:745-748</code></td><td><code>EINTR/EAGAIN/ENOBUFS → bufferFull=true; CANtxCount++; err=CO_ERROR_TX_BUSY;</code></td><td><code>errno ★★</code></td><td>三个"暂时发不出去"的 errno；<code>bufferFull</code> 标记该 buffer 待重发，<code>CANtxCount</code> 是全局欠发计数。</td></tr>
+<tr><td><code>:753</code></td><td><code>else log_printf(..., "send()"); err = CO_ERROR_SYSCALL;</code></td><td>—</td><td>真错误：打日志 + 上报错误码，本帧丢弃。</td></tr>
+<tr><td><code>:794-805</code></td><td><code>if(CANtxCount&gt;0) for(...) if(bufferFull){ ...CO_CANsend(...); break; }</code></td><td><code>CO_CANsend() ★★</code></td><td>每轮扫一遍 <code>txArray</code>，补发一条就 <code>break</code>——一轮一帧，保证不长时间占用主循环。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong><code>MSG_DONTWAIT</code> 干嘛的：</strong>告诉内核"发不出去就立刻返回，别堵着我"。CAN 是实时总线，队列满了也不能让程序卡住——宁可记一笔、下一轮再发。这就是第 5 站要展开的"非阻塞发送"。</p>
+</div>
+
+<div class="cpp">
+<p><strong>这一段可以写进简历：</strong>「基于 SocketCAN 实现 CANopen 从站的 CAN 驱动层：掌握 <code>socket(PF_CAN)/bind/epoll</code> 事件驱动收发链路，理解内核 <code>CAN_RAW_FILTER</code> 硬件过滤与软件报文匹配的双层过滤机制，实现非阻塞发送 + <code>bufferFull</code> 积压重传，并支持接收队列溢出检测（<code>SO_RXQ_OVFL</code>）与软件时间戳（<code>SO_TIMESTAMPING</code>）。」</p>
+</div>
+
+<div class="footnote">
+<p>本篇是《松下 AGV（CANopen）学习地图》第 1 站的补充册，只覆盖关键代码；完整背景（CAN 帧格式、vcan 搭建、抓包动手）见主手册第 1 站。所有行号对应本工程当前源码（CO_driver.c / CO_main_basic.c / CO_epoll_interface.c）。§3.1 与表 3-2 的结论经"本机 vcan 实测 + Linux v5.15 <code>net/can/raw.c</code> 源码"双向核对。</p>
+</div>
+
+</body>
+</html>

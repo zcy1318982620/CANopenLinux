@@ -277,7 +277,9 @@ OD_ATTR_RAM OD_RAM_t OD_RAM = {
     .x60FF_targetVelocity = 0,
     .x6502_supportedDriveModes = 0x00000025,
     .x67FE_versionNumber = 0x00040100,
-    .x67FF_singleDeviceType = 0x00020192
+    .x67FF_singleDeviceType = 0x00020192,
+    .x6FFF_agvOdometry_sub0 = 0x03,
+    .x6FFF_agvOdometry = {0.0f, 0.0f, 0.0f}
 };
 
 
@@ -443,6 +445,7 @@ typedef struct {
     OD_obj_var_t o_6502_supportedDriveModes;
     OD_obj_var_t o_67FE_versionNumber;
     OD_obj_var_t o_67FF_singleDeviceType;
+    OD_obj_array_t o_6FFF_agvOdometry;
 } ODObjs_t;
 
 static CO_PROGMEM ODObjs_t ODObjs = {
@@ -1950,6 +1953,14 @@ static CO_PROGMEM ODObjs_t ODObjs = {
         .dataOrig = &OD_RAM.x67FF_singleDeviceType,
         .attribute = ODA_SDO_R | ODA_MB,
         .dataLength = 4
+    },
+    .o_6FFF_agvOdometry = {
+        .dataOrig0 = &OD_RAM.x6FFF_agvOdometry_sub0,
+        .dataOrig = &OD_RAM.x6FFF_agvOdometry[0],
+        .attribute0 = ODA_SDO_R,
+        .attribute = ODA_SDO_R | ODA_MB,
+        .dataElementLength = 4,
+        .dataElementSizeof = sizeof(float32_t)
     }
 };
 
@@ -2115,6 +2126,9 @@ static OD_ATTR_OD OD_entry_t ODList[] = {
     {0x6502, 0x01, ODT_VAR, &ODObjs.o_6502_supportedDriveModes, NULL},
     {0x67FE, 0x01, ODT_VAR, &ODObjs.o_67FE_versionNumber, NULL},
     {0x67FF, 0x01, ODT_VAR, &ODObjs.o_67FF_singleDeviceType, NULL},
+    /* 追加在末尾: 0x6FFF > 所有既有索引, 保持 ODList 升序 (OD_find 二分查找)。
+     * 第二字段 = 子索引总数 = 数组元素数 + 1 (含 sub0)。 */
+    {0x6FFF, 0x04, ODT_ARR, &ODObjs.o_6FFF_agvOdometry, NULL},
     {0x0000, 0x00, 0, NULL, NULL}
 };
 

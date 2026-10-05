@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>松下 AGV（CANopen）学习地图 × 代码走读 对照手册</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0; padding-left:6mm; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.6pt; line-height:1.32;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-3a th:nth-child(1),.cols-3a td:nth-child(1){width:16%}
+.cols-3a th:nth-child(2),.cols-3a td:nth-child(2){width:34%}
+.cols-3a th:nth-child(3),.cols-3a td:nth-child(3){width:50%}
+.cols-3b th:nth-child(1),.cols-3b td:nth-child(1){width:19%}
+.cols-3b th:nth-child(2),.cols-3b td:nth-child(2){width:25%}
+.cols-3b th:nth-child(3),.cols-3b td:nth-child(3){width:56%}
+.cols-4a th:nth-child(1),.cols-4a td:nth-child(1){width:10%}
+.cols-4a th:nth-child(2),.cols-4a td:nth-child(2){width:23%}
+.cols-4a th:nth-child(3),.cols-4a td:nth-child(3){width:21%}
+.cols-4a th:nth-child(4),.cols-4a td:nth-child(4){width:46%}
+.cols-4b th:nth-child(1),.cols-4b td:nth-child(1){width:20%}
+.cols-4b th:nth-child(2),.cols-4b td:nth-child(2){width:26%}
+.cols-4b th:nth-child(3),.cols-4b td:nth-child(3){width:30%}
+.cols-4b th:nth-child(4),.cols-4b td:nth-child(4){width:24%}
+.cols-4c th:nth-child(1),.cols-4c td:nth-child(1){width:9%}
+.cols-4c th:nth-child(2),.cols-4c td:nth-child(2){width:27%}
+.cols-4c th:nth-child(3),.cols-4c td:nth-child(3){width:26%}
+.cols-4c th:nth-child(4),.cols-4c td:nth-child(4){width:38%}
+.cols-5a th:nth-child(1),.cols-5a td:nth-child(1){width:14%}
+.cols-5a th:nth-child(2),.cols-5a td:nth-child(2){width:14%}
+.cols-5a th:nth-child(3),.cols-5a td:nth-child(3){width:18%}
+.cols-5a th:nth-child(4),.cols-5a td:nth-child(4){width:14%}
+.cols-5a th:nth-child(5),.cols-5a td:nth-child(5){width:40%}
+.cols-5b th:nth-child(1),.cols-5b td:nth-child(1){width:22%}
+.cols-5b th:nth-child(2),.cols-5b td:nth-child(2){width:30%}
+.cols-5b th:nth-child(3),.cols-5b td:nth-child(3){width:22%}
+.cols-5b th:nth-child(4),.cols-5b td:nth-child(4){width:12%}
+.cols-5b th:nth-child(5),.cols-5b td:nth-child(5){width:14%}
+.cols-5c th:nth-child(1),.cols-5c td:nth-child(1){width:10%}
+.cols-5c th:nth-child(2),.cols-5c td:nth-child(2){width:15%}
+.cols-5c th:nth-child(3),.cols-5c td:nth-child(3){width:19%}
+.cols-5c th:nth-child(4),.cols-5c td:nth-child(4){width:28%}
+.cols-5c th:nth-child(5),.cols-5c td:nth-child(5){width:28%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.avoid { page-break-inside:avoid; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #2255a4; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#1a3f7a; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>松下 AGV（CANopen）学习地图 × 代码走读 对照手册</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode 的 CANopen 从站固件（Linux 用户态，SocketCAN）。</p>
+<p><strong>本篇定位：</strong>第 1 册 —— <strong>总览 + 第 0 站（工程全景）</strong>。后面的每一站都会单独再出一册，学完一站再出下一站。</p>
+<p><strong>本篇回答：</strong>这个工程到底是个什么东西？由哪些文件组成？数据从哪里进来、流到哪里去？怎么把它在本机跑起来？</p>
+<p><strong>怎么读：</strong>先读 §0 的站点地图（知道全貌，别急着钻细节）→ 再读第 0 站 → 照着「动手」小节做一遍 → 回来对答案。</p>
+<p><strong>标记说明：</strong><span class="star">粗体</span> = 关键结论；<code>&lt;pre&gt;</code> = 代码 / 结构图；宽表 = 逐行对照；<span class="star">灰框</span> = 补充说明；<span class="star">红框</span> = 坑与警告；<span class="star">蓝框</span> = 可以写进简历的点。</p>
+</div>
+
+<h2>0. 一页总览：这个工程是什么，我们要走哪 10 站</h2>
+
+<h3>0.1 一句话说清这个工程</h3>
+
+<p>它把一台 Linux 设备（最终是 imx6ull 开发板）<strong>伪装成两个 CANopen 从站</strong>：</p>
+
+<pre>┌──────────────────────────────────────────────────────────────┐
+│  CAN 总线                                                     │
+│                                                              │
+│   [节点1 = 自定义 OD  ]  ←→  canopend (本工程)  ←→  [节点2 = OD_2nd]
+│      右电机 0x38A RPDO                                    左电机 0x38B RPDO
+└──────────────────────────────────────────────────────────────┘
+        ↑                                              ↑
+   谁在发 0x38A / 0x38B？                        （本工程自己不发 TPDO）</pre>
+
+<p>工程接收两帧 PDO：<strong><code>0x38A</code>（右电机）</strong> 和 <strong><code>0x38B</code>（左电机）</strong>，从里面取出 CiA402 的「实际位置」<code>0x6064</code>，然后 <strong>printf 打印出来</strong>。这就是应用层现在做的全部事情。</p>
+
+<div class="note">
+<strong>⚠️ 先把预期摆正。</strong>这份官方 Sample 故意把应用层砍到最小 —— <strong>「收 PDO → 打印左右轮位置」</strong>。
+它是<strong>底座</strong>，不是成品 AGV。我们的工作就是在这个底座上长出：实时性、里程计、Qt 上位机、真机上板。
+所以「读懂它 + 做出增量」才是简历价值，而不是「我写了个 CANopen 协议栈」。
+</div>
+
+<h3>0.2 站点地图（10 站，分 3 个阶段）</h3>
+
+<pre>【阶段 A：摸清现状 —— 先让它跑起来，再彻底看懂】          （已在手的代码，不改动）
+ 第 0 站  工程全景        ← 本册
+ 第 1 站  CAN 总线 & SocketCAN
+ 第 2 站  CANopen 报文层（NMT / 心跳 / SYNC / COB-ID）
+ 第 3 站  对象字典 OD & SDO
+ 第 4 站  PDO 映射 & CiA402  ◀── 全工程的心脏，看到 posR/posL 就通了
+
+【阶段 B：做出增量 —— 简历上的硬货】                      （开始改代码）
+ 第 5 站  启动链路走读（CO_main_basic.c）
+ 第 6 站  实时性改造（SCHED_FIFO + 抖动实测）
+ 第 7 站  里程计（差速运动学 → 位姿 x,y,θ）
+
+【阶段 C：上位机 & 上板 —— 闭环成"产品"】
+ 第 8 站  Qt 上位机（显示位姿 / 发指令）
+ 第 9 站  交叉编译 & 部署到 imx6ull</pre>
+
+<h3>0.3 十站速查表</h3>
+
+<table class="cols-5c">
+<caption>表 0-1　十站速查：每站干什么、动哪个文件、用什么命令、简历能写什么</caption>
+<thead>
+<tr><th>站点</th><th>主要代码位置</th><th>这一站在做什么</th><th>接口 / 命令</th><th>简历能写什么</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>第 0 站<br>工程全景</td>
+<td>CO_application.c<br>CO_main_basic.c<br>application/OD.c<br>application/OD_2nd.h<br>Makefile</td>
+<td>看懂工程身份、文件分工、运行时数据流；把它编译跑起来</td>
+<td><code>make</code><br><code>./canopend can0 -i 1</code></td>
+<td>读懂并跑通一个工业级 CANopen 从站工程</td>
+</tr>
+<tr>
+<td>第 1 站<br>CAN 总线</td>
+<td>CO_driver.c<br>CO_epoll_interface.c</td>
+<td>建立虚拟 CAN 总线，亲手抓到第一帧报文</td>
+<td><code>modprobe vcan</code><br><code>ip link add dev can0 type vcan</code><br><code>candump -td can0</code></td>
+<td>Linux SocketCAN 设备管理与报文抓取</td>
+</tr>
+<tr>
+<td>第 2 站<br>报文层</td>
+<td>CO_main_basic.c:59-92<br>:626-660</td>
+<td>看清 NMT、心跳、SYNC、EMCY 这些"管理报文"长什么样</td>
+<td><code>cansend can0 000#01</code><br>看 canopend 日志</td>
+<td>CANopen 预定义连接集与 NMT 状态机</td>
+</tr>
+<tr>
+<td>第 3 站<br>OD & SDO</td>
+<td>application/OD.c<br>CANopenNode/309/CO_gateway_ascii.c</td>
+<td>理解对象字典的作用；用 SDO 读出厂信息</td>
+<td><code>cocomm "1 read 0x1000 0 u32"</code><br><code>1 read 0x1018 1 u32</code></td>
+<td>SDO 上传/下载、对象字典结构</td>
+</tr>
+<tr>
+<td>第 4 站<br>PDO + CiA402</td>
+<td>CO_application.c:31-149<br>CANopenNode/301/CO_PDO.c</td>
+<td>算出 PDO 每个字节的含义，模拟一帧让程序打印出左右轮位置</td>
+<td><code>cansend can0 38A#0000E8030000</code></td>
+<td>PDO 映射解码、CiA402 状态字与实际位置</td>
+</tr>
+<tr>
+<td>第 5 站<br>启动链路</td>
+<td>CO_main_basic.c<br>CO_epoll_interface.c</td>
+<td>通读程序启动全过程：双 OD 实例、epoll、PDO 初始化</td>
+<td>通读 + 打日志</td>
+<td>CANopen 协议栈初始化流程与双从站实现</td>
+</tr>
+<tr>
+<td>第 6 站<br>实时性</td>
+<td>Makefile:54<br>CO_main_basic.c:885-904</td>
+<td>打开 RT 线程（SCHED_FIFO），实测周期抖动并画图</td>
+<td><code>CO_SINGLE_THREAD=0</code><br>自己写的抖动统计</td>
+<td>Linux 实时线程调度与周期抖动量化分析</td>
+</tr>
+<tr>
+<td>第 7 站<br>里程计</td>
+<td>新写的 app 代码</td>
+<td>从左右轮位置差推算出车体位姿 (x, y, θ)</td>
+<td>自写 + 验证</td>
+<td>差速底盘里程计（odometry）实现</td>
+</tr>
+<tr>
+<td>第 8 站<br>Qt 上位机</td>
+<td>hmi/（新建）</td>
+<td>写一个桌面程序：显示位姿、画轨迹、发指令</td>
+<td>Qt5 + CAN / 网关 socket</td>
+<td>Qt 上位机 + 与嵌入式下位机联调</td>
+</tr>
+<tr>
+<td>第 9 站<br>上板</td>
+<td>build.sh / Yocto SDK</td>
+<td>交叉编译并部署到 imx6ull，在真板子上跑</td>
+<td><code>arm-linux-gnueabihf-gcc</code><br>qmake</td>
+<td>交叉编译、嵌入式部署与真机联调</td>
+</tr>
+</tbody>
+</table>
+
+<h3>0.4 知识点索引（用到什么，在哪一站讲）</h3>
+
+<table class="cols-3b">
+<caption>表 0-2　知识索引：每站会掰开的原理</caption>
+<thead>
+<tr><th>知识主题</th><th>关键内容</th><th>讲在哪一站</th></tr>
+</thead>
+<tbody>
+<tr><td>CAN 物理层 / 数据链路层</td><td>差分信号、仲裁、11 位 ID、DLC、小端</td><td>第 1 站</td></tr>
+<tr><td>SocketCAN</td><td><code>can0</code> 设备、raw socket、收发缓冲、vcan</td><td>第 1 站</td></tr>
+<tr><td>CANopen 预定义连接集</td><td>NMT 0x000、SYNC 0x080、EMCY 0x081、SDO 0x601、心跳 0x701</td><td>第 2 站</td></tr>
+<tr><td>NMT 状态机</td><td>Initialisation / Pre-op / Operational / Stopped</td><td>第 2 站</td></tr>
+<tr><td>对象字典 OD</td><td>索引 + 子索引 + 数据类型 + 读写属性</td><td>第 3 站</td></tr>
+<tr><td>SDO</td><td>分段/加速传输、上传（读）与下载（写）</td><td>第 3 站</td></tr>
+<tr><td>PDO</td><td>通信参数 + 映射参数、COB-ID 的 bit31 语义</td><td>第 4 站</td></tr>
+<tr><td>CiA 402 驱动器行规</td><td>控制字 0x6040、状态字 0x6041、实际位置 0x6064、实际速度 0x606C</td><td>第 4 站</td></tr>
+<tr><td>epoll 事件循环</td><td>每个 CAN 接口一个 socket、共用一个 epoll_fd</td><td>第 5 站</td></tr>
+<tr><td>Linux 实时调度</td><td><code>SCHED_FIFO</code>、优先级、周期抖动</td><td>第 6 站</td></tr>
+<tr><td>差速运动学</td><td>v = (vL+vR)/2，ω = (vR−vL)/L，位姿积分</td><td>第 7 站</td></tr>
+<tr><td>Qt 网络/串口通信</td><td>UI 线程与通信线程分离</td><td>第 8 站</td></tr>
+<tr><td>交叉编译</td><td>工具链 sysroot、动态库依赖、部署</td><td>第 9 站</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<strong>这一册（§0 + 第 0 站）对应的简历一句话：</strong>
+「基于 CANopenNode 搭建双电机 CANopen 从站固件，理解 CiA 402 行规与 SocketCAN 报文链路，完成从协议解析到应用层数据落地的完整走读。」
+—— 这是"能说清楚"的写法，不是"我做了个 CANopen"。后面每站都会给你一句更硬的。
+</div>
+
+<h2 class="pgbreak">第 0 站　工程全景：先看清这是什么，怎么跑起来</h2>
+
+<h3>0.1 关键文件分工</h3>
+
+<table class="cols-3a">
+<caption>表 1-1　关键文件职责（先认门，别背）</caption>
+<thead>
+<tr><th>文件</th><th>它是什么</th><th>你要关注什么</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CO_application.c</code></td>
+<td><strong>应用层本体</strong>（198 行）。工程里"你自己的代码"就这一个。</td>
+<td><code>app_programStart()</code> 是整个工程的灵魂：它把 RPDO 的 COB-ID 改成 0x38A/0x38B、挂上映射、注册 0x6064 的写回调。</td>
+</tr>
+<tr>
+<td><code>CO_main_basic.c</code></td>
+<td><strong>主程序</strong>（约 938 行）。命令行解析、创建 epoll、初始化两个 CO 实例、起线程、主循环。</td>
+<td><code>main()</code> 里 548～811 行是启动全流程；885～904 行是实时线程。<strong>第 5、6 站主战场。</strong></td>
+</tr>
+<tr>
+<td><code>CO_driver.c</code></td>
+<td>SocketCAN 驱动层：把 Linux <code>can0</code> 的 socket 接到 CANopenNode 的收发接口上。</td>
+<td>看 <code>socket()/bind()/read()/write()</code> 是怎么和栈对接的。第 1 站用。</td>
+</tr>
+<tr>
+<td><code>CO_epoll_interface.c</code></td>
+<td>epoll 事件泵：等待 CAN 事件和定时器事件，然后驱动协议栈的各个 process 函数。</td>
+<td><code>CO_epoll_processRT()</code> 里怎么判断"这帧是不是我的"。第 5 站用。</td>
+</tr>
+<tr>
+<td><code>application/OD.c</code> / <code>OD.h</code></td>
+<td><strong>节点 1 的对象字典</strong>（来自 Oriental Motor 的字典），成千上万行，全部是数据。</td>
+<td>只查你要用的项：<code>0x1005/0x1006</code>（SYNC）、<code>0x1400/0x1600</code>（RPDO）、<code>0x6041/0x6064</code>（CiA402）。别通读。</td>
+</tr>
+<tr>
+<td><code>application/OD_2nd.h</code> / <code>OD_2nd.c</code></td>
+<td><strong>节点 2 的对象字典</strong> = 节点 1 的"影子"，只保留最小能力。</td>
+<td>关键宏：<code>CNT_SDO_SRV = 0</code>、<code>CNT_NMT = 0</code>、<code>CNT_SYNC = 0</code>。→ 第 3 站会讲为什么这很重要。</td>
+</tr>
+<tr>
+<td><code>Makefile</code></td>
+<td>构建脚本。真正决定"程序用哪种模式跑"的地方。</td>
+<td>第 54、58～62 行的编译宏。<strong>第 6 站改实时性只动这里。</strong></td>
+</tr>
+<tr>
+<td><code>CANopenNode/</code></td>
+<td>上游协议栈源码（301/303/304/305/309 等），<strong>不要改</strong>，只读。</td>
+<td>当"参考书"用：<code>301/CO_PDO.c</code>、<code>CANopen.c</code> 是第 4 站的关键。</td>
+</tr>
+</tbody>
+</table>
+
+<h3>0.2 运行时数据流（一张图看完）</h3>
+
+<pre>       硬件的 CAN 总线 / vcan                     用户态进程 canopend
+ ┌──────────────────────────┐        ┌─────────────────────────────────────────────┐
+ │  外部发来一帧：            │        │                                             │
+ │  ID=0x38A  DLC=6          │        │  ① epoll 报告 can0 有数据可读                 │
+ │  data=E8 03 00 00 00 00   │──────▶ │     CO_epoll_wait()            (epoll_interface.c:143)
+ └──────────────────────────┘        │                                             │
+                                     │  ② 按 fd 找到是哪个 CAN 接口，读进来          │
+                                     │     CO_CANrxFromEpoll()                     │
+                                     │                                             │
+                                     │  ③ 按 COB-ID(0x38A) 查接收过滤器，命中 RPDO  │
+                                     │     → CO_PDO_receive()         (CO_PDO.c:465)
+                                     │     → 把 6 字节存进 CANrxData                │
+                                     │                                             │
+                                     │  ④ 主循环里处理 PDO（要求已在 Operational）  │
+                                     │     CO_process_RPDO()          (CANopen.c:1444)
+                                     │                                             │
+                                     │  ⑤ 按映射表逐项写进对象字典：                │
+                                     │     第1项 0x6041:00 16bit ← 状态字           │
+                                     │     第2项 0x6064:00 32bit ← 实际位置         │
+                                     │     OD_write()                               │
+                                     │                                             │
+                                     │  ⑥ 0x6064 挂了"写回调"，于是被调用           │
+                                     │     H6064_write()              (CO_application.c:31)
+                                     │     → printf("  posR = %d\n", pos)          │
+                                     └─────────────────────────────────────────────┘
+                                              ▼
+                                     终端打印：  H6064_write  posR = 1000</pre>
+
+<p>把这 6 步记住，整份工程就没有秘密了。<strong>第 1～4 站就是把这 6 步逐步拆开。</strong></p>
+
+<h3>0.3 怎么把它跑起来</h3>
+
+<h4>(1) 编译</h4>
+
+<pre>cd /home/zcy/Project/panasonic_canopen_agv
+make                       # 生成 28 个 .o，然后链接出 canopend</pre>
+
+<div class="warn">
+<strong>注意两件事：</strong>
+<ul>
+<li><code>Makefile</code> 第 73 行是 <code>all: clean $(LINK_TARGET)</code> —— <strong>每次 make 都会先 clean 一遍</strong>，不会增量编译，别以为是出错。</li>
+<li>动手前必须先 <code>make</code>。<strong>本步已实测通过</strong>（2026-09-28）：全量编译 28 个 <code>.o</code> 后链接出 <code>canopend</code>（约 510 KB），退出码 0。</li>
+<li>如果链接阶段报错（本工程历史上在受限环境下出现过），退路是手工链接：
+<code>cc -g -ggdb *.o -o canopend</code></li>
+<li><strong>一切命令都要先 <code>cd</code> 进工程目录。</strong><code>canopend</code> 是本地相对路径的二进制，
+在 <code>~</code> 下敲 <code>./canopend</code> 只会得到 <code>bash: ./canopend: 没有那个文件或目录</code> —— 这不是没编译，是找错地方了。</li>
+</ul>
+</div>
+
+<h4>(2) 建一条虚拟 CAN 总线（不需要任何硬件）</h4>
+
+<pre>sudo modprobe vcan
+sudo ip link add dev can0 type vcan
+sudo ip link set up can0
+ip -details link show can0          # 确认看到 can0 处于 UP</pre>
+
+<div class="warn">
+<strong>这四条命令必须由你自己在终端敲。</strong>它们需要 sudo 密码，我（AI）无法非交互执行。<br>
+<strong>本环境已完成</strong>（2026-09-28 实测）：<code>vcan</code> 模块已加载，<code>ip -details link show can0</code> 显示
+<code>can0: &lt;NOARP,UP,LOWER_UP&gt; mtu 72 ... vcan</code>，后面各站都能直接用 <code>can0</code> 抓包。
+</div>
+
+<h4>(3) 启动从站</h4>
+
+<pre>./canopend can0 -i 1                 # 让本进程扮演 CANopen 节点 1
+# 另一种常用起法（带命令行接口，第 3 站会用）：
+./canopend can0 -i 1 -c "stdio"</pre>
+
+<p>启动成功的标志：日志里出现 <code>running ...</code>，进程一直不退出。
+<strong>本步已实测通过</strong>（2026-09-28，vcan 环境），真实日志如下：</p>
+
+<pre>CANopen device, Node ID = 0x00, starting
+CAN Interface "can0" RX buffer set to 477 messages (212992 Bytes)
+CANopen NMT state changed to: "initializing" (0)
+CANopen device, Node ID = 0x01, communication reset
+CANopen device, Node ID = 0x01, running ...          ← 见到这一行就算跑通
+CANopen NMT state changed to: "operational" (5)</pre>
+
+<p>看到 <code>running ...</code> 之后进程会一直挂着（正常，别按 Ctrl-C），
+这时另开一个窗口就能在总线上抓到报文了 —— 那是第 1 站的内容。</p>
+
+<h3>0.4 编译宏：决定"程序按哪种方式跑"</h3>
+
+<table class="cols-4b">
+<caption>表 1-2　Makefile 里的关键宏（第 54、58～62 行）</caption>
+<thead>
+<tr><th>宏</th><th>当前值</th><th>作用</th><th>什么时候动它</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CO_SINGLE_THREAD</code></td>
+<td><code>1</code></td>
+<td>=1 时只用主线程（在 epoll 循环里顺手处理 RT 任务）；=0 时另起一条 <code>SCHED_FIFO</code> 实时线程。</td>
+<td><strong>第 6 站</strong>：改成 0 才能测实时性。</td>
+</tr>
+<tr>
+<td><code>CO_MULTIPLE_OD</code></td>
+<td><code>1</code></td>
+<td>允许一个进程里同时存在多个对象字典（本工程就是靠它跑双从站）。</td>
+<td>不动。</td>
+</tr>
+<tr>
+<td><code>CO_USE_APPLICATION</code></td>
+<td><code>1</code></td>
+<td>启用本工程自带的 <code>CO_application.c</code> 里的 app 回调（<code>app_programStart</code> 等）。</td>
+<td>不动。</td>
+</tr>
+<tr>
+<td><code>CO_CONFIG_HB_CONS</code></td>
+<td><code>0</code></td>
+<td><strong>关闭心跳消费者</strong>：本节点不监控别人的心跳。</td>
+<td>不动（但要知道：这解释了为什么"看不到节点监控功能"）。</td>
+</tr>
+<tr>
+<td><code>CO_CONFIG_STORAGE</code></td>
+<td><code>0</code></td>
+<td>关闭参数持久化（<code>0x1010</code> 存盘能力受限）。</td>
+<td>不动。</td>
+</tr>
+<tr>
+<td><code>LDFLAGS += -pthread</code></td>
+<td><strong>被注释掉</strong></td>
+<td>多线程模式需要链接 pthread。</td>
+<td><strong>第 6 站</strong>：与 <code>CO_SINGLE_THREAD=0</code> 一起打开。</td>
+</tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>为什么先讲这些宏？</strong>因为新手最容易踩的坑是：<strong>以为改了代码没生效，其实是编译宏没配对</strong>。
+记住一句话：<strong>这个工程的行为 = 源码 + Makefile 里的宏</strong>，两者一起才是"程序"。
+</div>
+
+<h3>0.5 动手（这一站只有 3 个动作）</h3>
+
+<ol>
+<li><strong>编译</strong>：<code>make</code>，直到看到生成了 <code>canopend</code>。若报错，把完整报错发我。</li>
+<li><strong>建 vcan</strong>：自己敲那四条 <code>sudo</code> 命令，然后用 <code>ip -details link show can0</code> 确认。</li>
+<li><strong>启动并观察</strong>：<code>./canopend can0 -i 1</code>，确认日志出现 <code>running ...</code> 且进程不退出。按 <code>Ctrl+C</code> 结束。</li>
+</ol>
+
+<p>做完这 3 步，第 0 站就通关了。<strong>你现在不需要理解任何 CANopen 细节</strong> —— 那是第 1～4 站的事。</p>
+
+<h3>0.6 自测（能答出来再进下一站）</h3>
+
+<ol>
+<li>这个工程启动后，扮演的是几个 CANopen 节点？分别是哪两个？</li>
+<li>一帧 <code>0x38A</code> 报文从进 socket 到被 printf 打印，中间经过了哪 6 个环节？</li>
+<li><code>CO_application.c</code> 里真正"属于应用层"的入口函数叫什么名字？</li>
+<li>想让程序从"单线程"切换到"实时线程"模式，需要改哪些地方？（至少说出 2 处）</li>
+<li>为什么不能直接通读 <code>application/OD.c</code>？（提示：它有多少行、是什么性质的东西）</li>
+</ol>
+
+<div class="note">
+<strong>下一册预告 —— 第 1 站：CAN 总线 &amp; SocketCAN。</strong>
+你会先建一条虚拟 CAN 总线 <code>can0</code>，用 <code>candump</code> 亲手抓到本节点发的第一帧，
+再回到 <code>CO_driver.c</code> 弄清 <code>socket() / bind() / epoll_ctl()</code> 这几行到底把程序和 <code>can0</code> 连上了什么。
+</div>
+
+<h2 class="pgbreak">第 1 站　CAN 总线 &amp; SocketCAN：亲手抓到第一帧</h2>
+
+<p><strong>这一站回答三个问题：</strong>CAN 帧在线上到底长什么样？Linux 上为什么写 CAN 程序不需要碰寄存器？这个工程里 <code>socket()</code> 那几行代码到底干了什么？</p>
+
+<div class="cpp">
+<strong>这一站的产出：</strong>① 一条可用的虚拟 CAN 总线 <code>can0</code>；② 你亲手 <code>candump</code> 抓到的第一屏报文，并能解释每一列的含义；
+③ 能指着 <code>CO_driver.c</code> 说出"这个 socket 是怎么和 <code>can0</code> 绑上的"。
+</div>
+
+<h3>1.1 先搞懂 CAN 帧长什么样</h3>
+
+<table class="cols-3b">
+<caption>表 2-1　CAN 总线最核心的 6 个概念</caption>
+<thead>
+<tr><th>概念</th><th>一句话解释</th><th>和你这个工程的关系</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>差分信号</td>
+<td>两根线 CAN_H / CAN_L，靠电压差表示 0/1，抗干扰强；总线两端各有一个 120&#937; 终端电阻。</td>
+<td>上板子时要确认终端电阻——双轮 AGV 里总线上通常就两个节点（电机驱动器 + 你的板子），两端都要有。</td>
+</tr>
+<tr>
+<td>报文 ID</td>
+<td>11 位（标准帧，0x000～0x7FF）。<strong>ID 不表示"地址"，而表示"这条消息是什么"+优先级</strong>；ID 数值越小优先级越高。</td>
+<td>本工程用 <code>0x38A</code>/<code>0x38B</code> 表示"右/左电机的位置反馈"。</td>
+</tr>
+<tr>
+<td>DLC</td>
+<td>数据长度码，0～8，表示后面有几个有效字节。</td>
+<td>你后面会看到 SYNC 帧的 DLC 是 <code>0</code>，而位置帧的 DLC 是 <code>6</code>。</td>
+</tr>
+<tr>
+<td>数据段</td>
+<td>最多 8 字节。<strong>多字节数值是"小端"存放</strong>（低位字节在前）。</td>
+<td>第 4 站解码 <code>0x6064</code>（32 位位置）时，必须按小端拼接，否则数值全错。</td>
+</tr>
+<tr>
+<td>多主 + 仲裁</td>
+<td>没有主从。任意节点想发就发，同时发时按 ID 逐位仲裁，ID 小者赢，输的一方自动重发。</td>
+<td>这就是为什么 CANopen 把"紧急/管理"报文放在低 ID（<code>0x000</code> NMT、<code>0x080</code> SYNC）。</td>
+</tr>
+<tr>
+<td>广播特性</td>
+<td><strong>所有节点都能看到总线上所有帧</strong>。"发给谁"是由 ID + 各节点自己的过滤器决定的，不是由地址决定的。</td>
+<td>所以 <code>candump</code> 能抓到全部报文，这对调试极其方便。</td>
+</tr>
+</tbody>
+</table>
+
+<pre>【CAN 2.0A 标准帧：代码里看到的样子 vs 线上真实的样子】
+
+代码里（SocketCAN 把它封装成一个 16 字节的 struct can_frame）：
+  ┌────────────────┬──────────┬───────┬──────────────────┐
+  │ can_id  (4 B)  │ can_dlc  │ pad   │ data[8]  (8 B)   │
+  │ 0x000~0x7FF    │ 0~8      │       │ 小端、按序排列      │
+  └────────────────┴──────────┴───────┴──────────────────┘
+              ↑ 你只需要操作这三个字段
+
+线上（CAN 控制器硬件自动完成的位流，你在用户态看不到）：
+  [SOF][11位ID][RTR][IDE][r0][DLC][ 8 字节数据 ][CRC15][CRC定界][ACK][EOF]
+   ↑ 仲裁、CRC 校验、错误重发、位填充 —— 全由硬件干，这是 CAN 可靠的原因</pre>
+
+<div class="note">
+<strong>记住这个分工：</strong>硬件负责"位流可靠送到"，内核负责"帧的正确性"，而<strong>你写的代码只负责"这些字节是什么意思"</strong>。
+CANopen 就是给"这些字节是什么意思"定的一套规矩 —— 这是第 2～4 站的主题。
+</div>
+
+<h3>1.2 SocketCAN：Linux 上为什么不写驱动</h3>
+
+<p>在单片机上做 CAN，你要配寄存器、写中断、管收发邮箱。在 Linux 上，内核已经把 CAN 控制器抽象成了<strong>一个网络设备</strong>（就像 <code>eth0</code> 那样），叫做 SocketCAN：</p>
+
+<pre>              应用进程（用户态）
+   ┌───────────────┬───────────────┬───────────────┐
+   │   canopend    │    candump    │    cansend    │
+   │  (本工程)      │  (can-utils)  │  (can-utils)  │
+   └───────┬───────┴───────┬───────┴───────┬───────┘
+           │ socket(PF_CAN, SOCK_RAW, CAN_RAW)
+           ▼               ▼               ▼
+   ┌───────────────────────────────────────────────┐
+   │         内核 SocketCAN 子系统（/proc/net/can）  │
+   │  · 每帧自动带上时间戳  · 过滤在核内完成           │
+   └───────────────────────┬───────────────────────┘
+                           ▼
+   ┌───────────────────────────────────────────────┐
+   │  can0  —— 一个普通的 Linux 网络接口              │
+   │  真实硬件：MCP2515 / flexcan / …                │
+   │  虚拟设备（本工程用）：vcan —— 纯软件，无硬件即可  │
+   └───────────────────────────────────────────────┘</pre>
+
+<p>所以整个工程<strong>没有一行 CAN 寄存器代码</strong>，全部是 socket 系统调用。这正是嵌入式 Linux 与你以前在单片机上写 CAN 的最大差别。</p>
+
+<div class="note">
+<strong>vcan 是什么？</strong>内核自带的一个"假的 CAN 网卡"。往它发帧，它就把帧广播给所有打开这个接口的 socket。
+没有硬件、不需要接线，就能完整跑通"发—收—解析"的整条链路。对学习来说是最理想的实验台。
+</div>
+
+<h3 class="pgbreak">1.3 代码走读 A：socket 是怎么建起来的</h3>
+
+<p>入口链路：<code>./canopend <span class="star">can0</span> -i 1</code> → <code>if_nametoindex("can0")</code> → <code>CO_CANinit()</code> → <code>CO_CANmodule_init()</code> → <code>CO_CANmodule_addInterface()</code>。</p>
+
+<pre>/* CO_main_basic.c:406-409 —— 命令行里的 "can0" 是怎么变成内核索引号的 */
+    if(optind < argc) {
+        CANdevice = argv[optind];
+        CANptr.can_ifindex = if_nametoindex(CANdevice);
+    }
+
+/* CO_main_basic.c:430-432 —— 设备不存在就直接退出（这是"必须先建 vcan"的原因） */
+    if(CANptr.can_ifindex == 0) {
+        log_printf(LOG_CRIT, DBG_NO_CAN_DEVICE, CANdevice);
+        exit(EXIT_FAILURE);</pre>
+
+<p>拿到了 <code>can_ifindex</code> 之后，真正的 socket 建立发生在 <code>CO_driver.c</code> 的 <code>CO_CANmodule_addInterface()</code>（第 270～387 行）：</p>
+
+<pre>/* CO_driver.c:300-308 */
+    interface->can_ifindex = can_ifindex;
+    ifName = if_indextoname(can_ifindex, interface->ifName);      /* 索引 → 名字"can0"，为了打日志 */
+
+    /* Create socket */
+    interface->fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);            /* ★ 就这一行拿到 fd */
+
+/* CO_driver.c:345-354 */
+    /* bind socket */
+    sockAddr.can_family = AF_CAN;
+    sockAddr.can_ifindex = can_ifindex;                           /* ★ 绑定到哪个网卡 */
+    ret = bind(interface->fd, (struct sockaddr*)&sockAddr, sizeof(sockAddr));
+
+/* CO_driver.c:374-386 */
+    /* Add socket to epoll */
+    ev.events = EPOLLIN;                                          /* 关心"可读"事件 */
+    ev.data.fd = interface->fd;
+    ret = epoll_ctl(CANmodule->epoll_fd, EPOLL_CTL_ADD, ev.data.fd, &ev);   /* ★ 挂进事件循环 */
+
+    /* rx is started by calling #CO_CANsetNormalMode() */
+    ret = disableRx(CANmodule);                                   /* 先闭麦，等进 normal mode 再开 */</pre>
+
+<table class="cols-3a">
+<caption>表 2-2　socket 建立全过程：每一行在干什么（CO_driver.c 第 308～386 行）</caption>
+<thead>
+<tr><th>行号</th><th>调用的系统调用</th><th>为什么要这一段</th></tr>
+</thead>
+<tbody>
+<tr><td>308</td><td><code>socket(PF_CAN, SOCK_RAW, CAN_RAW)</code></td><td>创建 CAN 原始套接字。返回的 <code>fd</code> 就是后续所有收发的句柄，等价于"打开了 can0 这扇门"。</td></tr>
+<tr><td>316</td><td><code>setsockopt(SO_RXQ_OVFL)</code></td><td>开启"接收队列溢出计数"。总线太忙导致丢帧时，内核会告诉我们丢了多少（后续第 862-871 行读取）。</td></tr>
+<tr><td>326</td><td><code>setsockopt(SO_TIMESTAMPING)</code></td><td>让内核给每帧打上<strong>软件时间戳</strong>。注释里明说了不用硬件时间戳（不是所有 CAN 硬件都支持得对）。第 6 站测抖动会用到它。</td></tr>
+<tr><td>339</td><td><code>getsockopt(SO_RCVBUF)</code></td><td>把接收缓冲区大小打出来。日志原文是 <code>CAN Interface "can0" RX buffer set to N messages</code>，N 由 <code>字节数 / 446</code> 估算（内核每帧约留 450 字节）。<strong>这个 N 就是"来不及处理时能顶多久"的余量。</strong></td></tr>
+<tr><td>349</td><td><code>bind(AF_CAN, can_ifindex)</code></td><td>把套接字绑定到具体的网卡 <code>can0</code>。没有这一步，socket 不知道该听哪块网卡。</td></tr>
+<tr><td>377</td><td><code>epoll_ctl(EPOLL_CTL_ADD)</code></td><td>把这个 fd 注册进 epoll。<strong>这是整个程序的事件驱动心脏</strong>：从此"有帧到了"不再需要轮询，内核会主动通知。</td></tr>
+<tr><td>384</td><td><code>disableRx()</code></td><td>先装入一个"谁也匹配不上"的过滤器，<strong>暂时收不到任何帧</strong>。设计意图：socket 先建好，等所有初始化（PDO 映射等）都就绪了，再由 <code>CO_CANsetNormalMode()</code> 统一开闸。</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>为什么 <code>canopend can0</code> 在你没建 vcan 时会直接死掉？</strong>
+答案就在 <code>CO_main_basic.c:408</code> 的 <code>if_nametoindex()</code>：没有 <code>can0</code> 这个接口，它返回 0，第 430 行判断后马上 <code>exit()</code>。
+所以"第 0 站跑不起来"十有八九是 vcan 没建。
+</div>
+
+<h3>1.4 两层过滤器：内核挡一层，程序再挡一层</h3>
+
+<p>CAN 是广播的，总线上所有帧都会涌向你的 socket。为了不把 CPU 浪费在无关帧上，本工程用了<strong>两层过滤</strong>：</p>
+
+<pre>总线上的所有帧
+      │
+      ▼  第一层：内核过滤器（真正的硬件/内核级，省 CPU）
+┌─────────────────────────────────────────────┐
+│ setsockopt(CAN_RAW_FILTER, rxFiltersCpy[])  │  ← CO_driver.c:156
+│ 过滤条件来自 CANmodule->rxFilter[]           │
+│ 而 rxFilter[] 由 CO_CANrxBufferInit() 填充   │  ← CO_driver.c:464-465
+└───────────────────┬─────────────────────────┘
+                    │ 只有 ID 匹配的帧才被允许进入用户态
+                    ▼
+      │
+      ▼  第二层：软件匹配（兜底 + 精确）
+┌─────────────────────────────────────────────┐
+│ CO_CANrxMsg() 遍历 rxArray[]                 │
+│ if (((rcvMsg->ident ^ obj->ident) & mask)==0)│  ← CO_driver.c:901
+│    找到 → 调用该对象的 CANrx_callback()       │
+└─────────────────────────────────────────────┘</pre>
+
+<table class="cols-3b">
+<caption>表 2-3　两层过滤对比</caption>
+<thead>
+<tr><th></th><th>第一层：内核过滤器</th><th>第二层：软件匹配</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>位置</strong></td><td><code>CO_driver.c:128-167</code> <code>setRxFilters()</code></td><td><code>CO_driver.c:900-911</code> <code>CO_CANrxMsg()</code></td></tr>
+<tr><td><strong>配置入口</strong></td><td>由 <code>CO_CANrxBufferInit()</code> 写进 <code>rxFilter[]</code>，再由 <code>CO_CANsetNormalMode()</code> 一次性下发</td><td>由同一个 <code>CO_CANrxBufferInit()</code> 写进 <code>rxArray[]</code></td></tr>
+<tr><td><strong>作用</strong></td><td>不匹配的帧<strong>根本不进用户态</strong>，省 CPU、省内存带宽</td><td>决定"这帧交给哪个对象处理"（RPDO？SYNC？SDO？）</td></tr>
+<tr><td><strong>怎么算匹配</strong></td><td>内核按 <code>can_id / can_mask</code> 比对</td><td><code>(收到的 ID ^ 注册的 ID) &amp; mask == 0</code></td></tr>
+</tbody>
+</table>
+
+<pre>/* CO_driver.c:456-468 —— 注册一个接收对象时，两层过滤器被同时填好 */
+        buffer->ident = ident & CAN_SFF_MASK;                 /* 只允许标准帧（11 位） */
+        if(rtr){ buffer->ident |= CAN_RTR_FLAG; }
+        buffer->mask  = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG;
+                                                    /* ★ 掩码里强制排除"扩展帧"和"远程帧" */
+
+        CANmodule->rxFilter[index].can_id   = buffer->ident;   /* 第一层：给内核 */
+        CANmodule->rxFilter[index].can_mask = buffer->mask;
+        if(CANmodule->CANnormal){
+            ret = setRxFilters(CANmodule);                     /* 已经开闸了就立刻更新内核 */
+        }</pre>
+
+<div class="note">
+<strong>开闸的时刻很重要。</strong><code>CO_CANsetNormalMode()</code>（<code>CO_driver.c:179-191</code>）做了两件事：
+① 调用 <code>setRxFilters()</code> 把过滤表下发给内核；② 成功后把 <code>CANmodule->CANnormal = true</code>。
+这个 <code>CANnormal</code> 标志后面到处在用：<strong>只有它为 true，收到的帧才会被真正处理</strong>（见 <code>CO_driver.c:957</code>）。
+</div>
+
+<h3>1.5 代码走读 B：一帧帧从 socket 出来</h3>
+
+<pre>/* CO_driver.c:927-991（精简）—— epoll 说"can0 有数据了"，然后呢？ */
+bool_t CO_CANrxFromEpoll(CO_CANmodule_t *CANmodule, struct epoll_event *ev, ...)
+{
+    for (uint32_t i = 0; i < CANmodule->CANinterfaceCount; i ++) {
+        CO_CANinterface_t *interface = &CANmodule->CANinterfaces[i];
+
+        if (ev->data.fd == interface->fd) {                   /* ★ 靠 fd 判断"这事件是不是我的" */
+            if ((ev->events & (EPOLLERR | EPOLLHUP)) != 0) {  /* 网卡异常/被关闭 */
+                recv(...);  log_printf(...);
+            }
+            else if ((ev->events & EPOLLIN) != 0) {           /* 有数据可读 */
+                CO_CANread(CANmodule, interface, &msg, &timestamp);   /* recvmsg() 取一帧 */
+                if (msg.can_id & CAN_ERR_FLAG) { /* 错误帧 → 交给错误处理 */ }
+                else {
+                    int32_t idx = CO_CANrxMsg(CANmodule, &msg, buffer);  /* 软件匹配 + 回调 */
+                    CANmodule->rxArray[idx].timestamp = timestamp;       /* 记下内核时间戳 */
+                }
+            }
+            return true;                                      /* 事件被消费掉了 */
+        }
+    }
+    return false;                                             /* 不是我的事件 */
+}</pre>
+
+<table class="cols-3a">
+<caption>表 2-4　从 epoll 通知到回调的 5 个环节</caption>
+<thead>
+<tr><th>环节</th><th>函数 / 位置</th><th>做了什么</th></tr>
+</thead>
+<tbody>
+<tr><td>① 等事件</td><td><code>CO_epoll_wait()</code><br><code>CO_epoll_interface.c:149</code></td><td><code>epoll_wait(fd, &amp;ev, 1, -1)</code> 阻塞等待。<strong>注意每次只取 1 个事件</strong>（第 6 站会讨论这里的影响）。</td></tr>
+<tr><td>② 认领事件</td><td><code>CO_CANrxFromEpoll()</code><br><code>CO_driver.c:940</code></td><td>比较 <code>ev.data.fd</code> 和本模块所有 socket 的 fd，确认这帧属于 <code>can0</code>。</td></tr>
+<tr><td>③ 取一帧</td><td><code>CO_CANread()</code><br><code>CO_driver.c:844</code></td><td><code>recvmsg()</code> 读一帧（必须读满 <code>CAN_MTU</code> = 16 字节），顺便取出辅助数据：时间戳和丢帧计数。</td></tr>
+<tr><td>④ 匹配对象</td><td><code>CO_CANrxMsg()</code><br><code>CO_driver.c:900-911</code></td><td>遍历 <code>rxArray[]</code> 做软件匹配，命中则调用注册的 <code>CANrx_callback()</code>。</td></tr>
+<tr><td>⑤ 进入协议层</td><td>例如 <code>CO_PDO_receive()</code><br><code>CO_PDO.c:465</code></td><td>回调根据对象类型把数据存进对应结构（第 4 站详讲）。</td></tr>
+</tbody>
+</table>
+
+<h3>1.6 代码走读 C：发送侧只有一行</h3>
+
+<pre>/* CO_driver.c:710-763（CO_DRIVER_MULTI_INTERFACE == 0 的分支，本工程走这条） */
+CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
+{
+    ...
+    ssize_t n = send(interface->fd, buffer, CAN_MTU, MSG_DONTWAIT);   /* ★ 发送就这一行 */
+    if (errno == 0 && n == CAN_MTU) {
+        /* 成功 */
+    }
+    else if (errno == EINTR || errno == EAGAIN || errno == ENOBUFS) {
+        /* 发送队列满：标记 bufferFull，稍后由 CO_CANmodule_process() 自动重发 */
+        buffer->bufferFull = true;
+        CANmodule->CANtxCount++;
+    }
+}</pre>
+
+<div class="note">
+注意 <code>MSG_DONTWAIT</code>：<strong>socketCAN 不支持阻塞式写</strong>。发不出去不能卡住（否则实时线程就废了），
+所以采用"标记 + 下轮重发"的策略。<code>CANtxCount &gt; 0</code> 时程序还会主动缩短下一轮的时间间隔
+（<code>CO_epoll_interface.c:307</code>），尽快把积压的帧冲出去。这个细节在第 6 站讲实时性时还会回来。
+</div>
+
+<div class="cpp">
+<strong>简历可以这么写（第 1 站版本）：</strong>
+「在 Linux 用户态基于 SocketCAN（<code>PF_CAN/SOCK_RAW</code>）实现 CAN 收发链路，掌握内核过滤器与软件过滤两级过滤机制、
+epoll 事件驱动模型及非阻塞发送/重传策略。」
+——「两级过滤」和「非阻塞重传」这两个词，面试官一听就知道你是真读过代码，不是抄的。
+</div>
+
+<h3 class="pgbreak">1.7 动手：建总线、抓第一帧</h3>
+
+<h4>步骤 1　建一条虚拟 CAN 总线（四条命令，自己敲）</h4>
+
+<pre>sudo modprobe vcan                          # 加载虚拟 CAN 内核模块
+sudo ip link add dev can0 type vcan         # 创建名为 can0 的虚拟 CAN 接口
+sudo ip link set up can0                    # 启动它
+ip -details link show can0                  # 确认：state UP，能看到 "vcan" 字样</pre>
+
+<h4>步骤 2　安装 can-utils（抓包/发包工具）</h4>
+
+<pre>sudo apt install -y can-utils</pre>
+
+<div class="note">
+<strong>装不上也不影响这一站。</strong>本机实测时 <code>candump</code>/<code>cansend</code> 并没有安装（<code>which candump</code> 为空），
+于是改用 <code>python3</code> 自带的 <code>socket.AF_CAN</code> 直接抓包 —— 零额外依赖，效果等价：
+<pre>python3 - &lt;&lt;'PY'
+import socket, struct, time
+s = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+s.bind(("can0",))                       # 接口名换成你自己的
+t0 = time.time()
+while time.time() - t0 &lt; 5:             # 抓 5 秒
+    f = s.recv(16)                      # 每帧固定 16 字节（can_frame 结构体）
+    cid, dlc = struct.unpack("=IB3x", f[:8])
+    cid &amp;= 0x1FFFFFFF                  # 去掉 RTR/ERR 等标志位，只留真正的 ID
+    print("%6.3f  %03X  [%d] %s" % (time.time()-t0, cid, dlc, f[8:8+dlc].hex()))
+PY</pre>
+输出的四列依次是：<strong>相对启动的秒数 · 帧 ID · DLC · 数据</strong>。
+它和 <code>candump -td can0</code> 看到的是同一批帧。
+</div>
+
+<h4>步骤 3　先开一个抓包窗口</h4>
+
+<pre>candump -td -a can0
+#  -t d : 每帧显示"相对上一帧"的毫秒时间差
+#  -a   : 十六进制和 ASCII 一起显示
+#  -td 输出示例：  (0.100123)  can0  080   [0]</pre>
+
+<h4>步骤 4　另开一个终端启动从站</h4>
+
+<pre>cd /home/zcy/Project/panasonic_canopen_agv
+./canopend can0 -i 1</pre>
+
+<h4>步骤 5　观察</h4>
+
+<p>预期你能在 candump 窗口看到<strong>启动瞬间一帧 <code>0x701</code>，随后每 100 ms 一帧、ID 为 <code>0x080</code>、DLC=0</strong> 的报文：</p>
+
+<pre>      can0  701   [1]  00                  ← 启动瞬间仅此一次：boot-up 帧（"我上线了"）
+      can0  080   [0]                       ← 之后每 100 ms 一帧，源源不断
+      can0  080   [0]
+      can0  080   [0]</pre>
+
+<p><strong>注意第一行。</strong>它不是周期心跳，而是 <strong>boot-up 帧</strong>：节点从 Initializing 切出来的那一瞬间，
+协议栈强制广播一次自己的 NMT 状态（<code>0x701</code> = 心跳 COB-ID，DLC=1，数据 <code>0x00</code> = Initializing 之前的占位值，
+详见下面的表 2-5 与红框说明）。</p>
+
+<p><strong>为什么会有 0x080？</strong>因为 <code>app_programStart()</code> 里这两行把本节点配成了 <strong>SYNC 生产者</strong>：</p>
+
+<pre>/* CO_application.c:76 / 82 */
+    OD_set_u32(OD_ENTRY_H1006_communicationCyclePeriod, 0, 100000, true);  /* 100000 us = 100 ms */
+    OD_set_u32(OD_ENTRY_H1005_COB_ID_SYNCMessage, 0, 0x40000080, true);    /* bit30=1 → isProducer */</pre>
+
+<table class="cols-4b">
+<caption>表 2-5　启动后总线上出现的报文（已实测复核：2026-09-28，vcan 环境）</caption>
+<thead>
+<tr><th>COB-ID</th><th>是什么</th><th>预期频率</th><th>为什么</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x080</code></td>
+<td>SYNC<br>（同步帧）</td>
+<td>每 100 ms 一帧<br>DLC = 0</td>
+<td>本节点被配成 SYNC 生产者（<code>0x1005 = 0x40000080</code>，bit30 = isProducer），周期 100 ms（<code>0x1006 = 100000</code>）。<br>DLC 为 0 是因为计数器溢出值 <code>0x1019</code> 默认为 0，不需要携带计数器字节。</td>
+</tr>
+<tr>
+<td><code>0x081</code></td>
+<td>EMCY<br>（紧急报文）</td>
+<td>只在出错时出现<br>（本机沙箱曾被误触发）</td>
+<td>EMCY 的 COB-ID = <code>0x80 + 节点号</code> = <code>0x081</code>。正常启动<strong>不该</strong>出现；一旦出现，说明协议栈认为出错了 —— 但要先排除"工具环境造成的假故障"（见下方红框）。</td>
+</tr>
+<tr>
+<td><code>0x701</code></td>
+<td>心跳<br>（Heartbeat）</td>
+<td><strong>启动瞬间只出现一次</strong><br>（<code>701 [1] 00</code>）<br>之后不再出现</td>
+<td>启动那一次叫 <strong>boot-up 帧</strong>：协议栈规定节点从 Initializing 切出时，必须向总线宣告一次"我上线了"。代码在 <code>CO_NMT_Heartbeat.c:237</code> 的 <code>NNTinit ||</code> 分支里，<strong>必然执行，与 <code>0x1017</code> 是否为 0 无关</strong>；随后 <code>CO_NMT_Heartbeat.c:245-247</code> 把状态由 <code>INITIALIZING</code> 改为 <code>PRE_OPERATIONAL</code> / <code>OPERATIONAL</code>。<br>之后之所以不再出现，才是因为 <code>0x1017</code>（心跳生产时间）默认为 <code>0</code> → 周期生产者关闭。</td>
+</tr>
+<tr>
+<td><code>0x182</code> 等</td>
+<td>TPDO</td>
+<td><strong>不会出现</strong></td>
+<td>OD 里 <code>0x1800</code> 系列的 COB-ID 都带 <code>0x80000000</code>（bit31=1 = 禁用），而 <code>app_programStart()</code> 没有改它们 → 本节点不发任何 TPDO。</td>
+</tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>实测补充：什么情况下会凭空冒出 <code>0x081</code> EMCY（以及怎么判断是不是假故障）</strong>
+<p>本机（在 TRAE 工具沙箱里）实测跑出来的帧序列是：
+<code>701 [1] 00</code> → <code>081 [8] 1081101400000000</code> → 之后每 100 ms 一帧 <code>080 [0]</code>。
+也就是说表 2-5 里"EMCY 不该出现"这条被打破了。追查下来，<strong>这不是工程的问题，是工具环境的问题</strong>：</p>
+<ol>
+<li>canopend 日志里每秒刷出约 10 行：
+<pre>(CO_CANsend) OS error "Operation not supported" in send()</pre></li>
+<li>用 <code>strace</code> 抓到的真身却是<strong>发送成功</strong>：
+<pre>sendto(24, "\200\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0", 16, MSG_DONTWAIT, NULL, 0) = 16</pre></li>
+<li>一帧 CAN 帧正好 <code>CAN_MTU = 16</code> 字节，返回 <code>16</code> 就是发成功了。可 <code>CO_driver.c:738</code> 的判据是
+<code>if (errno == 0 &amp;&amp; n == CAN_MTU)</code> —— 沙箱通过
+<code>LD_PRELOAD=/usr/share/trae-cn/resources/app/modules/sandbox/sbox.so</code> 把 <code>errno</code> 改写成了 <code>95</code>（<code>EOPNOTSUPP</code>），
+于是代码误判为"未知错误"，走 <code>CO_driver.c:753</code> 的兜底分支。</li>
+<li>兜底分支置 <code>CO_CAN_ERRTX_OVERFLOW</code> → 协议栈报 EMCY <code>0x8110</code>（<code>CO_EMC_CAN_OVERRUN</code>，总线过载）
+→ 心跳处理里 <code>errRegMasked</code> 成立（<code>CO_NMT_Heartbeat.c:289</code>）
+→ 节点从 Operational 掉回 <strong>Pre-operational</strong>（<code>CO_NMT_Heartbeat.c:292-293</code>）。</li>
+</ol>
+<p><strong>结论：这一整套"故障"是工具环境造成的假象。</strong>
+你在自己的普通终端里直接跑 <code>./canopend can0 -i 1</code>，不会看到那行 send 错误、不会有 EMCY、也不会掉到 Pre-operational。
+判断从站是否跑通的硬标准只有两条：① 日志出现 <code>running ...</code>；② 总线上能看到每 100 ms 的 <code>080 [0]</code>。
+两条都满足，第 0 / 第 1 站就算通关。</p>
+</div>
+
+<div class="warn">
+<strong>如果 candump 一帧都没有：</strong>
+<ol>
+<li>先看 canopend 那边有没有正常起来（有没有 <code>running ...</code>）。</li>
+<li>确认终端里的接口名和命令里写的一致 —— 命令写 <code>can0</code>，candump 就得抓 <code>can0</code>（若你建的是 <code>vcan0</code>，两处都要改）。</li>
+<li>确认 canopend 是<strong>正常退出</strong>而不是死掉了 —— 如果是 <code>if_nametoindex</code> 失败，它会直接 <code>exit()</code>，日志里会有一行关于 CAN 设备的 CRIT 错误。</li>
+<li>用 <code>ip -details link show can0</code> 再确认一次 <code>state UP</code>。</li>
+</ol>
+</div>
+
+<h4>步骤 6　自己发一帧，验证"过滤器确实在工作"</h4>
+
+<pre>cansend can0 123#DEADBEEF</pre>
+
+<p>预期结果：<strong>candump 能看到这一帧，但 canopend 毫无反应</strong>（不会打印任何东西）。</p>
+
+<p>原因：<code>0x123</code> 不在 <code>rxArray[]</code> 里注册过的任何 ID 中，两层过滤器都把它挡掉了。这个实验让你直观地看到"CAN 是广播的，但程序只挑自己要的"。</p>
+
+<div class="note">
+<strong>一个可以顺手做的小实验：</strong>给 canopend 加个 <code>-c "stdio"</code> 参数启动，
+它就会在标准输入上接受命令行（第 3 站的主角）。现在先不用管它，只要知道"这个参数让 canopend 多开了一个命令行入口"即可。
+</div>
+
+<h3>1.8 自测（能答出来再进第 2 站）</h3>
+
+<ol>
+<li>CAN 帧的 ID 是"地址"吗？<code>0x38A</code> 和 <code>0x38B</code> 谁在总线上优先级更高？为什么？</li>
+<li><code>CO_driver.c</code> 里真正创建 CAN 套接字的是哪一行？返回的 <code>fd</code> 后面被用在哪些地方（至少说出 3 处）？</li>
+<li>为什么 socket 刚建好却不能收帧？哪一步才真正"开闸"？</li>
+<li>本工程为什么要做两层过滤？只保留内核那层行不行？只保留软件那层行不行？</li>
+<li><code>send()</code> 为什么用 <code>MSG_DONTWAIT</code>？发不出去时程序怎么办？</li>
+<li>启动后总线上每 100 ms 出现的那个 <code>0x080</code> 是什么？它是本节点发的还是别的节点发的？DLC 为什么是 0？</li>
+<li>为什么总线上看不到<strong>周期性</strong>的 <code>0x701</code>（心跳）？那启动瞬间出现过的那一帧 <code>0x701</code> 又是什么？</li>
+</ol>
+
+<div class="note">
+<strong>下一册预告 —— 第 2 站：CANopen 报文层。</strong>
+你会把 <code>0x000 / 0x080 / 0x081 / 0x601 / 0x701</code> 这一整套"预定义连接集"彻底吃透，
+用 <code>cansend</code> 亲手把节点从 Pre-operational 切到 Operational，并逐行读懂 canopend 启动时打的日志。
+</div>
+
+<div class="footnote">
+本篇为《松下 AGV（CANopen）学习地图 × 代码走读 对照手册》，已收录：§0 十站总览 · 第 0 站 工程全景 · 第 1 站 CAN 总线 &amp; SocketCAN。<br>
+本篇所有代码位置均来自本仓库实际文件（行号已逐条核对）；表 2-5 的运行时行为已于 2026-09-28 在 vcan 上实测复核。<br>
+生成于 2026-09-27，实测复核于 2026-09-28。
+</div>
+
+</body>
+</html>

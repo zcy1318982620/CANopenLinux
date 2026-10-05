@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 7 站 · 里程计：差速运动学 → 位姿 x,y,θ（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:22%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:22%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:18%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 7 站 · 里程计：差速运动学 → 位姿 x, y, θ</h1>
+
+<div class="meta">
+<p><strong>本站定位</strong>：阶段 B「做出增量」的收官。第 6 站我们已经能在 RT 线程里 1ms 一拍拿到左右轮的真实位置（<code>posR</code> / <code>posL</code>，原始计数），但它们只是两个孤立的数字。本站把这两个数字，变成「车在哪」——位姿 <code>x, y, θ</code>。</p>
+<p><strong>一句话概括</strong>：在同一批钩子里，把「两个轮子转了多少」按差速运动学积分成「车走了多远、转了多少、在哪」。</p>
+<p><strong>为什么值得单独一站</strong>：① 这是从站节点第一次输出「有物理意义的量」，是后面 Qt 上位机（第 8 站）要显示的东西；② 它复用第 6 站已经搭好的 RT 节拍与钩子，不新增线程、不新增总线报文——是「在已有链路上加一节」的典型范例。</p>
+<p><strong>阅读顺序</strong>：§1 讲物理模型（不看代码）→ §2 讲数据从哪来、在哪算（看链路）→ §3 讲要量的参数 → §4 才是动手写 → §5/§6 衔接与自测。</p>
+</div>
+
+<h2>§0 一页地图：本站改了什么、在哪改</h2>
+
+<p>先看全景。上站（第 6 站）结束时，运行链路是「收帧 → 打印」；本站把「打印」换成「积分」，终点是位姿。</p>
+
+<pre>
+【第 6 站结束时】                        【第 7 站结束时】
+
+ CAN 总线来帧 0x38A / 0x38B               CAN 总线来帧 0x38A / 0x38B
+        │                                        │
+        ▼                                        ▼
+ CO_epoll_processRT()  (RT 线程)           CO_epoll_processRT()  (RT 线程)
+        │  CO_process_RPDO()                     │  CO_process_RPDO()
+        ▼                                        ▼
+ H6064_write()  ★ 只 printf 出 posR/posL    H6064_write()  ★ 把 posR/posL 存进全局变量
+        │                                        并置个「有新数据」的小旗 odom_new
+        ▼                                        │
+   (打印到终端，随后丢弃)                         ▼
+                                          app_programRt()  ★ 1ms 一拍检查旗子
+                                                 │  有则取左/右两轮的「圈差」
+                                                 ▼
+                                          差速运动学积分 → x, y, θ
+                                                 │
+                                                 ▼
+                                          (每秒打印一次位姿；第 8 站改由 OD 暴露给上位机)
+</pre>
+
+<p class="note"><strong>关键点先摆在这里</strong>：本站<strong>不新增线程、不新增 CAN 报文、不改 PDO 映射</strong>。只在两个<strong>已经存在</strong>的钩子里换内容：收帧钩子负责「存」，RT 拍钩子负责「算」。这正是「顺着已有链路做增量」的写法。</p>
+
+<h2>§1 差速运动学：三个公式把轮子变成车</h2>
+
+<h3>1.1 双轮差速模型在讲什么</h3>
+
+<p>这台 AGV 是<strong>双轮差速</strong>：左右各一个驱动轮，分别由两个电机独立驱动（对应我们工程里的 <code>OD</code>／右电机 与 <code>OD_2nd</code>／左电机）。它没有转向轮——<strong>转弯靠左右轮速度不同</strong>。俯视看是这样的：</p>
+
+<pre>
+                前进方向 (θ=0，车头朝 +x)
+                          ▲
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+        │              车体中心             │
+        │                 ●                 │
+        │                 │◄──── b ────►│    │   b = 两轮中心距（轮距）
+        │                 │                 │
+       ─●─────────────────┼─────────────────●─
+       左轮 L            车体中轴           右轮 R
+      (OD_2nd)                            (OD)
+</pre>
+
+<ul>
+<li><strong>左轮</strong>（<code>OD_2nd</code> / RPDO <code>0x38B</code>）：累计位置 <code>posL</code>。</li>
+<li><strong>右轮</strong>（<code>OD</code> / RPDO <code>0x38A</code>）：累计位置 <code>posR</code>。</li>
+<li>车体的姿态用三个量描述：<code>x, y</code>（车体中心在世界坐标里的位置，单位 m）和 <code>θ</code>（车头朝向角，单位 rad）。</li>
+</ul>
+
+<h3>1.2 三步公式（本站的全部数学）</h3>
+
+<p>任意一拍（1ms），我们从两个轮子的累计位置里取「这一拍各自转了多少」（记为 <code>ΔposR</code>、<code>ΔposL</code>，单位是驱动器给的计数），然后：</p>
+
+<table class="cols-3">
+<caption>表 7-1 差速运动学三步</caption>
+<thead><tr><th>步骤</th><th>公式</th><th>这一步在干什么</th></tr></thead>
+<tbody>
+<tr><td>① 计数 → 轮面位移</td><td><code>dR = k · ΔposR</code><br><code>dL = k · ΔposL</code></td><td>把「编码器计数」换算成「轮子边缘实际滚过的米数」。<code>k</code> 是每计数对应的米数（见 §3 标定）。</td></tr>
+<tr><td>② 两轮 → 车体</td><td><code>d  = (dR + dL) / 2</code><br><code>dθ = (dR − dL) / b</code></td><td>两个轮子的<strong>平均</strong>就是车体前进了多少 <code>d</code>；两个轮子的<strong>差</strong>除以轮距就是车体转了多少 <code>dθ</code>。等速前进→差=0→θ 不变；一轮快一轮慢→转小弯；同速反向→原地转。</td></tr>
+<tr><td>③ 累加成位姿</td><td><code>x += d · cos(θmid)</code><br><code>y += d · sin(θmid)</code><br><code>θ += dθ</code></td><td>把这一步的位移按当前朝向投影到世界坐标的 x / y 上，并更新朝向。<code>θmid</code> 见 1.3。</td></tr>
+</tbody>
+</table>
+
+<h3>1.3 用欧拉法还是中点法</h3>
+
+<p>第 ③ 步有个细节：这一步的位移 <code>d</code>，应该沿着「转之前的方向」投影，还是「转之后的方向」，还是「转一半时的方向」？三者分别是欧拉法、后向法、中点法。</p>
+
+<pre>
+  欧拉法(转之前θ)        中点法(转一半 θmid = θ+dθ/2)      后向法(转之后θ+dθ)
+        ╲                     ╲                              ╲
+         ╲ 本次 d              ╲ 本次 d                       ╲ 本次 d
+          ╲                     ╱╲  ← 取中间朝向               ╲
+           ╲                   ╱  ╲                             ╲
+   误差偏大(总是偏内/外)      误差最小(正负抵消)            误差偏大
+</pre>
+
+<p>我们的采样节拍是 1ms、车速又低，单拍转角 <code>dθ</code> 极小，<strong>用中点法几乎零成本、精度最好</strong>，所以选它：</p>
+
+<pre>
+  θmid = θ + dθ / 2
+  x += d * cos(θmid)
+  y += d * sin(θmid)
+  θ += dθ
+</pre>
+
+<p class="note">注意书写顺序：<code>θmid</code> 必须用「更新前的 <code>θ</code>」算，<code>θ</code> 最后才累加。<code>x</code>/<code>y</code> 也必须在 <code>θ</code> 更新前用 <code>θmid</code> 算完。顺序错了，公式就退化成别的积分法。</p>
+
+<h3>1.4 符号表：每个变量是什么、从哪来</h3>
+
+<table class="cols-3">
+<caption>表 7-2 本文出现的物理量与代码变量</caption>
+<thead><tr><th>物理量 / 符号</th><th>含义</th><th>在代码里的名字 / 从哪来</th></tr></thead>
+<tbody>
+<tr><td><code>posR</code> / <code>posL</code></td><td>右/左轮<strong>累计</strong>位置，单位「计数」</td><td>RPDO 帧里的 <code>0x6064</code> 被解析后，交给收帧钩子 <code>H6064_write</code>（右 <code>0x038A</code> / 左 <code>0x038B</code>）</td></tr>
+<tr><td><code>ΔposR</code> / <code>ΔposL</code></td><td>本拍内右/左轮各自转了多少计数</td><td>本拍值 − 上拍值（注意回绕，见 §4.5）</td></tr>
+<tr><td><code>k</code></td><td>每 1 个计数对应轮子滚过的米数 = <code>2πr / N</code></td><td>由轮半径 <code>r</code> 和每圈计数 <code>N</code> 标定出来（§3）</td></tr>
+<tr><td><code>dR</code> / <code>dL</code></td><td>本拍右/左轮的轮面位移，单位 m</td><td><code>k · ΔposR</code> / <code>k · ΔposL</code></td></tr>
+<tr><td><code>b</code></td><td>轮距：左右轮中心之间的横向距离，单位 m</td><td>卷尺量（§3）</td></tr>
+<tr><td><code>d</code></td><td>本拍车体前进的距离，单位 m</td><td><code>(dR + dL) / 2</code></td></tr>
+<tr><td><code>dθ</code></td><td>本拍车体转过的角度，单位 rad</td><td><code>(dR − dL) / b</code></td></tr>
+<tr><td><code>x, y</code></td><td>车体中心在世界坐标里的位置，单位 m</td><td>逐拍累加得到</td></tr>
+<tr><td><code>θ</code></td><td>车头朝向角，单位 rad</td><td>逐拍累加得到（<code>θ=0</code> 定义为车头朝 +x）</td></tr>
+</tbody>
+</table>
+
+<h2>§2 数据从哪来、在哪算：只碰两个已有钩子</h2>
+
+<p>所有公式都要有输入。输入是左右轮的位置，输出是位姿。整条链路里，本站只碰两个钩子：一个是<strong>收帧钩子</strong>（拿数据），一个是<strong>RT 拍钩子</strong>（算数据）。先把这两个函数讲清楚——它们分别是谁、被谁调、干什么。</p>
+
+<h3>2.1 收帧钩子：<code>H6064_write</code></h3>
+
+<table class="cols-2">
+<caption>表 7-3 H6064_write 速查</caption>
+<tbody>
+<tr><td>位置</td><td><code>CO_application.c:38</code>（本站要改这里）</td></tr>
+<tr><td>干什么</td><td>两个电机的 RPDO 帧里都有 <code>0x6064</code>（实际位置）。这个函数就是「<code>0x6064</code> 被写时的钩子」：谁往 <code>0x6064</code> 写，它就被叫一次。当前实现只是把位置 <code>printf</code> 出来。</td></tr>
+<tr><td>被谁调用</td><td><code>CO_RPDO_process</code>（<code>CANopenNode/301/CO_PDO.c:776</code>）。它在 RT 线程里收到 RPDO 帧后，逐条映射项写入对象字典；写到 <code>0x6064</code> 这一项时，发现该项挂了扩展（<code>.write = H6064_write</code>），于是走扩展、调用本函数。<strong>调用点在 <code>CO_PDO.c:863</code>（<code>OD_IO->write(...)</code>）。</strong></td></tr>
+<tr><td>它调用了谁</td><td>目前只调 <code>printf</code>。<strong>没有</strong>调 <code>OD_writeOriginal()</code>，也<strong>没有</strong>设置 <code>*countWritten</code>——这是有意的，见 2.4。</td></tr>
+<tr><td>参数</td><td><code>stream</code>：本项的描述符。其中 <code>stream-&gt;object</code> 是我们自己塞进去的<strong>标记</strong>（右轮 <code>0x038A</code>、左轮 <code>0x038B</code>），用来区分这次到底是左轮还是右轮。<br><code>buf</code>：<strong>已经解析好的位置值</strong>，直接 <code>*(int32_t*)buf</code> 就是个 <code>int32</code>。不用自己做字节拼接。<br><code>count</code>：数据字节数（本例 <code>0x6064</code> 是 32bit，故 4）。<br><code>countWritten</code>：出参，本应回填「实际写了几字节」。</td></tr>
+<tr><td>返回值</td><td><code>ODR_OK</code> 表示已处理；参数非法返回 <code>ODR_DEV_INCOMPAT</code>。</td></tr>
+</tbody>
+</table>
+
+<p>这个钩子是怎么挂到 <code>0x6064</code> 上的：<code>app_programStart</code>（<code>CO_application.c:72</code>）在配置 PDO 时，先给两个扩展结构体 <code>H6064_extentionR</code>/<code>H6064_extentionL</code>（<code>CO_application.c:60-69</code>）填上 <code>.write = H6064_write</code>，再调用 <code>OD_extension_init(OD_ENTRY_H6064_positionActualValue, &amp;H6064_extentionR)</code>（<code>CO_application.c:122</code>）和左轮对应的一次（<code>CO_application.c:152</code>）把扩展注册进对象字典。</p>
+
+<div class="note"><strong>为什么左、右两个扩展共用一个函数？</strong>因为 <code>H6064_write</code> 靠 <code>stream-&gt;object</code> 这个标记来区分左右。右轮扩展在注册时把 <code>object</code> 指向 <code>objR</code>（值 <code>0x038A</code>，<code>CO_application.c:119-121</code>），左轮指向 <code>objL</code>（<code>0x038B</code>，<code>CO_application.c:149-151</code>）。函数体里一句 <code>if (*can_id == 0x038A) ... else if (*can_id == 0x038B) ...</code> 就分开了。</div>
+
+<h3>2.2 RT 拍钩子：<code>app_programRt</code></h3>
+
+<table class="cols-2">
+<caption>表 7-4 app_programRt 速查</caption>
+<tbody>
+<tr><td>位置</td><td><code>CO_application.c:184</code>（本站要改这里）</td></tr>
+<tr><td>干什么</td><td>应用层留给我们挂「每拍要做的实时工作」的空位。第 6 站我们在这里做抖动统计，本站改成做里程计积分。</td></tr>
+<tr><td>被谁调用</td><td><code>rt_thread()</code>（<code>CO_main_basic.c:885</code>），唯一调用点在 <code>CO_main_basic.c:904</code>：每个 RT 循环末尾调用一次。<code>rt_thread</code> 由 <code>main</code> 启动，是独立的实时线程（第 6 站讲过它的 SCHED_FIFO、timerfd、epoll）。</td></tr>
+<tr><td>参数</td><td><code>co</code>：CANopen 实例（本站用不到）。<br><code>timerLate_us</code>：本拍迟到量（第 6 站的统计口径）。<br><code>timerEvent</code>：<code>true</code> 表示「这一拍是定时器到点触发的真节拍」，<code>false</code> 表示只是被别的源（CAN 报文 / 门铃）顺带唤醒。<strong>积分必须只在 <code>timerEvent==true</code> 时做</strong>，否则会被重复积分。</td></tr>
+<tr><td>返回值</td><td>无（<code>void</code>）。</td></tr>
+<tr><td>它调用了谁</td><td>本站里它会用到 §1 的公式，并（可选）打印位姿。</td></tr>
+</tbody>
+</table>
+
+<h3>2.3 关键结论：两个钩子在同一线程，不用加锁</h3>
+
+<p>这是本站最容易踩坑、也最值得写进面试答案的一点。看一眼 RT 循环的<strong>执行顺序</strong>：</p>
+
+<pre>
+rt_thread() 每一圈的固定顺序                    (CO_main_basic.c:885-910)
+
+  CO_epoll_wait(&epRT)            ← 等定时器/报文/门铃
+        │
+        ▼
+  CO_epoll_processRT(&epRT, CO, true)          (CO_epoll_interface.c:323)
+        │  ├─ CO_CANrxFromEpoll()               ← 收 CAN 帧          (:333)
+        │  ├─ CO_process_SYNC()                 ← 处理同步帧         (:346)
+        │  ├─ CO_process_RPDO()  ──► H6064_write()  ★ 存 posR/posL  (:350)
+        │  └─ CO_process_TPDO()                                      (:354)
+        ▼
+  CO_epoll_processLast(&epRT)
+        ▼
+  app_programRt(CO, epRT.timerLate_us, epRT.timerEvent)  ★ 算位姿  (CO_main_basic.c:904)
+        │
+        └──► 回到循环开头
+</pre>
+
+<p>看清楚：<strong>存数据的 <code>H6064_write</code> 和算数据的 <code>app_programRt</code>，都在同一个 RT 线程里，而且是同一圈里一前一后顺序执行</strong>。既然不存在两个线程同时访问，那么它们共享的变量（比如 <code>odom_posR_raw</code> / <code>odom_posL_raw</code> / <code>odom_new</code>）就<strong>不需要加锁</strong>。</p>
+
+<div class="warn"><strong>但要注意边界</strong>：一旦这些变量要被<strong>主线程/Qt 上位机</strong>读（第 8 站），跨线程访问就成立了，那时读侧必须用 <code>CO_LOCK_OD()</code> / <code>CO_UNLOCK_OD()</code> 保护（或在 OD 里以变量形式暴露）。本站内部「存—算」闭环不跨线程，先不加锁是对的。</div>
+
+<h3>2.4 为什么必须用钩子，不能直接读对象字典里的 <code>0x6064</code></h3>
+
+<p>一个自然的疑问：既然 RPDO 会把位置写进对象字典，那我在 <code>app_programRt</code> 里直接读 <code>0x6064</code> 的值不就行了？</p>
+
+<p><strong>不行</strong>。原因就在现有 <code>H6064_write</code> 的实现里：它<strong>没有调用 <code>OD_writeOriginal()</code></strong>（<code>CANopenNode/301/CO_ODinterface.c:75</code>，真正落存储的函数），<strong>也没有设置 <code>*countWritten</code></strong>。也就是说，这个钩子把值「接住、打印、丢掉」，<strong>值根本没有写回对象字典的真实存储</strong>——对象字典里 <code>0x6064</code> 永远停在初值。</p>
+
+<p>这也正好说明：<strong>钩子是唯一能拿到实时位置的入口</strong>。所以本站的做法就是——既然钩子每次都拿到最新的 <code>posR</code>/<code>posL</code>，那就在钩子里顺手把它存进我们自己的全局变量，供 <code>app_programRt</code> 使用。</p>
+
+<p class="note">顺带一个冷知识：<code>CO_RPDO_process</code> 在 <code>CO_PDO.c:863</code> 调用 <code>OD_IO-&gt;write(..., &amp;countWritten)</code> 时<strong>不检查返回值、也不校验 <code>countWritten</code></strong>，所以原代码「不设 <code>countWritten</code>」也能照常跑。标准做法（见 <code>CO_PDO.c:44-50</code> 的 <code>OD_write_dummy</code> 示例）是应把 <code>*countWritten = count</code> 回填，本站顺手补上更规范。</p>
+
+<h2 class="pgbreak">§3 标定参数：把「计数」变成「米」</h2>
+
+<p>公式里有两个必须实测/查手册的参数：<code>k</code> 和 <code>b</code>。它们决定了里程计的绝对准确度。</p>
+
+<table class="cols-3">
+<caption>表 7-5 标定参数</caption>
+<thead><tr><th>参数</th><th>怎么得到</th><th>代入处</th></tr></thead>
+<tbody>
+<tr><td>轮半径 <code>r</code>（m）</td><td>查轮子规格或卷尺量直径除以 2。</td><td>换算 <code>k</code></td></tr>
+<tr><td>每圈计数 <code>N</code>（counts/rev）</td><td>查驱动器手册（例：BLVD-KRD 的编码器分辨率）。</td><td>换算 <code>k</code></td></tr>
+<tr><td>每计数位移 <code>k = 2πr / N</code>（m/count）</td><td>上两项算出来。</td><td>① 步：<code>dR = k·ΔposR</code></td></tr>
+<tr><td>轮距 <code>b</code>（m）</td><td>卷尺量左右轮<strong>中心</strong>之间的横向距离（不是外缘间距）。</td><td>② 步：<code>dθ = (dR−dL)/b</code></td></tr>
+<tr><td>左右轮方向 <code>DIR_R / DIR_L</code></td><td>实车标定：手动让车沿 +x 直推一段，看 <code>posR</code>/<code>posL</code> 是增还是减；若与预期相反就取 <code>−1</code>。</td><td>取 <code>Δ</code> 时乘上，统一「前进为正」</td></tr>
+</tbody>
+</table>
+
+<h4>方向与符号的验证方法（必做一次）</h4>
+<ol>
+<li>把车<strong>原地向前推 1 米</strong>（直推，不转）。</li>
+<li>观察终端：<code>posR</code> 和 <code>posL</code> 应该<strong>都增大</strong>，且增大的计数接近 <code>1.0 / k</code>。若某个在减小，就把对应的 <code>DIR</code> 取 <code>−1</code>。</li>
+<li>把车<strong>原地左转</strong>（右轮前进、左轮后退）。<code>θ</code> 应该增大（逆时针为正）。若变小，说明左右轮接反了，交换两个 <code>DIR</code>。</li>
+</ol>
+
+<div class="warn"><strong>别忘了链接数学库</strong>：本站公式要用 <code>cos()</code>/<code>sin()</code>，需要 <code>#include &lt;math.h&gt;</code>，并且 <strong>Makefile 的 <code>LDFLAGS</code> 里要补 <code>-lm</code></strong>。当前 <code>Makefile:64-66</code> 只有 <code>-g -ggdb</code> 和 <code>-pthread</code>，<strong>没有 <code>-lm</code></strong>，不加会链接报 <code>undefined reference to 'cos'</code>。</div>
+
+<h2>§4 动手写：把钩子换成里程计</h2>
+
+<h3>4.1 总览：新增/改动清单</h3>
+
+<table class="cols-2">
+<caption>表 7-6 本站代码落点</caption>
+<thead><tr><th>位置</th><th>动作</th></tr></thead>
+<tbody>
+<tr><td><code>CO_application.c</code> 头部</td><td><strong>新增</strong>：<code>#include &lt;math.h&gt;</code>；标定宏（轮半径/每圈计数/轮距/方向/<code>k</code>）；共享变量（两轮原始位置、新数据旗）；里程计状态（<code>x, y, θ</code>）。</td></tr>
+<tr><td><code>CO_application.c</code> <code>H6064_write</code>（:38）</td><td><strong>改</strong>：把「<code>printf</code> 打印」换成「存进共享变量 + 置 <code>odom_new=true</code>」；顺手补 <code>*countWritten = count</code>。</td></tr>
+<tr><td><code>CO_application.c</code> <code>app_programRt</code>（:184）</td><td><strong>改</strong>：在 <code>if (!timerEvent) return;</code> 之后，加入「有新数据 → 取两轮 Δ → 差速积分 → 更新 x,y,θ」。</td></tr>
+<tr><td><code>Makefile</code>（:64-66）</td><td><strong>改</strong>：<code>LDFLAGS += -lm</code>。</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 头部：参数与共享变量</h3>
+
+<p>放在文件顶部（<code>RT_JITTER_OVER_US</code> 那一带）。<strong>每一个变量都在出现处说明用途</strong>：</p>
+
+<pre>
+#include &lt;math.h&gt;                     /* cos / sin */
+
+/* ---- 标定参数：按实车改（见 §3）---- */
+#define ODOM_WHEEL_R_M      0.050    /* 驱动轮半径 r，米 */
+#define ODOM_COUNT_PER_REV  10000    /* 每转计数 N，counts/rev */
+#define ODOM_WHEEL_BASE_M   0.300    /* 轮距 b，米 */
+#define ODOM_DIR_R          (+1)     /* 右轮方向：+1 前进为正，否则 -1 */
+#define ODOM_DIR_L          (+1)     /* 左轮方向：+1 前进为正，否则 -1 */
+#define ODOM_PI             3.14159265358979
+/* 每 1 计数对应的轮面位移 k = 2πr / N */
+#define ODOM_K_PER_COUNT    (2.0 * ODOM_PI * ODOM_WHEEL_R_M / ODOM_COUNT_PER_REV)
+
+/* ---- 收帧钩子 → RT 拍钩子 的共享数据（同线程，无需加锁，见 §2.3）---- */
+static int32_t odom_posR_raw;       /* 右轮最近一次累计位置(计数) 0x38A */
+static int32_t odom_posL_raw;       /* 左轮最近一次累计位置(计数) 0x38B */
+static bool_t  odom_new;            /* true=自上拍以来收到过新位置 */
+
+/* ---- 里程计状态：车体位姿 ---- */
+static double  odom_x;              /* 世界坐标 x，米 */
+static double  odom_y;              /* 世界坐标 y，米 */
+static double  odom_th;             /* 车头朝向 θ，弧度（0=朝 +x） */
+</pre>
+
+<h3>4.3 收帧钩子：从「打印」改成「存」</h3>
+
+<p>改后的 <code>H6064_write</code>（<code>CO_application.c:38</code>）。它<strong>只做一件事：把最新位置存起来、置旗子</strong>。它不计算——因为计算要等 1ms 节拍统一做（万一 1ms 内来两帧，直接算会重复积分）。</p>
+
+<pre>
+ODR_t H6064_write(OD_stream_t *stream, const void *buf,
+                  OD_size_t count, OD_size_t *countWritten)
+{
+    if (stream == NULL || stream->object == NULL || buf == NULL
+        || countWritten == NULL) {
+        return ODR_DEV_INCOMPAT;
+    }
+    uint16_t *can_id = (uint16_t*)stream->object;   /* 标记：0x038A / 0x038B */
+    int32_t   pos    = *(int32_t*)buf;              /* 已解析好的位置值 */
+
+    if (*can_id == 0x038A)      odom_posR_raw = pos;   /* 右轮 */
+    else if (*can_id == 0x038B) odom_posL_raw = pos;   /* 左轮 */
+    else return ODR_DEV_INCOMPAT;
+
+    odom_new = true;                 /* 告诉 RT 拍钩子：有新数据了 */
+    *countWritten = count;           /* 规范：回填写入字节数（见 §2.4） */
+    return ODR_OK;
+}
+</pre>
+
+<h3>4.4 RT 拍钩子：这里才是积分的地方</h3>
+
+<p>改后的 <code>app_programRt</code>（<code>CO_application.c:184</code>）。注意位置——代码要加在<strong>「<code>if (!timerEvent) return;</code>」之后</strong>，保证只在真节拍上积分一次。</p>
+
+<pre>
+void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent)
+{
+    (void) co;
+    /* ……第 6 站的抖动统计代码保持不动…… */
+    if (!timerEvent) return;                 /* 非真节拍：不积分 */
+
+    /* ===== 以下为第 7 站新增：里程计积分 ===== */
+    static int32_t prevR, prevL;             /* 上拍累计位置(计数) */
+    static bool_t  odom_init;                /* 首拍只记录起点，不积分 */
+
+    if (!odom_new) return;                   /* 本拍没收到新位置，跳过 */
+    odom_new = false;
+
+    if (!odom_init) {                        /* 首次：把起点记为 0 */
+        prevR = odom_posR_raw;
+        prevL = odom_posL_raw;
+        odom_init = true;
+        odom_x = odom_y = odom_th = 0.0;
+        return;
+    }
+
+    /* ① 取两轮「这拍转了多少计数」，无符号相减处理回绕(§4.5) */
+    int32_t dCntR = (int32_t)((uint32_t)odom_posR_raw - (uint32_t)prevR);
+    int32_t dCntL = (int32_t)((uint32_t)odom_posL_raw - (uint32_t)prevL);
+    prevR = odom_posR_raw;
+    prevL = odom_posL_raw;
+
+    /* ① 计数 → 轮面位移(m)，并统一方向 */
+    double dR = ODOM_DIR_R * ODOM_K_PER_COUNT * (double)dCntR;
+    double dL = ODOM_DIR_L * ODOM_K_PER_COUNT * (double)dCntL;
+
+    /* ② 两轮 → 车体位移/转角 */
+    double d  = (dR + dL) / 2.0;
+    double dth = (dR - dL) / ODOM_WHEEL_BASE_M;
+
+    /* ③ 中点法累加位姿 */
+    double thmid = odom_th + dth / 2.0;
+    odom_x += d * cos(thmid);
+    odom_y += d * sin(thmid);
+    odom_th += dth;
+
+    /* 每秒打印一次（1000 拍 ≈ 1s），别每拍都打 */
+    static uint32_t odom_n;
+    if (++odom_n >= 1000) {
+        odom_n = 0;
+        printf("[ODOM] x=%.3f y=%.3f th=%.1fdeg\n",
+               odom_x, odom_y, odom_th * 180.0 / ODOM_PI);
+        fflush(stdout);
+    }
+}
+</pre>
+
+<h3>4.5 为什么要用无符号相减：位置回绕</h3>
+
+<p>驱动器的累计位置是 32 位、会一直往一个方向涨，绕一圈后<strong>从最大翻到最小</strong>（回绕）。如果直接做有符号减法 <code>posR - prevR</code>，在回绕点会得到一个巨大的错值。</p>
+
+<p>解决办法很简单：<strong>两个 <code>uint32_t</code> 相减，结果再当 <code>int32_t</code> 解释</strong>。在模 2³² 意义下，只要这一拍真实增量远小于半圈，就永远得到正确的小增量：</p>
+
+<pre>
+  int32_t dCntR = (int32_t)((uint32_t)odom_posR_raw - (uint32_t)prevR);
+                        └──────── 先按无符号减（自动模 2^32）────────┘
+                └──── 再当有符号读：结果即为这一拍的带符号增量 ────┘
+</pre>
+
+<h3>4.6 自测：两条最直观的用例</h3>
+
+<table class="cols-2">
+<caption>表 7-7 里程计自测</caption>
+<thead><tr><th>动作</th><th>预期输出</th></tr></thead>
+<tbody>
+<tr><td>沿 +x <strong>直推 1 米</strong></td><td><code>th</code> 基本不变（≈0）；<code>x</code> 接近 <code>+1.000</code>；<code>y</code> 接近 0。若 <code>x</code> 变大但差得多，检查 <code>r</code>/<code>N</code>；若方向反了，查 <code>DIR_R/DIR_L</code>。</td></tr>
+<tr><td><strong>原地左转 90°</strong></td><td><code>th</code> 接近 <code>+90deg</code>；<code>x,y</code> 变化很小（原地转，中心几乎不动）。若转角差得多，检查轮距 <code>b</code>（<code>b</code> 越大转角算得越小）。</td></tr>
+</tbody>
+</table>
+
+<div class="warn"><strong>别在每拍里 <code>printf</code></strong>：RT 线程 1ms 一拍，若每拍打印，终端 IO 会拖垮实时性（正好坏掉第 6 站的成果）。按上面「每 1000 拍打印一次」，或干脆不打印、把位姿存到变量里给第 8 站读。</div>
+
+<h2>§5 从「能算」到「给上位机」：衔接第 8 站</h2>
+
+<p>本站做完，位姿 <code>x,y,θ</code> 已经在 <code>app_programRt</code> 里被算出来了，但它还只是本进程里的几个变量，上位机看不到。第 8 站（Qt 上位机）要拿到它，有两条常见路：</p>
+
+<table class="cols-3">
+<caption>表 7-8 位姿暴露的两条路</caption>
+<thead><tr><th>方式</th><th>怎么做</th><th>代价/适用</th></tr></thead>
+<tbody>
+<tr><td>① 加进对象字典（SDO 读）</td><td>在 OD 里新增一个厂商段条目（如 <code>0x2xxx</code>），把 <code>odom_x/y/th</code> 写进去，上位机用 SDO 周期读。</td><td>实现简单；SDO 请求是偶发的，实时性一般。适合「看一眼」。</td></tr>
+<tr><td>② 用 TPDO 主动上报</td><td>配置一个 TPDO 映射这几项，由同步帧（本站 <code>0x1006</code>=100ms 已在发 <code>0x080</code>）触发，周期性广播位姿。</td><td>周期确定、延迟低；要改 OD 与 TPDO 映射。适合「持续跟随」。</td></tr>
+</tbody>
+</table>
+
+<p class="note"><strong>跨线程提醒</strong>：无论走哪条路，位姿变量都会被「RT 线程写、主线程/发送侧读」。这时就要按 §2.3 的边界规则，用 <code>CO_LOCK_OD()</code>/<code>CO_UNLOCK_OD()</code> 保护读写（或让 OD 以「变量」形式统一访问）。本站内部闭环不跨线程，先不加锁是正确的；<strong>第 8 站才是真正引入锁的地方</strong>。</p>
+
+<h2>§6 小结 · 自测 · 衔接第 8 站</h2>
+
+<h3>6.1 一句话链路</h3>
+<pre>
+RPDO 帧(0x38A/0x38B) ─► CO_process_RPDO() ─► H6064_write()  ★存 posR/posL + 置旗
+                                              │(同一 RT 线程,同圈先后)
+                                              ▼
+                     app_programRt()  ★1ms 拍: Δ → dR/dL → d,dθ → 中点法 → x,y,θ
+</pre>
+
+<h3>6.2 应能回答的问题</h3>
+<ol>
+<li>为什么本站<strong>不需要</strong>加锁？—— 因为存（<code>H6064_write</code>）与算（<code>app_programRt</code>）在<strong>同一 RT 线程、同一圈内顺序执行</strong>；跨线程才需要锁。</li>
+<li>为什么<strong>只能</strong>用钩子拿位置、不能读 OD 的 <code>0x6064</code>？—— 因为现有 <code>H6064_write</code> 没有 <code>OD_writeOriginal()</code>、没设 <code>countWritten</code>，值没落进 OD 真实存储。</li>
+<li>为什么积分要放在 <code>timerEvent==true</code> 且加 <code>odom_new</code> 门控？—— 前者保证 1ms 真节拍积分一次、不被报文/门铃唤醒重复触发；后者保证 1ms 内来多帧也只积分一次。</li>
+<li>计数 → 米的换算链路？—— <code>k = 2πr/N</code>，<code>dR = k·ΔposR</code>。</li>
+<li>为什么用中点法、为什么 <code>θmid</code> 要用更新前的 <code>θ</code>、<code>θ</code> 最后才加？—— 见 §1.3、§1.3 的 note。</li>
+<li>位置回绕怎么处理？—— <code>(int32_t)((uint32_t)cur - (uint32_t)prev)</code>。</li>
+<li>改完为什么 Makefile 要加 <code>-lm</code>？—— 用了 <code>cos/sin</code>，缺数学库会链接失败。</li>
+</ol>
+
+<h3>6.3 本站在整个工程里的位置</h3>
+<ul>
+<li><strong>承接第 6 站</strong>：复用其 RT 节拍（1ms）、SCHED_FIFO 线程、收帧钩子机制，不新开线程。</li>
+<li><strong>本站产出</strong>：从站第一次输出有物理意义的量（位姿 <code>x,y,θ</code>）。</li>
+<li><strong>交给第 8 站</strong>：把位姿暴露到 OD / TPDO，Qt 上位机显示；并在跨线程处引入 <code>CO_LOCK_OD</code>。</li>
+</ol>
+
+<div class="footnote">
+<p><strong>取证位置汇总（便于对照源码）</strong></p>
+<ul>
+<li>收帧钩子：<code>CO_application.c:38</code>（<code>H6064_write</code>）；扩展结构体 <code>CO_application.c:60-69</code>；注册 <code>CO_application.c:122</code> / <code>:152</code>；标记赋值 <code>CO_application.c:119-121</code> / <code>:149-151</code>。</li>
+<li>RT 拍钩子：<code>CO_application.c:184</code>（<code>app_programRt</code>）；唯一调用点 <code>CO_main_basic.c:904</code>；RT 循环 <code>CO_main_basic.c:885-910</code>。</li>
+<li>RPDO 调用钩子：<code>CANopenNode/301/CO_PDO.c:776</code>（<code>CO_RPDO_process</code>）、<code>:859-865</code>（<code>OD_IO-&gt;write</code>）、<code>:44-50</code>（<code>OD_write_dummy</code> 示例）。</li>
+<li>扩展选择机制：<code>CANopenNode/301/CO_ODinterface.c:225-261</code>（<code>OD_getSub</code>，<code>:247-254</code> 选择 <code>extension-&gt;write</code>）；真正落存储 <code>CO_ODinterface.c:75</code>（<code>OD_writeOriginal</code>）。</li>
+<li>RT 处理顺序：<code>CO_epoll_interface.c:323-358</code>（<code>:333</code> 收帧、<code>:346</code> SYNC、<code>:350</code> RPDO、<code>:354</code> TPDO）。</li>
+<li>OD 条目：<code>application/OD.h:624</code>（<code>OD_ENTRY_H6064_positionActualValue</code>）。</li>
+<li>编译：<code>Makefile:64-66</code>（<code>LDFLAGS</code>，当前无 <code>-lm</code>）。</li>
+</ul>
+<p><strong>阅读顺序建议</strong>：先读 §1（物理，不看代码）→ 再读 §2（链路，看函数职责）→ §3（参数）→ §4（动手）→ §5/§6（衔接与自测）。上一站：第 6 站《实时性改造（上/下）》。下一站：第 8 站《Qt 上位机》。</p>
+</div>
+
+</body>
+</html>

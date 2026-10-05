@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>CANopen 心智模型补充册 —— 一条总线、一张字典、几扇门（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.6pt; line-height:1.32;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-3b th:nth-child(1),.cols-3b td:nth-child(1){width:19%}
+.cols-3b th:nth-child(2),.cols-3b td:nth-child(2){width:25%}
+.cols-3b th:nth-child(3),.cols-3b td:nth-child(3){width:56%}
+.cols-4c th:nth-child(1),.cols-4c td:nth-child(1){width:9%}
+.cols-4c th:nth-child(2),.cols-4c td:nth-child(2){width:27%}
+.cols-4c th:nth-child(3),.cols-4c td:nth-child(3){width:26%}
+.cols-4c th:nth-child(4),.cols-4c td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #2255a4; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#1a3f7a; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+figure { margin:2mm 0 3mm; page-break-inside:avoid; }
+figcaption { font-size:8.6pt; color:#444; text-align:center; margin-top:1mm; }
+a { color:#2255a4; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>CANopen 心智模型补充册 —— 一条总线、一张字典、几扇门</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode 的 CANopen <strong>从站</strong>（Linux 用户态 + SocketCAN）。</p>
+<p><strong>本篇定位：</strong>不是新站点，而是 <strong>CANopen 心智模型补充册</strong>。不逐行讲代码，只回答一个问题：<strong>CANopen 到底是什么东西？</strong> 用「四件东西 → 两扇门 → 一条收帧链」把概念钉进脑子。</p>
+<p><strong>怎么读：</strong>① 先看图建立整体；② 每讲一段链路，后面必跟一张<strong>流程图</strong>（<code>&lt;pre&gt;</code> 里的箭头图）；③ 引用代码一律给 <code>文件:行号</code> 可点击链接；④ 变量<strong>在哪出现就在那说明</strong>，不堆文末总表。</p>
+<p><strong>标记：</strong><code>★★★</code> = 本项目核心、必须会；<code>★★</code> = 重要；<code>★</code> = 知道即可。<span class="star">红框</span>=新手坑，<span class="star">灰框</span>=补充一句，<span class="star">蓝框</span>=简历话术。行号格式 <code>文件:行号</code>。</p>
+</div>
+
+<h2>1. 一页地图：CANopen 就四样东西</h2>
+
+<p>忘掉细节，先记住这张图。CANopen 这个协议，掰开揉碎就四样东西：<strong>一条总线</strong>（大家共用、广播）、<strong>一张对象字典 OD</strong>（设备所有变量都住这张表）、<strong>一组服务</strong>（SDO / PDO / NMT / SYNC / EMCY / 心跳）、<strong>一个状态机</strong>（INIT→PRE-OP→OP→STOPPED）。本工程就是把「左右电机驱动器」通过这张共享字典，接到同一个从站进程里。</p>
+
+<figure>
+<svg viewBox="0 0 760 360" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <rect x="0" y="0" width="760" height="360" fill="#fff"/>
+  <text x="24" y="30" font-size="14" font-weight="700" fill="#111">CANopen = 四样东西</text>
+
+  <!-- 总线 -->
+  <text x="24" y="66" font-size="11.5" fill="#333">① 一条总线：CAN_H / CAN_L，广播，谁都能看见所有帧</text>
+  <line x1="30" y1="92" x2="730" y2="92" stroke="#111" stroke-width="3"/>
+  <rect x="52" y="76" width="150" height="32" rx="3" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="127" y="96" font-size="10.5" text-anchor="middle" fill="#1a3f7a">上位机 Qt / 网关</text>
+  <rect x="305" y="76" width="150" height="32" rx="3" fill="#fdeeee" stroke="#b33" stroke-width="1.5"/>
+  <text x="380" y="96" font-size="10.5" font-weight="700" text-anchor="middle" fill="#a11">本从站（这个工程）</text>
+  <rect x="558" y="76" width="150" height="32" rx="3" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="633" y="96" font-size="10.5" text-anchor="middle" fill="#1a3f7a">左右电机驱动器</text>
+
+  <line x1="380" y1="108" x2="380" y2="140" stroke="#b33" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="388" y="130" font-size="9" fill="#a11">本从站内部拆开 ↓</text>
+
+  <!-- 内部四件套 -->
+  <rect x="60" y="146" width="640" height="196" rx="6" fill="#fafafa" stroke="#666" stroke-dasharray="5 3"/>
+  <text x="76" y="168" font-size="11" font-weight="700" fill="#111">本从站内部 = 一张 OD + 一组服务 + 一个状态机 + 收发器</text>
+
+  <rect x="80" y="180" width="295" height="70" rx="4" fill="#fff" stroke="#999"/>
+  <text x="92" y="200" font-size="10.5" font-weight="700" fill="#111">② 对象字典 OD（0x1000 ~ 0x6FFF）</text>
+  <text x="92" y="218" font-size="9.5" fill="#333">设备的全部变量都住这张表：状态字 0x6041、</text>
+  <text x="92" y="233" font-size="9.5" fill="#333">实际位置 0x6064、里程计 0x6FFF ……</text>
+  <text x="92" y="245" font-size="9" fill="#a11">一张表 = 一个设备。协议不认变量，只认「索引:子索引」</text>
+
+  <rect x="385" y="180" width="295" height="70" rx="4" fill="#fff" stroke="#999"/>
+  <text x="397" y="200" font-size="10.5" font-weight="700" fill="#111">③ 一组服务</text>
+  <text x="397" y="218" font-size="9.5" fill="#333">SDO（带地址、慢慢问） / PDO（不带地址、快快推）</text>
+  <text x="397" y="233" font-size="9.5" fill="#333">NMT（状态命令） / SYNC（节拍） / EMCY（报错）</text>
+  <text x="397" y="245" font-size="9.5" fill="#333">心跳（在线报告）</text>
+
+  <rect x="80" y="260" width="295" height="70" rx="4" fill="#fff" stroke="#999"/>
+  <text x="92" y="280" font-size="10.5" font-weight="700" fill="#111">④ NMT 状态机</text>
+  <text x="92" y="298" font-size="9.5" fill="#333">INIT → PRE-OP → OPERATIONAL → STOPPED</text>
+  <text x="92" y="313" font-size="9.5" fill="#333">boot-up 发 0x701；只有 OP 态 PDO 才干活</text>
+
+  <rect x="385" y="260" width="295" height="70" rx="4" fill="#fff" stroke="#999"/>
+  <text x="397" y="280" font-size="10.5" font-weight="700" fill="#111">收发器（SocketCAN）</text>
+  <text x="397" y="298" font-size="9.5" fill="#333">收：CO_CANrxMsg 按 COB-ID 匹配 → 回调</text>
+  <text x="397" y="313" font-size="9.5" fill="#333">发：往 tx 槽位塞帧，统一由驱动发出</text>
+</svg>
+<figcaption>图 1-1　CANopen 的四件东西：总线、对象字典、服务、状态机。本工程把它们装进一个 Linux 进程。</figcaption>
+</figure>
+
+<div class="note">
+<strong>一句话记忆：</strong>CANopen = 「用一条 CAN 总线，去读写一张叫做 OD 的表；读写的规矩，分成 SDO 和 PDO 两扇门」。NMT 决定这扇门开不开，SYNC 决定什么时候推，EMCY / 心跳负责出事了报一声。
+</div>
+
+<div class="cpp">
+<strong>简历话术：</strong>「熟悉 CANopen 应用层协议，理解对象字典、SDO/PDO 通信、PDO 映射与 NMT 状态机，能基于 CANopenNode 从站完成 CiA402 驱动的接入与实时数据回传。」
+</div>
+
+<h2 class="pgbreak">2. 一张对象字典（OD）：设备的一切都在这张表里</h2>
+
+<p>CANopen 报文里<strong>从来不出现变量名</strong>，只出现一对数字：<strong>(索引 index, 子索引 subindex)</strong>。这对数字指的就是 OD 表里的一行。所以理解 CANopen，一半功夫在理解「OD 是一张什么样的表」。</p>
+
+<p>本项目这张表在 [OD.c](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c) 里生成。先看几个最关键的条目——它们就是后面所有讲解的地基：</p>
+
+<table class="cols-4c">
+<caption>表 2-1　本工程必须记住的 OD 条目（索引:子索引 → 含义）</caption>
+<thead><tr><th>索引</th><th>名称（代码里）/ 用途</th><th>属性/长度</th><th>说明（谁写谁读）</th></tr></thead>
+<tbody>
+<tr><td><code>0x1005</code></td><td>SYNC 的 COB-ID</td><td>u32</td><td>默认 <code>0x00000080</code>（[OD.c:25](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L25)）；本工程在 startup 里被改成 <code>0x40000080</code>，bit30=1 表示<strong>本节点是 SYNC 生产者（自己拍节拍）</strong>。</td></tr>
+<tr><td><code>0x1006</code></td><td>SYNC 周期</td><td>u32</td><td>默认 0；startup 里设成 <code>100000</code> μs = 100ms（[CO_application.c:107](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L107)）。</td></tr>
+<tr><td><code>0x1014</code></td><td>EMCY 的 COB-ID</td><td>u32</td><td><code>0x80</code>（[OD.c:29](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L29)）。报错帧 COB-ID = <code>0x80 + nodeId</code>。</td></tr>
+<tr><td><code>0x1017</code></td><td>心跳生产周期</td><td>u16</td><td>默认 <code>0</code>（[OD.c:33](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L33)）= 不主动发心跳。所以抓包里只在状态变化时看到 boot-up <code>0x701</code>。</td></tr>
+<tr><td><code>0x1400:01</code></td><td>RPDO1 通信参数（COB-ID）</td><td>u32</td><td>右电机收帧 ID，startup 里设为 <code>0x0000038A</code>（[CO_application.c:122](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L122)）。</td></tr>
+<tr><td><code>0x1600:xx</code></td><td>RPDO1 映射参数</td><td>u32×2</td><td>规定 <code>0x38A</code> 这帧里装哪两个变量：<code>0x6041</code>+<code>0x6064</code>（[CO_application.c:127-137](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L127-L137)）。</td></tr>
+<tr><td><code>0x6041</code></td><td>状态字 statusword</td><td>u16</td><td>被映射进 RPDO，主站一发帧就回填它。</td></tr>
+<tr><td><code>0x6064</code></td><td>实际位置 positionActualValue</td><td>i32 / 4B</td><td>见下方解剖；本工程把它当「<strong>收进来的电机位置</strong>」用（[OD.c:1716](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L1716)）。</td></tr>
+<tr><td><code>0x6FFF</code></td><td>自定义里程计数组（x/y/θ）</td><td>float32×3</td><td>本工程自己加的条目（[OD.c:281](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L281)），给上位机用 SDO 读。</td></tr>
+</tbody>
+</table>
+
+<h3>2.1　一行 OD 的解剖（以 0x6064 为例）</h3>
+
+<pre>文件：application/OD.c
+:1716    .o_6064_positionActualValue = {
+:1717        .dataOrig   = NULL,                      /* 数据住哪：NULL = 由 RPDO 回填 */
+:1718        .attribute  = ODA_SDO_R | ODA_TRPDO | ODA_MB,
+:1719        .dataLength = 4                          /* 4 字节 = 32bit */
+:1720    },
+</pre>
+
+<p>三个字段各管一件事，就地说明：</p>
+
+<table class="cols-3b">
+<caption>表 2-2　OD 表项三个字段</caption>
+<thead><tr><th>字段</th><th>取值</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>dataOrig</code></td><td><code>NULL</code></td><td>指向真正存数据的内存。<strong><code>NULL</code> 是一个信号</strong>：这块数据不在本地 RAM 里初始化，而是等 RPDO 把它「搬」进来（[CO_PDO.c:810](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L810) 起「copy RPDO into OD variables according to mappings」）。</td></tr>
+<tr><td><code>attribute</code></td><td><code>ODA_SDO_R | ODA_TRPDO | ODA_MB</code></td><td>「谁能动它」的权限位，见下表 2-3。</td></tr>
+<tr><td><code>dataLength</code></td><td><code>4</code></td><td>4 字节。这个长度<strong>直接决定 PDO 帧的 DLC</strong>（见 §4），不是随便写的。</td></tr>
+</tbody>
+</table>
+
+<table class="cols-3b">
+<caption>表 2-3　attribute 权限位解码（[CO_ODinterface.h:121-130](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_ODinterface.h#L121-L130)）</caption>
+<thead><tr><th>位</th><th>值</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>ODA_SDO_R</code></td><td><code>0x01</code></td><td>SDO 服务可以<strong>读</strong>这个变量（主站用 SDO 问得到）。</td></tr>
+<tr><td><code>ODA_SDO_RW</code></td><td><code>0x03</code></td><td>SDO 可以<strong>读也可以写</strong>（如控制字 <code>0x6040</code>、模式 <code>0x6060</code>）。</td></tr>
+<tr><td><code>ODA_RPDO</code></td><td><code>0x08</code></td><td>可以<strong>被映射进 RPDO</strong>（本节点收，写进来）。</td></tr>
+<tr><td><code>ODA_TRPDO</code></td><td><code>0x0C</code></td><td><strong>等于 0x08|0x04</strong>：可映射进 TPDO <strong>或 RPDO</strong>。所以 <code>0x6064</code> 标了 <code>ODA_TRPDO</code> 照样能被 RPDO1 映射——不矛盾。</td></tr>
+<tr><td><code>ODA_MB</code></td><td><code>0x40</code></td><td>多字节（16~64bit）。带这个位，跨字节序时要按字节翻转（[CO_PDO.c:846](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L846) 的 <code>CO_BIG_ENDIAN</code> 分支）。</td></tr>
+</tbody>
+</table>
+
+<h3>2.2　两个「改 OD」的函数：一个赋值，一个挂钩子</h3>
+
+<p>startup 阶段（[CO_application.c:97](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L97)）用两个函数把上面这张表配好。按 HANDOFF 的规矩，以<strong>函数为单位</strong>说清：它干什么、被谁调、调了谁。</p>
+
+<table class="cols-3b">
+<caption>表 2-4　配置阶段两个函数</caption>
+<thead><tr><th>函数</th><th>被谁调用 / 调用了谁</th><th>干什么（变量就地说明）</th></tr></thead>
+<tbody>
+<tr><td><code>OD_set_u32()</code><br><code>OD_set_u8()</code></td><td>被 <code>app_programStart()</code> 调用（[CO_application.c:107](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L107) 起一整串）；内部会走 OD 写接口。</td><td>按 <code>(index, subindex)</code> 把值写进 OD。例：<code>OD_set_u32(OD_ENTRY_H1006..., 0, 100000, true)</code> 第 3 个参数 <code>100000</code> = SYNC 周期（μs）；最后那个 <code>true</code> = 同时写进持久存储副本。</td></tr>
+<tr><td><code>OD_extension_init()</code></td><td>被 <code>app_programStart()</code> 调用（[CO_application.c:146](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L146)、[:176](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L176)）。</td><td>给某个 OD 表项<strong>挂上读写钩子</strong>。本工程给 <code>0x6064</code> 挂了 <code>H6064_extentionR</code>（<code>.write = H6064_write</code>）。挂完之后，<strong>任何人往 0x6064 写，都会先转进 <code>H6064_write()</code></strong>（[CO_application.c:64](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L64)）。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>钩子用到的 <code>object</code> 是什么：</strong><code>H6064_extentionR.object</code> 里塞的是一个 <code>uint16_t</code>，值是 <code>0x038A</code>（右）/ <code>0x038B</code>（左）（[CO_application.c:144-145](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L144-L145)）。它跟 <code>0x6064</code> 表项本身无关，纯粹是「<strong>把发送方 COB-ID 捎给钩子</strong>」，让钩子知道这帧是哪个电机发来的。
+</div>
+
+<h3>2.3　值是怎么进 OD 的：两条来源，一个出口</h3>
+
+<pre>谁把值写进 OD？
+   ┌── SDO（主站慢慢问，带 index:subindex）──┐
+   │                                          ├──▶ OD 表项 (index:subindex)
+   └── PDO（主站快快推，不带地址、靠映射）──┘            │
+                                                        ├─ 普通表项：直接落 RAM 变量
+                                                        └─ 挂过钩子：转调 .write()
+                                                               └─ 本工程 0x6064 ─▶ H6064_write()
+
+线程分工：SDO/网关在主线程；PDO 在 rt 线程。两边都写同一张 OD_RAM，故用 CO_LOCK_OD 保护。
+</pre>
+
+<h2 class="pgbreak">3. 两扇门：SDO 与 PDO</h2>
+
+<p>OD 是仓库，<strong>进出仓库只有两扇门</strong>。把这两扇门的差别想明白，CANopen 就理解了一大半。</p>
+
+<table>
+<caption>表 3-1　SDO vs PDO</caption>
+<thead><tr><th style="width:16%">维度</th><th style="width:42%">SDO（服务数据对象）</th><th style="width:42%">PDO（过程数据对象）</th></tr></thead>
+<tbody>
+<tr><td>带不带地址</td><td><strong>带</strong>：每帧都写明 <code>index:subindex</code>，想去哪去哪。</td><td><strong>不带</strong>：地址是「预先配好」的映射（<code>0x1600</code>），每帧按固定布局装数据。</td></tr>
+<tr><td>要不要握手</td><td><strong>要</strong>：一问一答（请求帧 + 响应帧），可靠但慢。</td><td><strong>不要</strong>：主站单方向推，从站收到即用，快了不保证。</td></tr>
+<tr><td>长度</td><td>任意长度（可分块传大文件）。</td><td><strong>≤ 8 字节</strong>（一帧 CAN 的上限），固定布局。</td></tr>
+<tr><td>COB-ID</td><td><code>0x600+node</code>(收) / <code>0x580+node</code>(发)。</td><td>映射里指定，如本项目 <code>0x38A</code>/<code>0x38B</code>。</td></tr>
+<tr><td>典型用途</td><td>配置参数、读诊断、升级固件、读里程计 <code>0x6FFF</code>。</td><td><strong>周期性实时数据</strong>：状态字、位置、速度。</td></tr>
+<tr><td>本工程</td><td>Qt 上位机用 SDO 读 <code>0x6FFF</code> 里的 x/y/θ。</td><td>主站用 <code>0x38A</code>/<code>0x38B</code> 把两轮位置推进来。</td></tr>
+</tbody>
+</table>
+
+<pre>两扇门的心智图
+
+  SDO（带地址、要握手、慢但稳）          PDO（不带地址、不握手、快）
+  ┌──────────────────────────┐         ┌──────────────────────────┐
+  │ 请求: write 0x6064 = 1000 │         │ 帧 0x38A: [6041][6064]    │
+  │         ▲                 │         │            ▲             │
+  │         └── 响应: OK      │         │     布局写死在 0x1600 映射 │
+  └──────────────────────────┘         └──────────────────────────┘
+       想去哪去哪、可读可写              只能在配好的映射里、单向推
+</pre>
+
+<div class="cpp">
+<strong>一句话面试答法：</strong>「SDO 像<strong>快递寄件</strong>——每次填地址单、有签收，慢但准；PDO 像<strong>传送带</strong>——事先排好货位，东西一放就走，快但只走固定路线。我项目里实时数据（状态字、位置）走 PDO，配置和里程计回读走 SDO。」
+</div>
+
+<h2 class="pgbreak">4. PDO 映射：8 字节里怎么塞、DLC 怎么算</h2>
+
+<p>PDO 帧<strong>不带地址</strong>，那从站怎么知道「收到的 6 个字节哪几个是状态字、哪几个是位置」？答案：<strong>靠事先写好的映射</strong>（OD 里的 <code>0x1600</code>/<code>0x1601</code>）。映射表里每一个数，都编码了「取哪个变量、占几个 bit」。</p>
+
+<h3>4.1　一个映射值 = 索引 + 子索引 + 位长</h3>
+
+<p>CANopenNode 解析映射值的代码在 [CO_PDO.c:93-96](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L93-L96)，就四行，值得背下来：</p>
+
+<pre>文件：CANopenNode/301/CO_PDO.c
+:93    uint16_t index            = (uint16_t)(map >> 16);   /* 高16位 = 索引 */
+:94    uint8_t  subIndex         = (uint8_t)(map >> 8);      /* 次8位  = 子索引 */
+:95    uint8_t  mappedLengthBits = (uint8_t) map;            /* 低8位  = 位长(bit) */
+:96    uint8_t  mappedLength     = mappedLengthBits >> 3;    /* 位长/8 = 字节数 */
+</pre>
+
+<p>于是本工程 startup 里写的两个映射值（[CO_application.c:132](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L132)、[:137](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L137)）就能逐位拆开：</p>
+
+<table class="cols-3b">
+<caption>表 4-1　右电机 RPDO1（0x1600）两个映射值的含义</caption>
+<thead><tr><th>映射值</th><th>拆解</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>0x60410010</code></td><td><code>index=0x6041</code> / <code>sub=0x00</code> / <code>bits=0x10</code></td><td>取 <strong>0x6041 状态字</strong>，占 16 bit = <strong>2 字节</strong>。</td></tr>
+<tr><td><code>0x60640020</code></td><td><code>index=0x6064</code> / <code>sub=0x00</code> / <code>bits=0x20</code></td><td>取 <strong>0x6064 实际位置</strong>，占 32 bit = <strong>4 字节</strong>。</td></tr>
+<tr><td colspan="2"><strong>合计</strong></td><td>2 + 4 = <strong>6 字节</strong> → 这个 RPDO 的 <code>dataLength</code> 就是 6，<strong>所以帧的 DLC = 6</strong>。长度是算出来的，不是随手定的。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>长度在哪算出来的：</strong><code>CO_RPDO_init()</code>（[CO_PDO.c:626](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L626)）逐条解析映射，把每条 <code>stream.dataOffset</code>（暂存该条的字节数）累加进 <code>pdoDataLength</code>，最后写回 <code>PDO-&gt;dataLength</code>（[CO_PDO.c:207-218](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L207-L218)）。收帧时 <code>DLC &gt;= PDO-&gt;dataLength</code> 才算合法（[CO_PDO.c:472](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L472)）。
+</div>
+
+<h3>4.2　0x38A 这一帧的字节布局</h3>
+
+<pre>帧 COB-ID = 0x38A（右电机），DLC = 6，方向：主站 ──▶ 本从站
+
+  字节:  B0     B1      B2     B3     B4     B5
+        ┌──────┬──────┬──────┬──────┬──────┬──────┐
+        │     0x6041 状态字  │       0x6064 实际位置     │
+        │      (16 bit, 小端)  │       (32 bit, 小端)      │
+        └──────┴──────┴──────┴──────┴──────┴──────┘
+          第 1 条映射(2B)      第 2 条映射(4B)
+          0x60410010           0x60640020
+
+  例：位置 = 1000 (0x000003E8) → 小端字节序写进来是  E8 03 00 00
+      状态字 = 0x0237          → 小端字节序写进来是  37 02
+</pre>
+
+<p>所以「PDO 快」不是玄学：地址不用每次传，布局写死在映射里，收到 6 个字节直接按位置切开、按小端数值还原，然后写进 OD。</p>
+
+<div class="cpp">
+<strong>简历话术：</strong>「我能根据 0x1600 映射值手算 PDO 的 payload 布局和 DLC：比如 0x60410010 + 0x60640020 = 2+4 = 6 字节，帧里前 2 字节是状态字、后 4 字节是位置，多字节按小端还原。」
+</div>
+
+<h2 class="pgbreak">5. 收帧 → 落地：一条 RPDO 的完整调用链（函数为单位）</h2>
+
+<p>这是本篇最值钱的一段。一帧 CAN 从网卡到「变成里程计里的一个数」，中间经过哪些函数，HANDOFF 要求<strong>以函数为单位、说清被谁调、又调了谁</strong>，并配流程图。先看全景图：</p>
+
+<pre>一帧 CAN 从网卡到落地（默认多线程构建，CAN 套接字挂在 RT epoll 上）
+
+  rt_thread()                         CO_main_basic.c:884   ← RT 线程主循环
+   └─ CO_epoll_wait(&epRT)            CO_main_basic.c:889   ← 等事件(1ms timerfd / 套接字可读)
+        │
+   CO_epoll_processRT(&epRT, CO, true)                    CO_epoll_interface.c:324
+        ├─(收到帧) CO_CANrxFromEpoll()                        CO_driver.c:927
+        │            ├─ CO_CANread()   recvmsg()              CO_driver.c:818 / :954
+        │            └─ CO_CANrxMsg()  按 COB-ID 匹配 rxArray  CO_driver.c:880 / :971
+        │                  └─▶ 回调 = CO_PDO_receive()         CO_PDO.c:464
+        │                        └─ memcpy 到缓冲 + 置 CANrxNew 旗   CO_PDO.c:492-493
+        │
+        └─(到 1ms 节拍) CO_process_RPDO()                      CANopen.c:1444
+                          └─ CO_RPDO_process()                 CO_PDO.c:776
+                                └─ 按映射写 OD: OD_IO->write()  CO_PDO.c:863
+                                      └─▶ 钩子 = H6064_write()  CO_application.c:64
+                                            └─ 存 odom_posR_raw / odom_posL_raw，置 odom_new
+
+  回到 rt_thread() 同圈尾部：
+   └─ app_programRt()                                        CO_main_basic.c:903
+        └─ 读 odom_new → 里程计积分 → 写 OD_RAM.x6FFF_agvOdometry  CO_application.c:265-303
+</pre>
+
+<p>关键点：<strong>「收」和「算」都在同一个 RT 线程、同一圈里先后发生</strong>。所以 <code>odom_posR_raw</code>、<code>odom_new</code> 这些共享变量不需要加锁——没有第二个线程碰它们。</p>
+
+<h3>5.1　链上每个函数：干什么、被谁调、调了谁</h3>
+
+<table class="cols-3b">
+<caption>表 5-1　一条 RPDO 落地链上的函数（按调用顺序）</caption>
+<thead><tr><th>函数</th><th>被谁调用 / 调用了谁</th><th>干什么（变量就地说明）</th></tr></thead>
+<tbody>
+<tr><td><code>rt_thread()</code><br>[CO_main_basic.c:884](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L884)</td><td>由 <code>pthread_create()</code> 启动（[CO_main_basic.c:724](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L724)）；循环里调 <code>CO_epoll_wait()</code>、<code>CO_epoll_processRT()</code>、<code>app_programRt()</code>。</td><td>RT 线程主体。<code>SCHED_FIFO</code> 高优先级。<strong>注意：Makefile 里 <code>CO_SINGLE_THREAD</code> 是注释掉的</strong>（[Makefile:54](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L54)），所以真正跑的是这个多线程路径。</td></tr>
+<tr><td><code>CO_epoll_processRT()</code><br>[CO_epoll_interface.c:324](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L324)</td><td>被 <code>rt_thread()</code> 调用（[:890](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L890)）；内部调 <code>CO_CANrxFromEpoll()</code> 与 <code>CO_process_RPDO()</code>。</td><td>先收帧（<code>ep-&gt;epoll_new</code> 时），再在 <code>ep-&gt;timerEvent</code>（1ms 到点）时处理 RPDO。参数 <code>realtime=true</code> 表示这是实时线程。</td></tr>
+<tr><td><code>CO_CANrxFromEpoll()</code><br>[CO_driver.c:927](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L927)</td><td>被 <code>CO_epoll_processRT()</code> 调用（[:334](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L334)）；内部调 <code>CO_CANread()</code>、<code>CO_CANrxMsg()</code>。</td><td>拿 epoll 事件认领是哪个 socket（<code>ev-&gt;data.fd</code>），<code>EPOLLIN</code> 就往下读。<code>CANmodule-&gt;CANnormal</code> 为真才处理——这就是「开闸」的意义。</td></tr>
+<tr><td><code>CO_CANread()</code><br>[CO_driver.c:818](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L818)</td><td>被 <code>CO_CANrxFromEpoll()</code> 调用（[:954](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L954)）。</td><td>一次 <code>recvmsg()</code> 把内核里的帧取到 <code>msg</code>。<code>n != CAN_MTU</code> 判为错误（[:844-847](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L844-L847)）。</td></tr>
+<tr><td><code>CO_CANrxMsg()</code><br>[CO_driver.c:880](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L880)</td><td>被 <code>CO_CANrxFromEpoll()</code> 调用（[:971](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L971)）；<strong>调回调 <code>CANrx_callback</code></strong>。</td><td>在 <code>CANmodule-&gt;rxArray[]</code> 里找匹配项：<code>((ident ^ rcvMsgObj-&gt;ident) &amp; mask) == 0</code>（[:899-905](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L899-L905)），命中就调该槽位的回调（[:908-909](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L908-L909)）。<strong>这是「按 COB-ID 分发」的总闸</strong>。</td></tr>
+<tr><td><code>CO_PDO_receive()</code><br>[CO_PDO.c:464](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L464)</td><td>就是上面注册进 <code>rxArray</code> 的回调（由 <code>CO_RPDO_init()</code> 挂上）；被 <code>CO_CANrxMsg()</code> 调用。</td><td><strong>只搬运不落地</strong>：校验 <code>DLC &gt;= PDO-&gt;dataLength</code>，把数据 <code>memcpy</code> 进双缓冲 <code>CANrxData[bufNo]</code>，置 <code>CANrxNew</code> 旗（[:492-493](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L492-L493)）。参数 <code>msg</code> 是驱动拷过来的原始帧。</td></tr>
+<tr><td><code>CO_process_RPDO()</code><br>[CANopen.c:1444](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1444)</td><td>被 <code>CO_epoll_processRT()</code> 调用（[:351](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L351)）；内部遍历调 <code>CO_RPDO_process()</code>。</td><td>取 <code>NMTisOperational</code>（当前是否 OP 态，[:1454-1455](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1454-L1455)），逐路调 <code>CO_RPDO_process()</code>。</td></tr>
+<tr><td><code>CO_RPDO_process()</code><br>[CO_PDO.c:776](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L776)</td><td>被 <code>CO_process_RPDO()</code> 调用；内部调 <code>OD_IO-&gt;write()</code>（即 OD 写入口）。</td><td><strong>门槛</strong>：<code>PDO-&gt;valid &amp;&amp; NMTisOperational &amp;&amp; (syncWas || !synchronous)</code>（[:787-790](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L787-L790)）——不在 OP 态就不处理。之后按映射逐条 <code>OD_IO-&gt;write()</code>（[:863](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L863)）。</td></tr>
+<tr><td><code>H6064_write()</code><br>[CO_application.c:64](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L64)</td><td>被 OD 写路径经 extension 钩子调用；<strong>它不调用别的业务函数</strong>，只存值置旗。</td><td>用 <code>stream-&gt;object</code>（= 发送方 COB-ID <code>0x038A</code>/<code>0x038B</code>）区分左右轮：写 <code>odom_posR_raw</code> / <code>odom_posL_raw</code>，并置 <code>odom_new = true</code>（[:74-78](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L74-L78)）。</td></tr>
+<tr><td><code>app_programRt()</code><br>[CO_application.c:209](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L209)</td><td>被 <code>rt_thread()</code> 调用（[:903](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L903)）。</td><td>先甩掉非节拍唤醒（<code>!timerEvent</code> 直接 return，[:232-235](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L232-L235)）；<code>if (!odom_new) return</code>（[:265](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L265)）保证一拍只积分一次；算完写 <code>OD_RAM.x6FFF_agvOdometry[0..2]</code>（[:300-302](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L300-L302)）。</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>坑：</strong>「收到帧」和「写进 OD」<strong>不是同一时刻、也不是同一个函数</strong>。收帧是 <code>CO_PDO_receive()</code> 只做<strong>搬运 + 置旗</strong>（在 epoll 事件到来那一刻）；真正按映射写 OD 是稍后在 1ms 节拍里的 <code>CO_RPDO_process()</code>。中间隔着一次「旗子」。这解释了为什么 RPDO 数据会晚一拍才生效。
+</div>
+
+<div class="warn">
+<strong>坑（本项目特有）：</strong><code>0x1600</code> 用的是 <code>0x6064 实际位置</code> 这个标准 DS402 条目，但方向反了——正常 DS402 里 0x6064 是<strong>驱动器发给主站</strong>（TPDO），本工程却让主站<strong>发进来</strong>（RPDO）。所以看抓包别按教科书套。
+</div>
+
+<h2 class="pgbreak">6　从进程启动到报文进出：整个工程的运行链路</h2>
+
+<p>前面几节都在看局部。这一节把镜头拉到最远：<strong>进程怎么起来、开了几个线程、套接字挂在哪、报文从哪进从哪出。</strong>先看全景图，再逐个函数点名。</p>
+
+<pre>文件：CO_main_basic.c（main） + CO_epoll_interface.c + CANopen.c
+──────────────────────────────────────────────────────────────
+main()
+ ├─ CO_epoll_create(&amp;epMain, "CO_main", ...)      [CO_main_basic.c:548]  主线程 epoll
+ ├─ CO_epoll_create(&amp;epRT,   "CO_rt",   ...)      [CO_main_basic.c:555]  RT 线程 epoll
+ ├─ CANptr.epoll_fd = epRT.epoll_fd              [CO_main_basic.c:561]  ★CAN 套接字挂在 RT epoll
+ ├─ CO_CANinit(...)                               建 socket、绑 can0
+ ├─ CO_CANopenInit(...)                           建 OD/PDO/SDO/NMT，登记 rxArray
+ ├─ CO_CANsetNormalMode()                         [CO_main_basic.c:786]  ★开闸：CANnormal=1
+ ├─ pthread_create(&amp;rt_thread_id, ...)            [CO_main_basic.c:724]  拉起 RT 线程
+ │
+ ├─ RT 线程 rt_thread()                           [CO_main_basic.c:884]
+ │   └─ while(1):
+ │       ├─ CO_epoll_wait(&amp;epRT, ...)             [CO_main_basic.c:889]  ← 收帧/1ms 节拍都在这醒
+ │       ├─ CO_epoll_processRT(&amp;epRT, CO, true)   [CO_main_basic.c:890]
+ │       │    ├─ CO_CANrxFromEpoll()  →  读帧 → CO_CANrxMsg() → 回调 CO_PDO_receive()   (见 §5)
+ │       │    └─ if (ep-&gt;timerEvent) CO_process_RPDO()   [CO_epoll_interface.c:351]
+ │       └─ app_programRt(CO, ...)                [CO_main_basic.c:903]  里程计积分（见 §5）
+ │
+ └─ 主线程 while(1):                              100ms 节拍
+     ├─ CO_epoll_wait(&amp;epMain, ...)               [CO_main_basic.c:796]
+     ├─ CO_epoll_processMain(&amp;epMain, ...)        [CO_main_basic.c:804]
+     │    └─ CO_process()                          [CO_epoll_interface.c:311 → CANopen.c:1293]
+     │         ├─ CO_CANmodule_process()           处理发送队列          [CANopen.c:1305]
+     │         ├─ CO_NMT_process()                 心跳/boot-up/状态迁移 [CANopen.c:1363]
+     │         └─ (SDO / EMCY / 时间戳 / 网关 按需)
+     └─ app_programAsync()                         [CO_main_basic.c:810]  异步任务（本工程为空）
+──────────────────────────────────────────────────────────────
+两条线程，两个 epoll：主线程管「慢的、协议层的」，RT 线程管「快的、实时收发的」。</pre>
+
+<table class="cols-3b">
+<caption>表 6-1　运行链路上的函数（按职责分组）</caption>
+<thead><tr><th>函数</th><th>被谁调用 / 调用了谁</th><th>干什么（变量就地说明）</th></tr></thead>
+<tbody>
+<tr><td><code>CO_epoll_create()</code><br>[CO_main_basic.c:548](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L548)</td><td>被 <code>main()</code> 调用两次：<code>epMain</code>（[:548](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L548)）与 <code>epRT</code>（[:555](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L555)）。</td><td>各建一个 epoll 实例，外加一个 <code>timerfd</code>。参数是实例名与周期。<strong>两张表</strong>决定后面两条线程各管一摊。</td></tr>
+<tr><td><code>CO_CANsetNormalMode()</code><br>[CO_main_basic.c:786](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L786)</td><td>被 <code>main()</code> 调用（初始化末尾）。</td><td>置 <code>CANmodule-&gt;CANnormal = true</code>。<strong>这是总闸</strong>：在此之前收到的帧会被 <code>CO_CANrxFromEpoll()</code> 直接丢弃（它先判 <code>CANnormal</code>）。</td></tr>
+<tr><td><code>pthread_create()</code> → <code>rt_thread()</code><br>[CO_main_basic.c:724](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L724) / [:884](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L884)</td><td><code>main()</code> 起线程；<code>rt_thread()</code> 里循环调 <code>CO_epoll_wait</code>/<code>CO_epoll_processRT</code>/<code>app_programRt</code>。</td><td>RT 线程主体，<code>SCHED_FIFO</code> 实时优先级。TMR 周期 = <code>TMR_THREAD_INTERVAL_US</code> = 1000µs（[:63](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L63)）。</td></tr>
+<tr><td><code>CO_epoll_processMain()</code><br>[CO_epoll_interface.c:301](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L301)</td><td>被主线程 <code>while(1)</code> 调用（[:804](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L804)）；内部调 <code>CO_process()</code>。</td><td>主线程 100ms 节拍处理：<code>MAIN_THREAD_INTERVAL_US</code> = 100000µs（[:60](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L60)）。</td></tr>
+<tr><td><code>CO_process()</code><br>[CANopen.c:1293](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1293)</td><td>被 <code>CO_epoll_processMain()</code> 调用（[:311](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L311)）；内部调 <code>CO_CANmodule_process()</code>、<code>CO_NMT_process()</code> 等。</td><td>协议层「总调度」：把发不出去的帧排空（[:1305](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1305)）、跑 NMT/心跳（[:1363](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1363)）。</td></tr>
+<tr><td><code>CO_CANmodule_process()</code><br>[CO_driver.c:777](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L777)</td><td>被 <code>CO_process()</code> 调用（[:1305](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1305)）。</td><td>扫 <code>CANmodule-&gt;txArray[]</code>，把 buffered 待发的帧用 <code>CO_CANsend()</code> 真正写进 socket。<strong>发帧出口</strong>。</td></tr>
+<tr><td><code>CO_NMT_process()</code><br>[CO_NMT_Heartbeat.c:221](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L221)</td><td>被 <code>CO_process()</code> 调用（[:1363](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1363)）。</td><td>发心跳/boot-up、执行 NMT 状态迁移（详见 §7）。</td></tr>
+<tr><td><code>app_programAsync()</code><br>[CO_application.c:203](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L203)</td><td>被主线程 <code>while(1)</code> 调用（[:810](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L810)）。</td><td>本工程里是<strong>空函数</strong>——异步任务没写东西，属预留位。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>一句话记忆：</strong>主线程「慢（100ms）」，管 NMT/心跳/发帧这些不着急的；RT 线程「快（1ms）」，管收帧、落地 RPDO、里程计积分这些实时的。两条线程通过 OD 这块「共享小黑板」交换数据——这也解释了为什么 OD 读写必须小心并发。
+</div>
+
+<div class="cpp">
+<strong>简历话术：</strong>「本工程为 CANopen 从站，采用双线程 epoll 架构：主线程以 100ms 周期运行 NMT/心跳与协议层调度，实时线程以 1ms 周期运行 CAN 收发与业务积分，CAN 套接字注册在实时 epoll 上以保证帧处理优先级。」
+</div>
+
+<h2 class="pgbreak">7　状态机一瞥：为什么 PDO 只在 Operational 干活</h2>
+
+<p>§5 提到 <code>CO_RPDO_process()</code> 有句门槛 <code>NMTisOperational</code>（[CO_PDO.c:787-790](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L787-L790)）。这句门槛背后就是 CANopen 的<strong>网络管理状态机（NMT）</strong>。它是本站「现在愿不愿意干活」的总开关。</p>
+
+<pre>文件：CANopenNode/301/CO_NMT_Heartbeat.c
+──────────────────────────────────────────────────────────────
+                      上电
+                       │
+                       ▼
+                ┌─────────────┐
+                │  INITIALISING│  本站自己初始化
+                └──────┬──────┘
+                       │ 初始化完，发 boot-up 帧  0x701 [1] 00
+                       ▼
+                ┌─────────────┐
+        SDO 可以│ PRE-OPERATIONAL │  PDO 不许干（RPDO/TPDO 都关）
+        PDO 不行└──────┬──────┘
+                       │ 主站发 NMT「Start」命令（COB-ID 0x000，数据 01）
+                       ▼
+                ┌─────────────┐
+                │  OPERATIONAL │  ★PDO 才被允许收发（NMTisOperational=true）
+                └──────┬──────┘
+                       │ 主站发 NMT「Stop」（数据 02）/「Pre-op」（数据 80）
+                       ▼
+                ┌─────────────┐
+                │   STOPPED    │  只留心跳，PDO/SDO 都停
+                └─────────────┘
+──────────────────────────────────────────────────────────────
+四级：INITIALISING → PRE-OP → OPERATIONAL →（STOPPED 可来回切）</pre>
+
+<table class="cols-3b">
+<caption>表 7-1　状态机相关函数与状态位</caption>
+<thead><tr><th>函数 / 变量</th><th>被谁调用 / 调用了谁</th><th>干什么（变量就地说明）</th></tr></thead>
+<tbody>
+<tr><td><code>CO_NMT_process()</code><br>[CO_NMT_Heartbeat.c:221](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L221)</td><td>被 <code>CO_process()</code> 调用（[:1363](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1363)）。</td><td>按周期发心跳（<code>0x700+nodeId</code>）、上电发 boot-up，并执行收到的 NMT 命令引发的状态迁移。</td></tr>
+<tr><td><code>CO_NMT_getInternalState()</code> → <code>NMTisOperational</code><br>[CANopen.c:1454](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1454)</td><td>被 <code>CO_process_RPDO()</code> 调用。</td><td>读当前 NMT 状态，等于 <code>CO_NMT_OPERATIONAL</code> 时 <code>NMTisOperational = true</code>，否则 false。这个 bool 直接决定 §5 的 RPDO 处理是否放行。</td></tr>
+<tr><td><code>od_1005</code> / <code>od_1006</code> / <code>od_1017</code>（OD 起点）</td><td>由 OD 默认值给出，被 <code>CO_NMT_process()</code> 读取使用。</td><td><code>0x1005</code> = SYNC COB-ID（默认 <code>0x80</code>）、<code>0x1006</code> = 同步周期（本工程 0）、<code>0x1017</code> = 心跳周期（本工程 0，即不上报心跳）。见 [OD.c:23-33](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L23-L33)。</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>坑：</strong>抓包看到每 100ms 一个 <code>080 [0]</code>（SYNC 帧，长度 0），但本工程 <code>0x1006</code> 同步周期为 0——说明这条 SYNC 是<strong>主站发出来的</strong>（本站作为从站照收），不是本站发的。<strong>方向别搞反</strong>。
+</div>
+
+<div class="note">
+<strong>一句话记忆：</strong>为什么 PDO 要等 OP 态？因为 PDO 是「实时数据流」，主站必须先在 PRE-OP 用 SDO 把两边的映射、周期都配置对齐，再一声令下进 OP，双方才开始对滚数据。SDO 是「配置期」的，PDO 是「运行期」的。
+</div>
+
+<div class="footnote">
+本册为《CANopen 心智模型补充册》，与主手册及 S1~S8 分册配套阅读。<br>
+所有代码引用均为可点击的 <code>文件:行号</code> 链接；图号、表号在本册内独立编号。<br>
+建议阅读顺序：§1 建立地图 → §2 认识 OD → §3 分清两扇门 → §4 看懂 PDO 字节 → §5 跟一条收帧链 → §6 拉远看全局 → §7 理解状态机。
+</div>
+</body>
+</html>

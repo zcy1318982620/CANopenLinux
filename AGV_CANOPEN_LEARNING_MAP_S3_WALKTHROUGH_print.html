@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 3 站 · 对象字典 OD 与 SDO（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:17%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:23%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:22%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.cols-5 th:nth-child(1),.cols-5 td:nth-child(1){width:18%}
+.cols-5 th:nth-child(2),.cols-5 td:nth-child(2){width:22%}
+.cols-5 th:nth-child(3),.cols-5 td:nth-child(3){width:20%}
+.cols-5 th:nth-child(4),.cols-5 td:nth-child(4){width:10%}
+.cols-5 th:nth-child(5),.cols-5 td:nth-child(5){width:30%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #2255a4; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#1a3f7a; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 3 站 · 对象字典 OD 与 SDO —— 参数存在哪、怎么读写</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode V4 的 CANopen 从站（Linux 用户态 + SocketCAN，进程名 <code>canopend</code>）。双对象字典：<code>OD</code>（右电机）/ <code>OD_2nd</code>（左电机）。</p>
+<p><strong>本篇定位：</strong>第 3 站补充册。讲两件事——<strong>① 对象字典 OD 是什么、长什么样；② SDO 这条「点对点参数通道」是怎么按索引去读写它的</strong>。</p>
+<p><strong>怎么读：</strong>本册<strong>以模块为单位</strong>，每个模块只回答：<span class="star">干什么 → 传什么参数（参数含义）→ 返回什么 → 被谁调用 → 它调用了谁</span>。变量<strong>在出现的地方就地说明</strong>，不做集中总表。<strong>不做字节级拆帧</strong>，重点看流程图和各模块怎么接起来。</p>
+<p><strong>标记：</strong><span class="star">★★★</span> 必会 / <span class="star">★★</span> 重要 / <span class="star">★</span> 知道即可；灰框=补充，红框=坑，蓝框=简历话术。行号格式 <code>文件:行号</code>。</p>
+</div>
+
+<h2>0. 一页地图：第 3 站只有两条链</h2>
+
+<p>先给一句话结论：<strong>OD 是「节点身上有什么数据、放在哪、能不能读写」；SDO 是「网络上别人怎么按索引来读写这些数据」</strong>。前者是静态的仓库，后者是动态的搬运工。</p>
+
+<pre>第 3 站 全部内容
+
+链 A  对象字典 OD —— 节点自己身上的「数据总目录」（静态，开机就存在）
+   索引       目录表 ODList[]        描述符 ODObjs          数据区(变量)
+  0x6064  ──▶ [ 索引 0x6064 那一行 ] ──▶ [ 0x6064 的「名片」 ] ──▶ 真正的值
+              OD_find() 负责查行        OD_getSub() 负责取名片      （读/写在这里发生）
+   一句话：输入一个「索引」，能一路走到「值」。
+
+链 B  SDO —— 网络上「点对点」读写这些数据（动态，收到帧才动）
+   请求帧 ─▶ CO_SDO_receive() ─▶ CO_SDOserver_process()
+                                       │  查表 = 链 A
+                                       ├─ 语法：读还是写？哪个索引？
+                                       ├─ 权限：这个对象允许被读/写吗？
+                                       ├─ 落地：io.read() / io.write()
+                                       └─ 应答帧发回
+   一句话：SDO 就是「拿链 A 的机制，替远端的客户端读/写一条 OD」。
+
+   ★ 本项目还在 0x6064 上挂了一个「应用钩子」：
+       别人一写 0x6064 → 不落默认内存，而是调用 H6064_write() → 打印 posR / posL
+</pre>
+
+<div class="note">
+<strong>为什么这两件事要放一站讲？</strong>SDO 本身不存数据，它只做「翻译」：把线上的请求翻译成「对 OD 某一行的一次读/写」。所以 <strong>OD 是内容，SDO 是通道</strong>。不先讲清 OD，SDO 就只是空中楼阁；不接着讲 SDO，OD 就只是躺在内存里的一堆常量。
+</div>
+
+<h2 class="pgbreak">1. OD 是什么：CANopen 的「数据总目录」</h2>
+
+<h3>1.1 一句话原理</h3>
+<p>CANopen 有一条核心设计：<strong>总线上不传变量名，只传地址</strong>。这个地址就是「<strong>索引 + 子索引</strong>」。每个节点把自己的全部可访问数据编成一张表，表里每一项都用一个「索引:子索引」当门牌号——这张表就叫<strong>对象字典（Object Dictionary, OD）</strong>。</p>
+<p>所以任何一次通信（不管是第 4 站的 PDO，还是本站的 SDO），第一步都要落到某个 <code>index:sub</code> 上，协议栈才知道「读谁 / 写谁」。这不是本项目的设计，是 CANopen 协议规定死的。</p>
+
+<h3>1.2 一个「对象」由 4 件事定义</h3>
+<table class="cols-2">
+<caption>表 1-1　OD 里每一项都能用这 4 件事描述清楚</caption>
+<thead><tr><th>要素</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><strong>索引 Index</strong><br>（16 bit）</td><td>0x0000–0xFFFF。协议划了区：<code>0x1000–0x1FFF</code> = 通信参数（NMT/心跳/SDO/PDO 的配置都在这）；<code>0x2000–0x5FFF</code> = 厂商自定义；<code>0x6000–0x9FFF</code> = 设备行规，CiA402（伺服驱动）就在这里，如 <code>0x6041</code> 状态字、<code>0x6064</code> 实际位置。</td></tr>
+<tr><td><strong>子索引 SubIndex</strong><br>（8 bit）</td><td>一个索引下可以有多个成员，用子索引区分。例如 <code>0x1018</code>（设备身份）下有 4 个成员：厂商 ID、产品码…</td></tr>
+<tr><td><strong>数据类型</strong></td><td>如 UINT32、INTEGER32、BOOLEAN、VISIBLE_STRING。决定这个值占几个字节、怎么解释。</td></tr>
+<tr><td><strong>访问权限</strong></td><td>只读 / 只写 / 读写，外加「能不能被 SDO 访问」「能不能被 PDO 传输」。权限不够时读写会被拒（转成 abort，见 §4）。</td></tr>
+</tbody>
+</table>
+
+<h3>1.3 三种组织方式：VAR / ARR / REC</h3>
+<p>OD 里每一项的形状只有三种，本项目三种都用到：</p>
+
+<pre>VAR（单个变量）           ARR（数组）                 REC（记录）
+  索引 0x1000              索引 0x1003                索引 0x1400
+   └ sub0 = 值             ├ sub0 = 元素个数(16)      ├ sub0 = 最高子索引(4)
+     （只有一个成员）        ├ sub1 = 第 1 个元素        ├ sub1 = COB-ID
+                            ├ sub2 = 第 2 个元素        ├ sub2 = 传输类型
+                            └ … 等长、同类型            └ … 成员可不同长短、可不同类型
+
+本项目例子：              本项目例子：                本项目例子：
+ 0x1000 设备类型            0x1003 错误历史             0x1018 设备身份
+ 0x6064 实际位置            0x607D 软限位              0x1400 RPDO 通信参数
+</pre>
+
+<table class="cols-2">
+<caption>表 1-2　三种对象类型速查</caption>
+<thead><tr><th>类型</th><th>特点 / 怎么记</th></tr></thead>
+<tbody>
+<tr><td><code>ODT_VAR</code></td><td><strong>单个值</strong>，只有 sub0。读一个参数就是它。</td></tr>
+<tr><td><code>ODT_ARR</code></td><td><strong>等长元素排成队</strong>。sub0 固定放「一共几个」，元素从 sub1 开始。像 Python 的定长数组。</td></tr>
+<tr><td><code>ODT_REC</code></td><td><strong>一组成员打包</strong>，成员可长短不一。sub0 放「最高子索引是几」。像 C 的 struct。</td></tr>
+</tbody>
+</table>
+
+<h3>1.4 这份 OD 是从哪来的？（很重要）</h3>
+<p>本项目的 OD <strong>不是人手写的</strong>，是用 <strong>CANopenEditor 工具 + 电机驱动器的 EDS/XDD 文件自动生成</strong>的。证据直接写在文件头上：</p>
+
+<pre>文件：application/OD.h  （第 12–29 行，文件头注释）
+  File Names: OD.h; OD.c
+  Project File: BLVD-KRD-R.xdd        ← 右电机驱动器的电子数据表
+  Created/Modified By: ORIENTAL MOTOR  ← 松下（东方马达）
+  Vendor ID:   702
+  Product:     BLVD-KRD / Product ID 5111
+  ！注意：DON'T EDIT THIS FILE MANUALLY（别手改，改了重生成会覆盖）
+</pre>
+
+<table class="cols-2">
+<caption>表 1-3　本项目其实有两套 OD</caption>
+<thead><tr><th>字典</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>OD</code><br>（application/OD.c/.h）</td><td><strong>右电机</strong>，源文件 <code>BLVD-KRD-R.xdd</code>，挂在 <code>CO</code> 这套协议栈实例上。共 <strong>157 个对象</strong>（含通信参数、CiA402、厂商对象），功能完整。</td></tr>
+<tr><td><code>OD_2nd</code><br>（application/OD_2nd.c/.h）</td><td><strong>左电机</strong>，源文件 <code>BLVD-KRD-Left.xdd</code>，挂在 <code>CO_2nd</code> 上。它是<strong>精简版</strong>：只列了 PDO 相关的几组对象（0x1400~0x1403 / 0x1600~0x1603 / 0x1800~0x1803 / 0x1A00~0x1A03）和一批电机对象，没有 NMT/SYNC/SDO/EM/HB 那些通信计数——因为它本质是「<strong>只做 PDO 的左轮镜像</strong>」。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>为什么要「从 EDS 生成」？</strong>EDS（电子数据表）是电机驱动器厂商提供的「说明书文件」，里面写着这台驱动器支持哪些对象、索引是多少、什么类型、能不能读写。主站配置工具靠它配置，从站靠它生成 OD。所以可以这么理解：<strong>本项目的 OD.c，本质上就是「BLVD-KRD 这台电机驱动器的参数说明书」，被翻译成了 C 代码</strong>。一台 AGV 挂两个驱动器（左/右），就有两套 OD。
+</div>
+
+<h2 class="pgbreak">2. 链 A 的骨架：OD 的三张表</h2>
+
+<p>打开 <code>application/OD.c</code>，会发现它其实是<strong>三块数据 + 最后一句组装</strong>。下面按「它到底存了什么」来拆。</p>
+
+<table class="cols-3">
+<caption>表 2-1　OD.c 里的三块数据</caption>
+<thead><tr><th>块</th><th>是什么</th><th>在本项目里的样子</th></tr></thead>
+<tbody>
+<tr><td><strong>① 数据区</strong><br>（值存在这）</td><td>两个 C 结构体，字段就是各对象的<strong>当前值</strong>。<code>OD_PERSIST_COMM</code>=掉电要保存的（如心跳周期、PDO 配置）；<code>OD_RAM</code>=掉电不留的（如状态字、实际位置）。</td><td><code>OD_RAM.x6064_positionActualValue</code> 就是「实际位置」这个值本身。</td></tr>
+<tr><td><strong>② 描述符表</strong><br><code>ODObjs</code></td><td>每个对象一张「<strong>名片</strong>」，告诉协议栈：值在哪、几个字节、能不能读/写。按类型有三种结构：<code>OD_obj_var_t</code> / <code>OD_obj_array_t</code> / <code>OD_obj_record_t</code>。</td><td><code>o_67FF_singleDeviceType = { .dataOrig=&amp;OD_RAM.x67FF…, .attribute=ODA_SDO_R|ODA_MB, .dataLength=4 }</code>（OD.c:1949 附近）</td></tr>
+<tr><td><strong>③ 目录表</strong><br><code>ODList[]</code></td><td>整本 OD 的「<strong>目录页</strong>」，<strong>按索引从小到大排好序</strong>。每行形如 <code>{索引, 子索引个数, 对象类型, 名片指针, 扩展钩子}</code>，最后一行是哨兵 <code>{0x0000,0x00,0,NULL,NULL}</code> 表示结束。</td><td><code>{0x1000,0x01,ODT_VAR,&amp;ODObjs.o_1000_deviceType,NULL}</code>（OD.c:1961）、<code>{0x6064,…}</code>（OD.c:2074 附近）</td></tr>
+</tbody>
+</table>
+
+<p>三块拼完，文件最后一句把「目录」变成一个可用的 OD 对象：</p>
+
+<pre>文件：application/OD.c（第 2121–2126 行）
+ static OD_t _OD = { (sizeof(ODList)/sizeof(ODList[0])) - 1,   /* size = 对象个数 */
+                     &amp;ODList[0] };                             /* list = 目录首地址 */
+ OD_t *OD = &amp;_OD;                                             /* 全局指针 OD ★★★ */
+</pre>
+<p>就地说明：<code>OD_t</code> 就两个字段——<code>size</code>（这本字典有多少项）和 <code>list</code>（目录首地址）。算出来的 <code>size = 157</code>，说明目录里 <code>list[0..156]</code> 是 157 个真对象，第 157 行是哨兵。<code>OD</code> 是个全局指针，全工程（协议栈、应用）都通过它访问右电机字典；左电机对应的是 <code>OD_2nd</code>。</p>
+
+<h3>2.1 从「索引」走到「值」：链 A 的核心流程图</h3>
+
+<pre>有人想访问 0x6064
+   │
+   ▼
+① OD_find(OD, 0x6064)
+   │   干什么：在目录表 ODList[] 里按索引找「那一行」
+   │   怎么找：因为目录已按索引升序排列 → 可以「二分查找」，不用从头翻
+   │   返回：OD_entry_t*（目录行的指针）；找不到 = NULL
+   ▼
+② 拿到这一行后：OD_getSub(entry, subIndex=0, &amp;io, odOrig=false)
+   │   干什么：把「目录行 + 子索引」翻译成「这条数据怎么读、怎么写」
+   │   结果填在 io 里：io.read / io.write 两个函数指针 + 一条 OD_stream_t
+   │        （OD_stream_t 里记着：值在哪(dataOrig)、多长(dataLength)、什么权限(attribute)）
+   │   返回：ODR_t（ODR_OK=成功；否则是具体错误，如「对象不存在」「没有这个子索引」）
+   ▼
+③ io.read() 或 io.write()
+   │   干什么：真正把数据搬进/搬出内存
+   ▼
+④ 数据区的真值：OD_RAM.x6064_positionActualValue
+</pre>
+
+<div class="note">
+<strong>为什么要拆成三张表、还非得排序？</strong>三个理由：① <strong>好自动生成</strong>——EDS 变了，工具重新生成一次 OD.c 即可；② <strong>值与描述分离</strong>——值在可写的 RAM，描述是常量，放只读区更省更安全；③ <strong>能二分查找</strong>——目录有序，157 个对象最多比 8 次就能定位（这决定了 <code>OD_find</code> 的实现方式）。这三件事合起来，就是整个 OD 模块存在的意义。
+</div>
+
+<h2 class="pgbreak">3. 链 A 的接口：读写 OD 的「五件套」</h2>
+
+<p>协议栈和应用都<strong>不直接碰</strong>那三张表，而是通过一组固定接口访问。掌握下面这张总表，第 3 站就通了一半。每一行都按你的要求列：<strong>干什么 / 传什么参数 / 返回什么 / 谁调它 / 它调谁</strong>。</p>
+
+<table class="cols-5">
+<caption>表 3-1　OD 接口总表（★★★ 全都要认得）</caption>
+<thead><tr><th>接口</th><th>干什么</th><th>传入 / 参数含义</th><th>返回</th><th>调用关系</th></tr></thead>
+<tbody>
+
+<tr>
+<td><code>OD_find</code><br>ODinterface.c:142</td>
+<td>在目录表里<strong>按索引找一行</strong>（二分查找）</td>
+<td><code>od</code>=用哪本字典（<code>OD</code> 或 <code>OD_2nd</code>）；<code>index</code>=要找的对象索引</td>
+<td><code>OD_entry_t*</code><br>（那一行；找不到 NULL）</td>
+<td><strong>被</strong>：SDO server、PDO 初始化<br><strong>调</strong>：无（纯查表）</td>
+</tr>
+
+<tr>
+<td><code>OD_getSub</code><br>ODinterface.c:181</td>
+<td>把「目录行+子索引」翻译成<strong>可用的读写句柄</strong></td>
+<td><code>entry</code>=目录行；<code>subIndex</code>=要哪个成员；<code>io</code>=出参，装 read/write 函数指针与 stream；<code>odOrig</code>=是否强制用默认读写（false=允许走应用钩子）</td>
+<td><code>ODR_t</code><br>（成功 / 具体错误码）</td>
+<td><strong>被</strong>：SDO server<br><strong>调</strong>：无（按对象类型算地址）</td>
+</tr>
+
+<tr>
+<td><code>OD_readOriginal</code><br><code>OD_writeOriginal</code><br>ODinterface.c</td>
+<td>默认的读写实现：<strong>直接从数据区搬内存</strong></td>
+<td><code>stream</code>=哪条数据；<code>buf</code>=读/写缓冲；<code>count</code>=几个字节</td>
+<td><code>ODR_t</code></td>
+<td><strong>被</strong>：SDO server 通过 <code>io.read/io.write</code> 调<br><strong>调</strong>：无</td>
+</tr>
+
+<tr>
+<td><code>OD_getSDOabCode</code><br>ODinterface.c:263</td>
+<td>把内部错误码翻成<strong>CANopen 标准 abort 码</strong>（好发给对端）</td>
+<td>一个 <code>ODR_t</code> 错误码</td>
+<td>32 bit abort code<br>（0 = 没错误）</td>
+<td><strong>被</strong>：SDO server（出错时）<br><strong>调</strong>：无（查表）</td>
+</tr>
+
+<tr>
+<td><code>OD_extension_init</code><br>ODinterface.c</td>
+<td>给某个对象<strong>挂应用钩子</strong>：以后读/写它时走你自己的函数</td>
+<td><code>entry</code>=给哪个对象挂；<code>ext</code>=你的钩子结构（含 read/write 函数指针和一个 object）</td>
+<td>无</td>
+<td><strong>被</strong>：应用 <code>app_programStart()</code><br><strong>调</strong>：无（只记下指针）</td>
+</tr>
+
+<tr>
+<td><code>OD_get_u32</code><br><code>OD_set_u32</code> / <code>OD_set_u8</code><br>ODinterface.c</td>
+<td>快捷读写：应用<strong>一行</strong>读写某个已知对象的值</td>
+<td><code>entry</code>=哪个对象（常用宏 <code>OD_ENTRY_Hxxxx</code>）；<code>subIndex</code>；值；<code>attr</code>=是否按权限检查</td>
+<td><code>ODR_t</code></td>
+<td><strong>被</strong>：应用 <code>app_programStart()</code><br><strong>调</strong>：<code>OD_getSub</code>+读写</td>
+</tr>
+
+</tbody>
+</table>
+
+<h3>3.1 <code>OD_find</code> + <code>OD_getSub</code>：一对「查表搭档」</h3>
+<p>这两个是整个 OD 的入口，几乎所有访问都要先过它们。分工很清晰：<strong><code>OD_find</code> 管「按索引找到那一行」，<code>OD_getSub</code> 管「这一行里的第几个成员怎么读/写」</strong>。</p>
+
+<pre>OD_find(od, index)                 OD_getSub(entry, sub, &amp;io, odOrig)
+ ─ 输入：哪本字典 + 索引              ─ 输入：目录行 + 子索引
+ ─ 动作：二分查找 ODList[]            ─ 动作：看这一行是 VAR/ARR/REC，分别算：
+ ─ 输出：目录行 或 NULL                     VAR → sub 必须=0，取名片里的地址/长度
+                                         ARR → sub0=个数，subN 地址=首地址+元素大小×(N-1)
+                                         REC → 在成员表里挨个找 subIndex 相同的那项
+                                     ─ 输出：io.read / io.write + 一条 stream（值在哪、多长、权限）
+</pre>
+
+<p>就地说明两个关键结构：</p>
+<table class="cols-2">
+<caption>表 3-2　<code>OD_entry_t</code>（目录行）与 <code>OD_stream_t</code>（数据流）</caption>
+<thead><tr><th>结构</th><th>字段含义</th></tr></thead>
+<tbody>
+<tr><td><code>OD_entry_t</code><br>（目录表的一行）</td><td><code>index</code>=索引；<code>subEntriesCount</code>=子索引个数；<code>odObjectType</code>=VAR/ARR/REC；<code>odObject</code>=指向名片（描述符）；<code>extension</code>=扩展钩子（默认 NULL，本工程只在 0x6064 上非 NULL）。</td></tr>
+<tr><td><code>OD_stream_t</code><br>（一条数据）</td><td><code>dataOrig</code>=值在数据区的地址；<code>attribute</code>=权限位（见下）；<code>dataLength</code>=几个字节；<code>object</code>=钩子自带的对象标记（默认 NULL）；<code>subIndex</code>=当前访问的子索引。</td></tr>
+</tbody>
+</table>
+
+<p>权限位 <code>attribute</code>（<code>OD_attributes_t</code>）用位组合表示「这个对象允许什么访问」：<code>ODA_SDO_R</code>=可被 SDO 读、<code>ODA_SDO_W</code>=可被 SDO 写、<code>ODA_TPDO</code>=可被 TPDO 传、<code>ODA_RPDO</code>=可被 RPDO 传、<code>ODA_MB</code>=可被 PDO 映射、<code>ODA_STR</code>=字符串。SDO 环节只关心前两个：<strong>没写权限就拒绝写，没读权限就拒绝读</strong>。</p>
+
+<h3>3.2 应用钩子：本工程唯一一处「拦截」</h3>
+<p>正常情况下 SDO 读写走的是 <code>OD_readOriginal</code>/<code>OD_writeOriginal</code>。但如果某个对象挂了钩子，并且调用 <code>OD_getSub</code> 时 <code>odOrig=false</code>，就会改走<strong>钩子函数</strong>。本工程就拿它做了个「打点观察」。</p>
+
+<pre>在 app_programStart() 里：
+    OD_extension_init(OD_ENTRY_H6064_positionActualValue, &amp;H6064_extentionR);   ← 右电机 0x6064
+    OD_extension_init(OD_2nd_ENTRY_H6064_positionActualValue, &amp;H6064_extentionL); ← 左电机 0x6064
+
+其中钩子结构：OD_extension_t = { .object, .read, .write }
+   本工程只填 .write = H6064_write（不拦读），.object 指向一个小标记 0x038A / 0x038B
+</pre>
+
+<table class="cols-5">
+<caption>表 3-3　<code>H6064_write</code>（应用自定义钩子，CO_application.c:41 附近）</caption>
+<thead><tr><th>项</th><th>内容</th><th>项</th><th>内容</th><th>备注</th></tr></thead>
+<tbody>
+<tr>
+<td>干什么</td><td>别人通过 SDO（或任何路径）<strong>写 0x6064 时被调用</strong>：判断这次写的是左轮还是右轮的对象，然后打印</td>
+<td>传参</td><td><code>stream</code>=被访问的数据流（里面 <code>stream-&gt;object</code> 指向那个 0x038A/0x038B 标记）；<code>buf</code>=要写入的值；<code>count</code>=几个字节；<code>countWritten</code>=出参，实际写了几个</td>
+<td>返回 <code>ODR_t</code>；它<strong>不调别人</strong>，只 <code>printf</code>。被谁调：SDO server 的 <code>io.write</code></td>
+</tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>这一段说明了一件重要的事：</strong>CANopenNode 允许应用<strong>拦截任意对象的读写</strong>（<code>OD_extension_init</code>）。本工程用最简单的方式示范了一次——「谁往实际位置写值，就打印出来」。这也是后面第 7 站里程计能挂上去的接口基础：把「收到位置」变成你自己的一段逻辑。
+</div>
+
+<h2 class="pgbreak">4. 链 B 是什么：SDO（点对点参数通道）</h2>
+
+<h3>4.1 一句话原理</h3>
+<p>SDO = Service Data Object，<strong>点对点、一问一答</strong>的参数通道。它不参与周期性数据传输，专门用来「偶尔读个参数 / 改个参数」。特点：<strong>慢，但万能</strong>——OD 里任何一个对象它都能读写。</p>
+
+<table class="cols-3">
+<caption>表 4-1　SDO 的四个关键点</caption>
+<thead><tr><th>问题</th><th>答案</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>谁跟谁说话</td><td>客户端 ↔ 服务端</td><td>客户端（一般是主站/配置工具）发起，服务端（从站）应答。本项目作为从站，<strong>提供 SDO server</strong>；同时内置 SDO client，供命令行当网关用（§6）。</td></tr>
+<tr><td>走哪条 COB-ID</td><td>0x600+节点号<br>0x580+节点号</td><td><code>0x600+n</code>=请求（客户端→服务端）；<code>0x580+n</code>=应答（服务端→客户端）。节点号来自启动参数 <code>-i</code>：本项目 <code>-i 1</code> → 请求 <code>0x601</code>，应答 <code>0x581</code>。</td></tr>
+<tr><td>两个方向</td><td>上传 upload<br>下载 download</td><td>upload=<strong>读</strong>（服务端把值「传上去」）；download=<strong>写</strong>（把值「灌下来」）。名字容易记反，按「相对服务端」理解。</td></tr>
+<tr><td>两种速度</td><td>加速 / 分段</td><td>数据 <strong>≤4 字节</strong>：一帧搞定（加速传输）；<strong>&gt;4 字节</strong>：拆成多帧，双方按「toggle」交替确认（分段传输）。</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 一问一答的时序</h3>
+
+<pre>        客户端（主站 / 配置工具）                    服务端（本节点 canopend）
+              │                                            │
+              │   ① 请求：读 0x6064 的 sub0                 │
+              ├────────── 0x601 (0x600+1) ───────────────▶ │
+              │                                            │  查 OD（=链 A）
+              │                                            │  读值 / 或发现无权限
+              │   ② 应答：值 / 或 一个 abort 码              │
+              │◀───────── 0x581 (0x580+1) ─────────────────┤
+              │                                            │
+        （≤4 字节：上面两步就结束；>4 字节：①②各拆成多帧，来回 toggle）
+</pre>
+
+<p><strong>失败会怎样？</strong>服务端可以「中止」这次传输，回一个 <strong>abort 码</strong>（CANopen 规定的标准错误号），常见的几个：</p>
+
+<table class="cols-3">
+<caption>表 4-2　常见 abort 码（由 <code>OD_getSDOabCode</code> 从内部错误码翻译而来）</caption>
+<thead><tr><th>abort 码</th><th>意思</th><th>什么时候出现</th></tr></thead>
+<tbody>
+<tr><td><code>0x05040005</code></td><td>内存不够</td><td>缓冲不足</td></tr>
+<tr><td><code>0x06010000</code></td><td>不支持这种访问</td><td>该对象没开放 SDO 读写</td></tr>
+<tr><td><code>0x06010001</code></td><td>对象只写，不能读</td><td>你硬要读它</td></tr>
+<tr><td><code>0x06010002</code></td><td>对象只读，不能写</td><td>你硬要写它</td></tr>
+<tr><td><code>0x06020000</code></td><td>对象不存在</td><td>索引写错了</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>坑：别把 SDO 和 PDO 搞混。</strong>SDO = 「配置/调试用的一问一答」，慢但什么都能读写；PDO = 「运行时周期广播」，快但只能传预先映射好的那几个量。本项目运行时把左右轮的实际位置（posR/posL）<strong>走 PDO</strong>；而要<strong>改参数、看参数</strong>就<strong>走 SDO</strong>。第 4 站讲 PDO。
+</div>
+
+<div class="note">
+<strong>一个把两站串起来的点：</strong>PDO 的「配置」（映射了哪几个对象、COB-ID 是多少）<strong>本身就存在 OD 里</strong>（就是 <code>0x1400</code>/<code>0x1600</code> 这些对象）。而这些配置对象只能通过 SDO 写。所以一句话：<strong>SDO 是配置通道，PDO 是数据通道</strong>。
+</div>
+
+<h2 class="pgbreak">5. 链 B 的主链：SDO server 怎么处理一条请求</h2>
+
+<p>先讲模块职责：<strong>SDO server = 本节点开的一个「参数服务窗口」，替远端客户端读写自己的 OD</strong>。它自己不存数据，全部动作都是「查 OD → 读写 → 应答」。</p>
+
+<h3>5.1 完整主链（谁调谁）</h3>
+
+<pre>【CAN 帧到达】由 SocketCAN 收上来，交给协议栈注册的回调
+   │
+   ▼
+CO_SDO_receive(SDO, msg)                      CO_SDOserver.c:56   ★★
+   │  干什么：把这一帧「存进 SDO 自己的缓冲」，并置一个「有新帧」标志（不当场处理）
+   │  特例：如果这帧是 abort，直接清状态（这次通信作废）
+   ▼
+（不在中断里处理，回到主循环）CO_process()      CANopen.c:1373      ★★★
+   │  干什么：主循环每一轮都会来问一次「SDO 有没有事要做」
+   ▼
+CO_SDOserver_process(SDO, NMTisPreOrOperational, timeDifference_us, &amp;timerNext_us)
+   │                                          CO_SDOserver.c:683  ★★★
+   │
+   ├─ ① 现在允许 SDO 吗？      只有 Pre-operational / Operational 状态才允许，否则不理
+   │
+   ├─ ② 这是读还是写？          看请求帧的命令：写(download) / 读(upload)
+   │
+   ├─ ③ 取出索引与子索引        index = 0x6064 …, subIndex = 0
+   │
+   ├─ ④ 查表（这就是链 A！）    OD_getSub( OD_find(SDO-&gt;OD, index), subIndex, &amp;SDO-&gt;OD_IO, false )
+   │        └─ 失败 → OD_getSDOabCode() 转成 abort 码，回一个 abort 帧，结束
+   │
+   ├─ ⑤ 查权限                 attribute 里有没有 ODA_SDO_R / ODA_SDO_W
+   │        └─ 不够 → 同样转 abort 回去
+   │
+   ├─ ⑥ 落地读写               io.write()（写）/ io.read()（读）  ← 真值在这被改动/取出
+   │        └─ ★ 若该对象挂了钩子 → 走应用的 H6064_write，而不是默认写内存
+   │
+   └─ ⑦ 组织应答帧 → CO_CANsend() 发回    （分段传输则继续多轮收发，直到传完）
+</pre>
+
+<h3>5.2 主链上那几个函数的「黑盒说明」</h3>
+
+<table class="cols-5">
+<caption>表 5-1　主链函数逐个说（参数/返回/调用关系）</caption>
+<thead><tr><th>函数</th><th>干什么</th><th>传入 / 参数含义</th><th>返回</th><th>调用关系</th></tr></thead>
+<tbody>
+
+<tr>
+<td><code>CO_SDO_receive</code><br>CO_SDOserver.c:56</td>
+<td>帧到达回调：把帧存缓冲、置标志</td>
+<td><code>SDO</code>=本服务端实例；<code>msg</code>=收到的 CAN 帧</td>
+<td>无（void）</td>
+<td><strong>被</strong>：CAN 接收层回调<br><strong>调</strong>：无</td>
+</tr>
+
+<tr>
+<td><code>CO_process</code><br>CANopen.c:1373</td>
+<td>主循环的「总调度」：挨个问各模块有没有事</td>
+<td><code>CO</code>=协议栈实例；<code>timeDifference_us</code>=距上次的微秒数；<code>timerNext_us</code>=出参，回答「下次最早何时叫我」</td>
+<td>无（void）</td>
+<td><strong>被</strong>：<code>main</code> 循环<br><strong>调</strong>：<code>CO_SDOserver_process</code> 等各模块</td>
+</tr>
+
+<tr>
+<td><code>CO_SDOserver_process</code><br>CO_SDOserver.c:683</td>
+<td>状态机核心：处理一条 SDO 请求的每一步</td>
+<td><code>SDO</code>=服务端实例（内有 OD 指针、节点号、缓冲）；<code>NMTisPreOrOperational</code>=布尔，「现在允许 SDO 吗」；<code>timeDifference_us</code>=用于算超时；<code>timerNext_us</code>=出参，配合主循环排下次调用</td>
+<td><code>CO_SDO_return_t</code><br>（这次通信结束 / 还要继续）</td>
+<td><strong>被</strong>：<code>CO_process</code><br><strong>调</strong>：<code>OD_find</code>、<code>OD_getSub</code>、<code>OD_getSDOabCode</code>、<code>io.read/write</code>、<code>CO_CANsend</code></td>
+</tr>
+
+<tr>
+<td><code>CO_SDOserver_init</code><br>CO_SDOserver.c:315</td>
+<td>开机时给这个「服务窗口」接线（跑一次）</td>
+<td><code>OD</code>=服务哪本字典；<code>nodeId</code>=本节点号；<code>SDOtimeoutTime_ms</code>=超时；收发回调与索引</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong>：<code>CO_CANopenInit</code>（CANopen.c:1019）<br><strong>调</strong>：无</td>
+</tr>
+
+</tbody>
+</table>
+
+<div class="note">
+<strong>为什么帧到了不在回调里直接处理，要等主循环？</strong>因为 CAN 接收回调跑在「收包上下文」里，必须快进快出；而处理一条 SDO 要查表、搬数据、甚至写存储，是慢活。所以设计成：<strong>回调只负责「收下+举手」，真正的活在主循环里干</strong>。这条「收 → 举手 → 主循环处理」的套路，第 2 站的 NMT/心跳也是同一套，是 CANopenNode 的通用节拍。
+</div>
+
+<div class="cpp">
+<strong>简历话术：</strong>「熟悉 CANopen SDO 服务端实现：请求→查对象字典→权限校验→读写→应答/abort 的完整链路，并用 <code>OD_extension_init</code> 实现过对象级读写钩子。」
+</div>
+
+<h2 class="pgbreak">6. 反向：本机当客户端 —— 用命令行读写 OD</h2>
+
+<p>本工程除了「被动当服务端」，还能「主动当客户端」：它内置了 SDO client，并配了一个 <strong>ASCII 命令界面（网关，CiA 309-3）</strong>。这意味着一件很爽的事——<strong>不用写一行代码，就能在命令行里读/写任意 OD 对象</strong>。</p>
+
+<h3>6.1 怎么开、怎么用</h3>
+
+<pre>启动（多一个 -c "stdio" 就打开命令行网关）：
+    ./canopend can0 -i 1 -c "stdio"
+    &gt; help                            ← 看全部命令
+    &gt; r 0x1017 0                      ← 读 0x1017（心跳周期）的 sub0
+    &gt; w 0x1017 0 u16 1000             ← 写 1000（单位 ms）进去
+    &gt; 1 write 0x1010 1 vs save        ← 把参数存进保存区（掉电不丢）
+
+关机壳里还有：set node / set sdo_timeout / start / stop / preop / reset node / reset comm / lss_* / log
+类型码（写在命令里告诉栈按什么类型解释）：b / i8..i64 / u8..u64 / x8..x64 / r32 / r64 / vs / os / us / d
+</pre>
+
+<div class="note">
+<strong>这是怎么来的？</strong>工程根 <code>CO_driver_target.h</code> 里<strong>默认打开了 SDO client 与网关</strong>（<code>CO_CONFIG_SDO_CLI</code>、<code>CO_CONFIG_GTW</code> 都带 ENABLE/ASCII 标志），所以 Linux 版默认就带这套调试能力。注意别被 <code>CANopenNode/301/CO_config.h</code> 里写的 <code>CO_CONFIG_GTW (0)</code> 误导——那些值是包在 <code>#ifdef CO_DOXYGEN</code> 里的，<strong>只给文档生成器看，不参与编译</strong>。
+</div>
+
+<h3>6.2 敲一条 <code>r</code> 命令，背后发生了什么</h3>
+
+<pre>你在终端敲：   r 0x1017 0
+   │
+   ▼
+网关解析命令（CO_gateway_ascii.c:855 起）：
+   │   把 0x1017 当索引、0 当子索引、（没给类型则按 hex 处理）
+   ▼
+① CO_SDOclient_setup(...)                CO_gateway_ascii.c:896
+   │   干什么：给这次会话配好收发 COB-ID（0x600+n / 0x580+n）和目标节点号
+   ▼
+② CO_SDOclientUploadInitiate(...)        CO_gateway_ascii.c:907
+   │   干什么：发起一次「读」，进入状态机（内部会发请求帧）
+   ▼
+③ 状态置为「读中」→ 主循环里继续推进      CO_gateway_ascii.c:920
+   │   收应答 → 拼出值（分段则继续收）
+   ▼
+④ printf 把值打回终端
+</pre>
+
+<p><code>w</code>（写）命令的流程几乎一样，只是把第 ② 步换成 <code>CO_SDOclientDownloadInitiate</code>（发起写），再把你要写的数据填进 SDO 缓冲、然后进入「写中」状态。</p>
+
+<div class="cpp">
+<strong>简历话术：</strong>「使用 CANopen 网关命令行（CiA&nbsp;309-3）在线读写从站对象字典，完成参数配置与故障排查，无需额外调试工具。」
+</div>
+
+<h2 class="pgbreak">7. 合起来看：OD 与 SDO 在整机运行里的位置</h2>
+
+<p>把本站两条链放进整机里，位置就一目了然了。<strong>OD 是每个节点自己的仓库；SDO 是仓库对外的「一对一门」。</strong></p>
+
+<pre>        ┌──────────────────── can0 总线 ────────────────────┐
+        │                                                    │
+   [外部主站 / PC]                                  [本节点 canopend]
+        │                                                    │
+        │  SDO  0x601 / 0x581  ── 读写任意 OD 对象 ──▶  ┌──────────────┐
+        │                                              │ SDO server   │
+        │  PDO  0x38A / 0x38B  ── 周期传位置/状态 ────▶ │ （§5 主链）  │
+        │                                              └──────┬───────┘
+        │                                                     │ 查表 + 读写
+        │                                                     ▼
+        │                                        ┌────────────────────────┐
+        │                                        │  对象字典 OD（右电机）  │
+        │                                        │  对象字典 OD_2nd（左）  │
+        │                                        └────────────────────────┘
+        │                                                     ▲
+        └──── 本机命令行 r/w ──▶ SDO client（§6）──────────────┘
+                                 （自己也去读写别人 / 自己的 OD）
+</pre>
+
+<h3>7.1 一个「殊途同归」的观察</h3>
+<p>本项目在 <code>app_programStart()</code>（CO_application.c:65 起）里，用 <code>OD_set_u32</code> / <code>OD_set_u8</code> 直接改了 OD：</p>
+
+<pre>OD_set_u32(OD_ENTRY_H1006_communicationCyclePeriod, 0, 100000, true);  ← SYNC 周期 = 100000 µs = 100 ms
+OD_set_u32(OD_ENTRY_H1005_COB_ID_SYNCMessage,      0, 0x40000080, true); ← 使能发送 SYNC
+OD_set_u32(OD_ENTRY_H1400_RPDOCommunicationParameter, 1, 0x0000038A, true); ← 右 RPDO 的 COB-ID
+OD_set_u8 (OD_ENTRY_H1600_RPDOMappingParameter, 0, 2, true);           ← 映射 2 项
+OD_set_u32(OD_ENTRY_H1600_RPDOMappingParameter, 1, 0x60410010, true);  ← 第 1 项：0x6041 状态字，16 bit
+OD_set_u32(OD_ENTRY_H1600_RPDOMappingParameter, 2, 0x60640020, true);  ← 第 2 项：0x6064 位置，32 bit
+</pre>
+
+<p>就地说明：<code>OD_ENTRY_H1006…</code> 这类宏就是「第 3 站 §2 里那个目录表的第几行」的现成写法（形如 <code>&amp;OD-&gt;list[n]</code>），所以应用不用自己去 <code>OD_find</code>，直接拿宏就能 <code>OD_set</code>。最后那个 <code>true</code> 是「要不要按权限检查」。</p>
+
+<div class="note">
+<strong>关键理解：</strong>同样是「配置 SYNC 和 PDO」，有两条路——<strong>① 本工程走的是「启动时直接改内存」</strong>（<code>OD_set_*</code>，不经过网络）；<strong>② 真实主站走的是「用 SDO 写同样的对象」</strong>。两条路<strong>终点都是 OD 里同一批对象</strong>（0x1005/0x1006/0x1400/0x1600…）。看懂这一点，就看懂了 SDO 在整个项目里的角色：它是「把 OD 配置权交给网络另一头」的那条通道。
+</div>
+
+<h2 class="pgbreak">8. 小结 · 自测 · 站间衔接</h2>
+
+<h3>8.1 五句话总结</h3>
+<pre>① OD = 节点自己的「数据总目录」，每一项 = 索引+子索引+类型+权限。
+② OD.c 是三张表拼的：数据区（值）+ 描述符（名片）+ 目录 ODList[]（按索引有序，可二分）。
+③ 访问 OD 靠五件套：OD_find → OD_getSub → io.read/write；出错用 OD_getSDOabCode
+   翻译；想拦截就用 OD_extension_init 挂钩子（本工程挂在 0x6064 上）。
+④ SDO = 点对点一问一答的参数通道（0x600/0x580），能读写任何 OD 对象；
+   server 替别人读我，client 让我去读别人（本项目都有）。
+⑤ 运行时数据走 PDO，参数配置/调试走 SDO；而 PDO 的配置本身就存在 OD 里。
+</pre>
+
+<h3>8.2 合上文档，答这五问</h3>
+<pre>1. 说清「一个 OD 对象」由哪 4 件事定义？VAR / ARR / REC 各举一例。
+2. OD.c 里的三张表分别存什么？目录表为什么必须按索引排好序？
+3. OD_find 和 OD_getSub 各干什么、分别返回什么？为什么要把它们分开？
+4. SDO 从收到帧到发出应答，中间要经过哪几步？哪一步会碰到「链 A」？
+5. 本项目里「配 SYNC / 配 PDO」有哪两条路？它们最后都落到什么地方？
+</pre>
+
+<h3>8.3 与前后站的衔接</h3>
+<table class="cols-3">
+<caption>表 8-1　第 3 站的位置</caption>
+<thead><tr><th>方向</th><th>连接</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>承接</td><td>第 2 站 报文层</td><td>本册 §5 用的「收下→举手→主循环处理」节拍，和第 2 站的 NMT/心跳是同一套。</td></tr>
+<tr><td>通往</td><td>第 4 站 PDO &amp; CiA402</td><td>PDO 的映射配置就在 OD 的 <code>0x1400/0x1600</code> 里；0x6041/0x6064 这些 CiA402 对象也要先会在 OD 里找到，才看得懂 posR/posL 从哪来。</td></tr>
+<tr><td>落点</td><td>第 7 站 里程计</td><td>本册 §3.2 的钩子机制（<code>H6064_write</code>）就是「把收到的位置变成自己的逻辑」的入口。</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<strong>整站简历话术：</strong>「掌握 CANopen 对象字典结构（VAR/ARR/REC、索引/子索引/权限）与 SDO 通信链路；能读懂由 EDS 自动生成的双电机 OD，理解 SDO 配置通道与 PDO 数据通道的分工。」
+</div>
+
+<div class="footnote">
+第 3 站补充册 · 对象字典 OD &amp; SDO · 对应主手册《AGV_CANOPEN_LEARNING_MAP_print.html》站点地图第 3 站。<br>
+主要取证文件：<code>application/OD.c</code>、<code>application/OD.h</code>、<code>application/OD_2nd.h</code>、<code>CANopenNode/301/CO_ODinterface.c</code>、<code>CANopenNode/301/CO_SDOserver.c</code>、<code>CANopenNode/301/CO_SDOserver.h</code>、<code>CANopenNode/CANopen.c</code>、<code>CANopenNode/309/CO_gateway_ascii.c</code>、<code>CO_application.c</code>、<code>CO_driver_target.h</code>。
+</div>
+
+</body>
+</html>

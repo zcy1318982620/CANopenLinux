@@ -51,7 +51,7 @@ CC ?= gcc
 OPT =
 OPT += -g -ggdb
 #OPT += -O2
-OPT += -DCO_SINGLE_THREAD=1
+#OPT += -DCO_SINGLE_THREAD=1
 #OPT += -DCO_CONFIG_DEBUG=0xFFFF
 #OPT += -Wextra -Wshadow -pedantic -fanalyzer
 #OPT += -DCO_USE_GLOBALS
@@ -63,7 +63,8 @@ OPT += -Wno-format
 CFLAGS = -Wall $(OPT) $(INCLUDE_DIRS)
 LDFLAGS =
 LDFLAGS += -g -ggdb
-#LDFLAGS += -pthread
+LDFLAGS += -pthread
+LDFLAGS += -lm
 
 #Options can be also passed via make: 'make OPT="-g" LDFLAGS="-pthread"'
 
@@ -82,4 +83,4 @@ install:
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(LINK_TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $^ $(LDFLAGS) -o $@

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 6 站（下）· 定时精度与抖动实测（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:22%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:22%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:18%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 6 站（下）· 实时性改造 —— 定时精度与抖动实测</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— CANopenNode V4 的 CANopen 从站（Linux 用户态 + SocketCAN，进程名 <code>canopend</code>）。</p>
+<p><strong>本篇定位：</strong>上篇把 RT 线程「开出来、提了优先级」（把路修好）。本篇回答剩下的：<strong>RT 线程靠什么被准时叫醒？醒来后到底准不准？怎么把「不准」量出来？</strong></p>
+<p><strong>三块内容：</strong>
+  <br>· §1 定时机制：<code>timerfd</code> + <code>epoll</code>，为什么比 <code>sleep</code> 准。
+  <br>· §2 现成的测量点：<code>timeDifference_us</code> —— 这个变量天生就是「本圈实际耗时」。
+  <br>· §3~§4 抖动从哪来 + 动手写统计（改造第三步）。
+  <br>· §5 另一个角度：单帧接收延迟（<code>SO_TIMESTAMPING</code>）。</p>
+<p><strong>怎么读：</strong>每段只回答：<span class="star">这段在干什么 → 关键函数传什么/返回什么 → 被谁调用 → 调用了谁</span>。<strong>不做字节级拆帧</strong>，重点看流程图。行号格式 <code>文件:行号</code>。</p>
+<p><strong>标记：</strong><span class="star">★★★</span> 必会 / <span class="star">★★</span> 重要 / <span class="star">★</span> 知道即可。灰框=补充，红框=坑。<strong>加粗代码块（中文注释）</strong>=本站要新写的代码，不是工程里已有的。</p>
+</div>
+
+<h2>§0 一页地图：本篇要走到哪</h2>
+
+<pre>上篇做完：  多线程已开 → RT 线程存在 → SCHED_FIFO:80 已设
+            │
+            │  但「路修好」≠「车开得稳」
+            ▼
+本篇（下篇）三步：
+  ① 搞清定时机制        timerfd + epoll —— RT 线程怎么被「准时叫醒」（§1）
+  ② 找到现成测量点      epRT.timeDifference_us —— 本圈实际耗时，拿来就用（§2）
+  ③ 动手加统计          在 app_programRt 里写几行 → 每秒打印 min/avg/max/超限次数（§3~§4）
+  补充：另一把尺子        单帧接收延迟（SO_TIMESTAMPING）（§5）</pre>
+
+<h2>§1 RT 线程靠什么被「准时叫醒」</h2>
+
+<h3>1.1 三件套：epoll + eventfd + timerfd</h3>
+
+<p>RT 线程的核心是这一句（CO_main_basic.c:890）：<code>CO_epoll_wait(&amp;epRT)</code>。它内部就是「睡到有事发生」。能让它醒来的有三路事件，全部由一个 epoll 管着，这个 epoll 在 <code>CO_epoll_create</code>（CO_epoll_interface.c:68）里搭好：</p>
+
+<pre>CO_epoll_create(&epRT, 1000)                 ← 参数：定时器周期 1000µs（= 1ms）
+   │
+   ├─ epoll_fd  = epoll_create(1)                    (CO_epoll_interface.c:78)
+   │     「事件容器」。下面几个 fd 都注册到它里面，一次 epoll_wait 就能等所有来源。
+   │
+   ├─ event_fd  = eventfd(0, EFD_NONBLOCK)           (:85)  → epoll_ctl ADD (:92)
+   │     「门铃」。别的线程想叫醒本线程，就往它写一个数（见上篇 §4.2 wakeupCallback）。
+   │
+   ├─ timer_fd  = timerfd_create(CLOCK_MONOTONIC)    (:99)  → epoll_ctl ADD (:115)
+   │     「节拍器」。由内核计时，到点自动通知，不需要谁去轮询。
+   │        tm.it_interval = 1000µs                  (:104-105)  ← 之后每 1ms 自动重复
+   │        tm.it_value    = 1ns                     (:106-107)  ← 首次几乎立刻触发
+   │        timerfd_settime(...)                     (:108)
+   │
+   ├─ ep->timerInterval_us = 1000                    (:120)  记下目标周期
+   ├─ ep->previousTime_us  = 当前时间(单调时钟)        (:121)  给下一圈算时差用
+   └─ ep->timeDifference_us = 0                      (:122)
+            │
+            ▼
+   CO_epoll_wait(&epRT)  →  epoll_wait(epoll_fd, &ev, 1, -1)   (CO_epoll_interface.c:149)
+                             └─ 超时参数 -1 = 一直阻塞，直到有事件</pre>
+
+<table class="cols-3">
+<caption>表 6B-1　三个 fd 各是什么</caption>
+<thead><tr><th>fd</th><th>是什么 / 谁触发</th><th>醒来后干什么</th></tr></thead>
+<tbody>
+<tr><td><code>timer_fd</code></td><td>内核定时器（timerfd）。每 1ms 由内核自动触发一次。来源是「时间」。</td><td>置 <code>ep-&gt;timerEvent = true</code>（:188），表示「这次是到点醒的」→ 允许跑 PDO。</td></tr>
+<tr><td><code>event_fd</code></td><td>线程间门铃（eventfd）。别的线程写一个数就响。来源是「软件通知」。</td><td>只把数据读掉（:173），<code>timerEvent</code> 保持 false → <strong>不会因为被叫醒就多跑一次 PDO</strong>。</td></tr>
+<tr><td>CAN 收帧 fd</td><td>CAN 套接字。挂在 RT 的 epoll 上（CO_main_basic.c:561）。来源是「CAN 帧到达」。</td><td>由 <code>CO_CANrxFromEpoll</code> 把帧读走（见 §2）。</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 为什么用 timerfd，不用 <code>sleep</code> / <code>usleep</code></h3>
+
+<table class="cols-2">
+<caption>表 6B-2　定时方式对比</caption>
+<thead><tr><th>方式</th><th>问题 / 优势</th></tr></thead>
+<tbody>
+<tr><td><code>usleep(1000)</code> 循环</td><td>① <code>usleep</code> 是「睡这么久」，醒来时刻不保证；② <strong>会累积漂移</strong>：每次多睡一点点，误差越滚越大；③ 睡之前你还得先把活干完，没法「到点就跑」。</td></tr>
+<tr><td><code>timerfd</code> + <code>epoll</code></td><td>① 内核按 <code>it_interval</code> 的<strong>绝对节拍</strong>推进，不累积漂移；② <code>epoll_wait</code> 一次就能等三路事件（定时 / 门铃 / CAN 帧），不用写轮询死循环；③ 没事件时线程真在睡眠，不占 CPU。</td></tr>
+</tbody>
+</table>
+
+<p class="note"><strong>关键理解：<code>it_interval</code> 是「周期」，<code>it_value</code> 是「下一次触发的延时」。</strong>本例 <code>it_value = 1ns</code>（:107），意思是「创建后几乎立刻触发第一次」，之后按 <code>it_interval = 1000µs</code> 自动重复，不需要每圈重新设置。</p>
+
+<h3>1.3 应用可以「提前」下一圈：timerNext_us</h3>
+
+<p>有些活等不到下一圈定时。比如主线程刚发了 CAN 帧，希望「尽快」再进一次循环去把发送队列冲掉。为此 <code>CO_epoll_processLast</code>（CO_epoll_interface.c:192-219）做了一件事：<strong>如果本轮有人把 <code>timerNext_us</code> 改得比 <code>timerInterval_us</code> 小，就用 <code>timerfd_settime</code> 把「下一次触发」提前。</strong></p>
+
+<pre>谁改小了 timerNext_us？
+  CO_epoll_interface.c:307-308  CO_epoll_processMain 里：
+      if (co->CANmodule->CANtxCount &gt; 0 && ep->timerNext_us &gt; CANSEND_DELAY_US)
+          ep->timerNext_us = CANSEND_DELAY_US;      ← 100µs（CO_epoll_interface.c:55）
+
+逻辑：还有没发完的 CAN 报文 → 把下一圈的等待压到 100µs → 尽快回来继续发
+      │
+      ▼
+CO_epoll_processLast（:204）if (timerNext_us &lt; timerInterval_us)
+      → timerfd_settime 设成一次性、且在 :208-213 转成秒/纳秒
+      （注意 :206 有个 +1µs，防止算出 0）</pre>
+
+<p>这解释了为什么主线程的节拍虽然是 100ms，但「有报文待发」时实际不会老老实实等 100ms。</p>
+
+<h2 class="pgbreak">§2 现成的测量点：<code>timeDifference_us</code></h2>
+
+<p>抖动统计不用自己造时钟——工程里每圈都已经算好了「上一圈实际花了多久」。就在 <code>CO_epoll_wait</code>（CO_epoll_interface.c:143）里，四行代码：</p>
+
+<pre>CO_epoll_wait(CO_epoll_t *ep) {
+    ...
+    epoll_wait(ep->epoll_fd, &ep->ev, 1, -1);          // :149  一直睡，直到有事
+    ep->epoll_new  = true;                             // :150
+    ep->timerEvent = false;                            // :151
+
+    uint64_t now = clock_gettime_us();                 // :154  现在（单调时钟，不会被改系统时间影响）
+    ep->timeDifference_us = (uint32_t)(now - ep->previousTime_us);  // :155  ★本圈实际耗时
+    ep->previousTime_us   = now;                       // :156  记下来，给下一圈算
+
+    ep->timerNext_us = ep->timerInterval_us;           // :158  默认下圈还是 1ms（除非有人改小）
+    ... （后面按事件类型分支：event_fd / timer_fd）
+}</pre>
+
+<p>把这条时间线画出来最直观：</p>
+
+<pre>RT 线程时间轴：
+  ────────────────────────────────────────────────────────────────────►  时间
+        ▲                          ▲                          ▲
+   epoll_wait 返回             epoll_wait 返回             epoll_wait 返回
+     （上一圈）                    （本圈）                    （下一圈）
+        │                          │                          │
+        └──── 干活：收帧 ─► SYNC/RPDO/TPDO ─► app_programRt ───┘ 干活 ───┘
+               ↑__ 这一段就是「一圈」__↑
+
+  timeDifference_us（本圈）= 本圈返回时刻 − 上圈返回时刻      （:155）
+  理想值 = timerInterval_us = 1000 µs
+  抖动   = | timeDifference_us − 1000 |</pre>
+
+<table class="cols-3">
+<caption>表 6B-3　<code>timeDifference_us</code> 是谁算的、被谁用</caption>
+<thead><tr><th>环节</th><th>位置</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>算出来</td><td>CO_epoll_interface.c:154-155</td><td>用 <code>clock_gettime_us()</code>（:61，取 <code>CLOCK_MONOTONIC</code> 单调时钟）做差。</td></tr>
+<tr><td>被 RT 逻辑用</td><td>CO_epoll_interface.c:337 / 341 / 345</td><td>喂给 <code>CO_process_SYNC / RPDO / TPDO</code>，做「距上次过了多久」的时间补偿。</td></tr>
+<tr><td>被应用用</td><td>CO_main_basic.c:904</td><td><code>app_programRt(CO, epRT.timeDifference_us)</code> —— <strong>本站的统计就写在这里面。</strong></td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong>顺手记一个把关点。</strong>CO_epoll_interface.c:329：</p>
+<pre>if (!realtime || ep->timerEvent) {  ...跑 SYNC / RPDO / TPDO...  }</pre>
+<p>RT 线程调用时 <code>realtime = true</code>（CO_main_basic.c:891），所以条件变成「只有 <code>timerEvent</code> 为真才跑 PDO」。也就是说：<strong>被 eventfd 叫醒那种「非定时」唤醒，不会白跑一趟 PDO</strong>——避免同一节拍内重复处理。反之，如果哪次是 CAN 帧唤醒（也不是定时事件），同样不跑 PDO，只把帧收进来，交给本圈或下一圈的定时事件处理。</p>
+</div>
+
+<h2 class="pgbreak">§3 抖动从哪来</h2>
+
+<p>理想情况下 <code>timeDifference_us</code> 永远等于 1000。现实中它会摆动。下面是主要原因（按「自己造的」和「系统给的」分开）：</p>
+
+<table class="cols-4">
+<caption>表 6B-4　抖动来源与对策</caption>
+<thead><tr><th>来源</th><th>为什么会抖</th><th>表现</th><th>对策</th></tr></thead>
+<tbody>
+<tr><td>调度延迟</td><td>更 urgent 的活占着 CPU，你的线程醒来了但上不了 CPU</td><td>偶发大尖峰</td><td>上篇的 SCHED_FIFO 提优先级</td></tr>
+<tr><td>缺页 / 内存分配</td><td>运行时才真正分配物理页，触发缺页处理，卡在 syscall 里</td><td>头几圈特别慢</td><td><code>mlockall(MCL_CURRENT|MCL_FUTURE)</code> 提前锁内存；避免在 RT 线程里 malloc</td></tr>
+<tr><td>CPU 降频</td><td>省电调频（governor）让频率忽高忽低</td><td>整体偏慢、周期性波动</td><td>调成 <code>performance</code> governor</td></tr>
+<tr><td>中断</td><td>网卡/CAN/定时器中断打断当前执行</td><td>微秒级散布</td><td>中断亲和性（irq affinity）绑到别的核</td></tr>
+<tr><td>跨核迁移</td><td>线程被调度器在不同 CPU 核间搬来搬去，缓存全失效</td><td>随机中等尖峰</td><td><code>sched_setaffinity</code> 绑到固定核</td></tr>
+<tr><td>日志 / 文件 IO</td><td><code>printf</code>/<code>openlog</code>/写盘会阻塞，且要拿锁</td><td>大尖峰</td><td><strong>RT 线程里尽量不写日志</strong>；要写就累积到内存、交给主线程</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>最常见的坑，是自己造的抖动。</strong>RT 线程里出现下面任一操作，抖动一定大：<code>printf</code> / <code>log_printf</code>（要拿 stdio 锁、可能写终端）、<code>malloc/free</code>（可能触发缺页）、读写文件、等 mutex。这类操作应全部搬到主线程。</p>
+<p>对照一下本工程：<code>rt_thread()</code>（CO_main_basic.c:885-910）里除了收帧和 <code>app_programRt</code>，<strong>没有任何日志输出</strong>——这正是它抖动小的原因之一。所以你往里加统计时，别在每圈都打印。</p>
+</div>
+
+<h2 class="pgbreak">§4 改造第三步：动手写抖动统计</h2>
+
+<h3>4.1 往哪写</h3>
+
+<p>写在 <code>app_programRt</code>（CO_application.c:177）。它现在的样子是「空壳」：</p>
+<pre>void app_programRt(CO_t *co, uint32_t timer1usDiff) {
+    (void) co; (void) timer1usDiff;   /* unused */   ← 参数收下了，但没用
+    ...（下面 #if 0 里是一段示例，未编译）
+}</pre>
+
+<p>它的调用者是 <code>rt_thread()</code>（CO_main_basic.c:904），每圈被调一次，第 2 个参数就是 <code>epRT.timeDifference_us</code>。所以<strong>它天生就拿到了本圈耗时</strong>，只是现在丢掉了。</p>
+
+<h3>4.2 统计什么</h3>
+
+<p>按「1 秒一个窗口」统计，四个数就够看清问题：</p>
+
+<table class="cols-3">
+<caption>表 6B-5　四个统计量</caption>
+<thead><tr><th>量</th><th>含义</th><th>怎么看</th></tr></thead>
+<tbody>
+<tr><td><code>avg</code></td><td>本窗口平均周期</td><td>接近 1000 说明「平均节拍对了」，但这<strong>不代表</strong>实时性好。</td></tr>
+<tr><td><code>min</code></td><td>本窗口最快一圈</td><td>太小说明有「提前醒」的情况（如被 eventfd 唤醒）。</td></tr>
+<tr><td><code>max</code></td><td>本窗口最慢一圈</td><td><strong>最重要。</strong>实时性看的就是这个「最坏情况」。</td></tr>
+<tr><td><code>over</code></td><td>超过「目标 + 阈值」的圈数</td><td>直接告诉你：有几次没达标、有多频繁。</td></tr>
+</tbody>
+</table>
+
+<h3>4.3 代码骨架（可直接抄，再接自己的日志）</h3>
+
+<pre>/* CO_application.c 里 app_programRt 的改造版（示意，注释为中文） */
+#include &lt;stdio.h&gt;
+
+void app_programRt(CO_t *co, uint32_t timer1usDiff) {
+    (void) co;
+
+    static uint32_t n;                  /* 本窗口内已经过了多少圈 */
+    static uint32_t sum;                /* 本窗口耗时累加 */
+    static uint32_t mn = 0xFFFFFFFFu;   /* 本窗口最小周期（初值给个很大的数） */
+    static uint32_t mx;                 /* 本窗口最大周期（重点看它） */
+    static uint32_t over;               /* 超过阈值的圈数 */
+    static uint32_t acc;                /* 累计耗时，用来判断是否满 1 秒 */
+
+    n++;  sum += timer1usDiff;  acc += timer1usDiff;
+    if (timer1usDiff &lt; mn) mn = timer1usDiff;
+    if (timer1usDiff &gt; mx) mx = timer1usDiff;
+    if (timer1usDiff &gt; 1000 + 200) over++;   /* 目标 1000µs；超过 200µs 记一次 */
+
+    if (acc &gt;= 1000000) {                     /* 累计满 1 秒，输出一行并清零 */
+        printf("RT: n=%u avg=%u min=%u max=%u over200=%u us\n",
+               n, sum / n, mn, mx, over);
+        n = 0; sum = 0; mn = 0xFFFFFFFFu; mx = 0; over = 0; acc = 0;
+    }
+}</pre>
+
+<p>跑起来会看到类似这样的输出：</p>
+
+<pre>RT: n=1000 avg=1000 min=993 max=1011 over200=0 us     ← 很稳
+RT: n=1000 avg=1001 min=988 max=1320 over200=2 us     ← 有 2 次被拖到 1.3ms，要查
+                ▲         ▲        ▲         ▲
+             平均对     最快      最慢      超限次数（真正要盯的）</pre>
+
+<p class="note"><strong>关于 <code>printf</code>：</strong>它在 RT 线程里不是零风险（要拿 stdio 锁）。但本骨架<strong>一秒才打一行</strong>，影响可以忽略。若要更严谨：把每圈数值存进一个环形数组，只在主线程的 <code>app_programAsync</code>（CO_main_basic.c:811）里统一打印。</p>
+
+<h3>4.4 一次对比实验（这才是「实测」）</h3>
+
+<pre>同样的统计代码，跑三次对比：
+
+  ① 单线程模式（不改 Makefile）          → 没有 RT 线程，看主线程抖动（预期大）
+  ② 多线程，但**不加** -p                → RT 线程是 SCHED_OTHER（预期仍会被抢）
+  ③ 多线程，加 -p 80 + sudo              → SCHED_FIFO 生效（预期 max 明显收窄）
+
+  看 max 和 over200 这两列的变化 —— 这就是「实时性改造」的效果证据。</pre>
+
+<h2>§5 另一把尺子：单帧接收延迟（SO_TIMESTAMPING）</h2>
+
+<p>上面量的是「线程节拍准不准」。还有一种抖动是「帧本身晚到了」，要用另一把尺子量：内核收到帧的时刻 vs. 应用取到帧的时刻。</p>
+
+<table class="cols-3">
+<caption>表 6B-6　时间戳链路</caption>
+<thead><tr><th>环节</th><th>位置</th><th>做什么</th></tr></thead>
+<tbody>
+<tr><td>打开时间戳</td><td>CO_driver.c:322-330</td><td>对 CAN 套接字 <code>setsockopt(SO_TIMESTAMPING)</code>，模式是「软件时间戳」（<code>SOF_TIMESTAMPING_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE</code>）。注释里写明：硬件时间戳在很多设备上不靠谱，所以用软件。</td></tr>
+<tr><td>内核打戳</td><td>（内核）</td><td>内核在收到帧的瞬间记下时间，收在控制消息（cmsg）里。</td></tr>
+<tr><td>应用取戳</td><td>CO_driver.c:822（<code>CO_CANread</code>）</td><td>用 <code>recvmsg</code> 读，从 cmsg 里解析出：<code>SO_TIMESTAMPING</code> → 时间戳（:855-860）；<code>SO_RXQ_OVFL</code> → 收包队列溢出丢帧计数（:863）。</td></tr>
+<tr><td>存起来</td><td>CO_driver.c:927（<code>CO_CANrxFromEpoll</code>）→ :974</td><td>把时间戳存进 <code>rxArray[idx].timestamp</code>，供后续（如 trace）使用。</td></tr>
+</tbody>
+</table>
+
+<p><strong>怎么用来量抖动：</strong>在收到帧时，用「当前时间 − 帧时间戳」近似「帧从内核到应用」的延迟。配合 §4 的节拍统计，就能区分两类问题：</p>
+
+<pre>若节拍统计 max 很大、而单帧延迟正常  → 是「线程被占了 / 调度问题」
+若节拍统计正常、而单帧延迟很大      → 是「总线拥堵 / 驱动路径慢 / 收包队列撑了」
+
+两者一起看，才能定位抖动出在哪一段。</pre>
+
+<p class="warn"><strong>注意现状：</strong>时间戳在 <code>CO_CANread</code> → <code>CO_CANrxFromEpoll</code> 里<strong>已经取出来并存下了</strong>，但代码目前<strong>没有拿它做任何统计</strong>（只是存着）。也就是说，这个开关是「现成可用的测量入口」——正好是本站可以接上的活。</p>
+
+<h2>§6 小结 · 自测 · 衔接第 7 站</h2>
+
+<h3>6.1 本站（下篇）三句话</h3>
+<ol>
+<li><strong>定时靠 <code>timerfd</code> + <code>epoll</code></strong>：内核按 <code>it_interval = 1ms</code> 自动推进（不累积漂移），<code>epoll_wait</code> 一次等三路事件（定时 / 门铃 / CAN 帧），没事件时线程真睡眠。</li>
+<li><strong>测量点是现成的</strong>：<code>ep->timeDifference_us</code>（CO_epoll_interface.c:155）就是「本圈实际耗时」，理想 1000µs，抖动 = 实际 − 1000。<code>app_programRt</code> 每圈都能拿到它。</li>
+<li><strong>统计写在 <code>app_programRt</code></strong>：按 1 秒窗口记 <code>min/avg/max/超限次数</code>，重点盯 <code>max</code>。改造效果靠「单线程 / 多线程不加 -p / 多线程加 -p」三次对比来证明。</li>
+</ol>
+
+<h3>6.2 自测（能答上来就算过）</h3>
+<ol>
+<li><code>timerfd</code> 比 <code>usleep</code> 好在哪两点？（提示：漂移、与 epoll 的配合）</li>
+<li><code>it_value = 1ns</code> 和 <code>it_interval = 1000µs</code> 分别管什么？</li>
+<li><code>timeDifference_us</code> 是在哪两个时刻之间做差？为什么它天然就是「本圈耗时」？</li>
+<li>为什么 RT 线程被 <code>eventfd</code> 叫醒时，不会白跑一次 PDO？（提示：CO_epoll_interface.c:329）</li>
+<li>如果统计显示 <code>avg</code> 正常但 <code>max</code> 偶发很大，你应该先怀疑哪些原因？</li>
+<li>为什么在 RT 线程里 <code>printf</code> 会加大抖动？本骨架是怎么规避影响的？</li>
+</ol>
+
+<h3>6.3 衔接第 7 站</h3>
+
+<p>到这里，第 6 站的两件事都完成了：<strong>RT 线程能准时跑（上篇），并且我们能量出它有多准时（下篇）。</strong>这条「1ms 准时 → 收两帧 RPDO → 拿到左右轮实际位置」的路已经通了。</p>
+
+<p>但它现在还只是「打印 <code>posR/posL</code>」。<strong>第 7 站要做的，是把这两个位置变成有意义的「车在哪」</strong>——差速运动学：左右轮位置 → 车体的位移与转角（位姿 <code>x, y, θ</code>）。落点正是同两个钩子：RT 侧的 <code>app_programRt</code>（CO_main_basic.c:904）与收帧钩子 <code>H6064_write</code>（CO_application.c:31）。</p>
+
+<div class="footnote">
+<p><strong>本册主要取证位置：</strong>CO_epoll_interface.c:55（CANSEND_DELAY_US）、:61（clock_gettime_us）、:68-124（epoll/eventfd/timerfd 创建）、:143-190（wait 与 timeDifference_us）、:192-219（timerNext_us 提前触发）、:291-310（processMain）、:314-352（processRT）、:329（timerEvent 把关）；CO_main_basic.c:548/555/561、:890-904（rt_thread）、:811（app_programAsync）、:904（app_programRt 调用）；CO_application.c:177（app_programRt）；CO_driver.c:322-330（SO_TIMESTAMPING）、:822（CO_CANread）、:855-863（cmsg 解析）、:927-974（CO_CANrxFromEpoll 存时间戳）；CO_epoll_interface.h:87-112（结构体字段）。</p>
+<p><strong>阅读顺序：</strong>第 1 站（全局地图）→ 第 2 站（NMT/心跳/SYNC/EMCY）→ 第 3 站（OD &amp; SDO）→ 第 4 站（PDO 映射 &amp; CiA402）→ 第 5 站（启动链路走读）→ 第 6 站·上（多线程 &amp; SCHED_FIFO）→ <strong>第 6 站·下（本文）</strong>→ 第 7 站（里程计）。</p>
+</div>
+
+</body>
+</html>

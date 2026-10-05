@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 2 站 · 报文层运行链路：NMT / 心跳 / SYNC / EMCY（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.6pt; line-height:1.32;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-3a th:nth-child(1),.cols-3a td:nth-child(1){width:18%}
+.cols-3a th:nth-child(2),.cols-3a td:nth-child(2){width:34%}
+.cols-3a th:nth-child(3),.cols-3a td:nth-child(3){width:48%}
+.cols-3b th:nth-child(1),.cols-3b td:nth-child(1){width:19%}
+.cols-3b th:nth-child(2),.cols-3b td:nth-child(2){width:25%}
+.cols-3b th:nth-child(3),.cols-3b td:nth-child(3){width:56%}
+.cols-4a th:nth-child(1),.cols-4a td:nth-child(1){width:18%}
+.cols-4a th:nth-child(2),.cols-4a td:nth-child(2){width:16%}
+.cols-4a th:nth-child(3),.cols-4a td:nth-child(3){width:16%}
+.cols-4a th:nth-child(4),.cols-4a td:nth-child(4){width:50%}
+.cols-4b th:nth-child(1),.cols-4b td:nth-child(1){width:11%}
+.cols-4b th:nth-child(2),.cols-4b td:nth-child(2){width:25%}
+.cols-4b th:nth-child(3),.cols-4b td:nth-child(3){width:22%}
+.cols-4b th:nth-child(4),.cols-4b td:nth-child(4){width:42%}
+.cols-4c th:nth-child(1),.cols-4c td:nth-child(1){width:9%}
+.cols-4c th:nth-child(2),.cols-4c td:nth-child(2){width:27%}
+.cols-4c th:nth-child(3),.cols-4c td:nth-child(3){width:26%}
+.cols-4c th:nth-child(4),.cols-4c td:nth-child(4){width:38%}
+.cols-4d th:nth-child(1),.cols-4d td:nth-child(1){width:22%}
+.cols-4d th:nth-child(2),.cols-4d td:nth-child(2){width:20%}
+.cols-4d th:nth-child(3),.cols-4d td:nth-child(3){width:32%}
+.cols-4d th:nth-child(4),.cols-4d td:nth-child(4){width:26%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #2255a4; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#1a3f7a; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 2 站 · 报文层运行链路 —— NMT / 心跳 / SYNC / EMCY</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode V4 的 CANopen 从站（Linux 用户态 + SocketCAN，进程名 <code>canopend</code>）。双对象字典：<code>OD</code>（右电机）/ <code>OD_2nd</code>（左电机）。</p>
+<p><strong>本篇定位：</strong>第 2 站的补充册，讲<strong>报文层（NMT / 心跳 / boot-up / SYNC / EMCY）在工程里是怎么跑起来的</strong>。</p>
+<p><strong>怎么读：</strong>本册<strong>以函数为单位</strong>——每个函数只回答三件事：<span class="star">干什么、被谁调用、它调用了谁</span>。变量<strong>在它出现的地方就地说明</strong>，不做集中总表。细节只保留真正影响行为的（判据、单位、字节序、边界），不复述每一行。<strong>主线是整机的运行链路，不是单行实现。</strong></p>
+<p><strong>标记：</strong>灰框=补充，红框=坑，蓝框=简历话术；<span class="star">粗体</span>=关键结论。</p>
+</div>
+
+<h2>1. 全局运行链路：这个进程一辈子只做三件事</h2>
+
+<p><code>canopend</code> 是常驻进程，运行结构就三条链：<strong>① 上电初始化链</strong>（跑一次，把 socket、对象字典、各模块接好线）、<strong>② 周期运行链</strong>（每 100&nbsp;ms 或被 CAN 帧唤醒一次，收 → 处理 → 发）、<strong>③ 复位链</strong>（收到 NMT 复位命令或异常时，退回 ① 重来）。本篇讲的 NMT / 心跳 / SYNC / EMCY <strong>全部活在 ② 里</strong>。</p>
+
+<pre>main()  —— canopend 进程
+│
+├─① 上电初始化链（跑一次）
+│    CO_new() ×2            建 CO / CO_2nd 两套对象（含所有子模块结构体）
+│    CO_storageLinux_init() 载入持久化参数（如 0x1017 心跳周期）
+│    app_programStart()     应用预置 OD 初值（0x1006 / 0x1005 …）
+│    ┌── 通信复位时从这里重来 ↓ ──────────────────────────┐
+│    │ CO_CANinit() ×2        打开 can0 的 SocketCAN 句柄  │
+│    │ CO_LSSinit()           LSS 从站：身份对象 / 节点号   │
+│    │ CO_CANopenInit() ×2    各模块 init 接线（见 §2.3）   │
+│    │ CO_CANopenInitPDO() ×2 解析 PDO 映射                │
+│    │ CO_CANsetNormalMode()  放开收发，进入正常模式        │
+│    └────────────────────────────────────────────────────┘
+│
+└─② 周期运行链（每轮循环）
+     CO_epoll_wait()          等事件：CAN 帧到达 或 100ms 定时到
+     │
+     ├─ CO_epoll_processRT()    ① 收帧分发  ② SYNC / RPDO / TPDO   ← §3.1
+     ├─ CO_epoll_processMain()  CO_process()：EM → NMT → SDO → …   ← §3.2
+     │      └─ CO_CANmodule_process()  ← 全进程唯一的 send() 出口
+     └─ CO_epoll_processLast()  算出下一次唤醒时间
+</pre>
+
+<p>把上图画成一句话：<strong>收帧走 <code>processRT</code> 的回调，状态机走 <code>processMain</code> 的 <code>CO_process()</code>，所有发出的帧最后都从 <code>CO_CANmodule_process()</code> 出去。</strong>记住这三句，后面每个模块只需回答"它挂在哪一段"。</p>
+
+<table class="cols-3a">
+<caption>表 1-1　报文层四个模块各自挂在哪一段链路</caption>
+<thead><tr><th>链路环节</th><th>入口函数（谁被调用）</th><th>报文层模块在这里做什么</th></tr></thead>
+<tbody>
+<tr><td>收帧分发</td><td><code>CO_CANrxFromEpoll()</code></td><td>把内核收到的帧按 COB-ID 匹配到槽位，调对应 <code>CANrx_callback</code>：NMT 命令、SYNC、EMCY 消费、PDO 都在这里"进"。</td></tr>
+<tr><td>周期处理·第一部分</td><td><code>CO_process_SYNC()</code> → <code>CO_SYNC_process()</code></td><td><strong>SYNC</strong>：生产 / 消费同步节拍。</td></tr>
+<tr><td>周期处理·第二部分</td><td><code>CO_process()</code></td><td>先 <code>CO_CANmodule_process()</code>（发帧），再依次 <code>CO_EM_process()</code> → <code>CO_NMT_process()</code> → SDO/HBconsumer/TIME。<strong>EMCY 与 NMT / 心跳在这里跑</strong>。</td></tr>
+</tbody>
+</table>
+
+<table class="cols-3a">
+<caption>表 1-2　实测抓到的帧，各由谁造出来</caption>
+<thead><tr><th>实测帧（vcan）</th><th>由哪个函数造</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>701 [1] 00</code></td><td><code>CO_NMT_process()</code></td><td>心跳 / <strong>boot-up</strong>，本机（nodeId=1）发给主站"我还活着"。<code>00</code> = 状态 INITIALIZING。见 §5。</td></tr>
+<tr><td><code>081 [8] 10 81 10 14 …</code></td><td><code>CO_EM_process()</code>（内容来自 <code>CO_error()</code>）</td><td>EMCY：报错。本例是沙箱环境造成的假故障。见 §7。</td></tr>
+<tr><td><code>080 [0]</code></td><td><code>CO_SYNC_process()</code></td><td>SYNC 节拍，本机是生产者，每 100&nbsp;ms 广播一帧。见 §6。</td></tr>
+<tr><td><code>7E4 / 7E5 …</code></td><td>LSS slave / master</td><td>LSS 配置报文（节点号、波特率），只在配置阶段出现。</td></tr>
+<tr><td><code>0x38A / 0x38B …</code></td><td>RPDO</td><td>右 / 左电机的实时数据通道，第 3 站展开。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong>为什么先画链路再讲模块：</strong>模块名（<code>CO_NMT_process</code>、<code>CO_SYNC_process</code>…）单看很容易晕。先记住"总线上有这几种帧 + 它们分别由哪一段链路产生"，再回头读代码，顺序就顺了。之后每节的写法都一样：<strong>定位 → 调用关系 → 函数表 → 关键点</strong>。</p>
+</div>
+
+<h2 class="pgbreak">2. 上电初始化链：这个节点是怎么"上线"的</h2>
+
+<p>先讲协议，再讲代码。按 CANopen 规定，一个节点上电后<strong>不是立刻就能收发数据</strong>的，它必须走完一条固定的上线流程；本节代码就是这条流程的一次实现。看代码时请始终对照下面这张图。</p>
+
+<pre>CANopen 节点上线流程（协议规定）          ← 本节代码就是在实现这条流程
+  INITIALIZING ──初始化完──▶ 发出 boot-up "701 [1] 00" ──▶ PRE-OPERATIONAL
+        │                                                      │ 只允许 SDO / 心跳 / EMCY
+        │                                                      │ PDO 一句都不许发
+        │                                                      ▼ 主站配好参数、下 NMT 启动
+        │                                                 OPERATIONAL
+        │                                            此时才允许 PDO 收发
+        │
+  代码里的三步（顺序不可换）：
+   ① 建对象      CO_new() ×2                 —— 造零件：按 OD 配置表在堆上建出各模块
+   ② 接总线      CO_CANinit() ×2             —— 接上线：打开 can0，但还没放开收发
+   ③ 接线 + 上线 CO_CANopenInit()/PDO()      —— 发号 + 登记回调 + 分配 nodeId
+                 CO_CANsetNormalMode()       —— 放开收发；"这一刻"节点才上线，
+                                                 boot-up 也在这之后才由心跳生产者发出</pre>
+
+<div class="note">
+<p><strong>一句话读懂本节：</strong>三步的<strong>职责边界</strong>恰好对应三个函数——<code>CO_new()</code> 只造对象（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L761">CANopen.c:761</a>），<code>CO_CANinit()</code> 只接总线（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L844">CANopen.c:844</a>），<code>CO_CANopenInit()</code> 只接线（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L896">CANopen.c:896</a>）。而<b>上线与否</b>只由一个开关决定：<code>CANmodule-&gt;CANnormal</code>——只有 <code>CO_CANsetNormalMode()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L179">CO_driver.c:179</a>）把它置真，周期处理里的状态门控（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L333">CO_epoll_interface.c:333</a>）才会放行。在此之前，收到的帧也不处理、要发的帧也发不出去。</p>
+</div>
+
+<h3>2.1 只跑一次的阶段：造零件、载参数、预置 OD</h3>
+
+<p>下面这几步在 <code>main()</code> 里<strong>只跑一次</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L273">CO_main_basic.c:273</a> 起），都在外层复位循环<strong>之前</strong>。它们建立的是"零件"和"参数"，与总线状态无关。</p>
+
+<table class="cols-4b">
+<caption>表 2-1　一次性阶段：谁被调用、为什么必须是这个顺序</caption>
+<thead><tr><th>步骤</th><th>函数（位置）</th><th>做了什么 / 谁调它</th><th>为什么必须在这一步（协议含义）</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>main()</code> 参数解析<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L273">CO_main_basic.c:273</a></td><td>认设备名、<code>-i</code> 节点号、<code>-s</code> 存储路径；<code>mlStorage.pendingNodeId</code> 暂存节点号。</td><td>节点号 <b>决定本机所有 COB-ID</b>（心跳 <code>0x700+n</code>、EMCY <code>0x80+n</code>、SDO <code>0x600+n</code>），必须最先定下来。</td></tr>
+<tr><td>2</td><td><code>CO_new()</code> ×2<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L463">CO_main_basic.c:463</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L475">:475</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L761">CANopen.c:761</a></td><td>按配置表在堆上建出 <code>CO</code> / <code>CO_2nd</code>，含 CANmodule、NMT、SYNC、EM、PDO、SDO 等全部子模块。<code>OD_INIT_CONFIG</code> / <code>OD_2nd_INIT_CONFIG</code> 是配置表，<code>CNT_NMT</code>/<code>CNT_SYNC</code>… 决定某模块建几个。</td><td>协议里的"节点"就是这堆结构体。<b>此刻还没碰总线</b>——只是照图纸把零件造齐。</td></tr>
+<tr><td>3</td><td><code>CO_storageLinux_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L485">CO_main_basic.c:485</a></td><td>把 <code>0x1010/0x1011</code> 与持久化数据块接到文件，载入上次保存的参数。</td><td>像 <code>0x1017</code>（心跳周期）这类参数是掉电保持的，<b>必须在下面读 OD 之前载入</b>，否则读到的是默认值。</td></tr>
+<tr><td>4</td><td><code>app_programStart()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L503">CO_main_basic.c:503</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L65">CO_application.c:65</a></td><td>应用预置 OD 初值：本工程在此写 <code>0x1006 = 100000</code>（SYNC 周期）、<code>0x1005 = 0x40000080</code>（本机作 SYNC 生产者）等。</td><td>同理：<b>应用写 OD 必须早于 <code>CO_CANopenInit()</code></b>，否则你写的值会被 init 的默认值覆盖。这是应用层与协议层的先后约定。</td></tr>
+<tr><td>5</td><td><code>CO_epoll_create(&amp;epMain, …)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L548">CO_main_basic.c:548</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L68">CO_epoll_interface.c:68</a></td><td>建主循环定时器，周期<code>MAIN_THREAD_INTERVAL_US = 100000</code>（100&nbsp;ms），即"一轮"的时间上限。</td><td><b>协议里心跳/SYNC 是定时行为</b>：总线上没帧时，至少每 100&nbsp;ms 醒一次去跑状态机、算下一次心跳。这个周期就是那个节拍。</td></tr>
+</tbody>
+</table>
+
+<h3>2.2 通信复位链：让节点"下线再上线"的一段可重复代码</h3>
+
+<p>下面这几步在 <code>while</code> 外层循环里（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L575">CO_main_basic.c:575</a>），<strong>每次通信复位都要重跑一遍</strong>。什么算通信复位？——收到 NMT 复位命令（<code>0x81</code>）、LSS 改了节点号 / 波特率、或 LSS 处理返回 <code>CO_RESET_COMM</code>。<b>这也解释了"为什么改完节点号要复位/重启进程才生效"：新配置要重新走一遍这条链。</b></p>
+
+<table class="cols-4b">
+<caption>表 2-2　通信复位链：调用顺序与其中的协议约定</caption>
+<thead><tr><th>序</th><th>函数（位置）</th><th>做了什么 / 谁调它</th><th>为什么必须这一步（协议含义）</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>CO_CANsetConfigurationMode()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L587">CO_main_basic.c:587</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L171">CO_driver.c:171</a><br><code>CO_CANmodule_disable()</code> ×2<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L588-L589">CO_main_basic.c:588-589</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L391">CO_driver.c:391</a></td><td>把 socket 拉回配置态、停掉收发（两套对象都要 disable）。</td><td>协议规定：改配置（节点号、PDO 映射、波特率）必须在<b>总线静止</b>时做。所以先"闭麦"——这也是 2.3 的 alternatives 能安全改指针的前提。</td></tr>
+<tr><td>2</td><td><code>CO_CANinit(CO)</code> / <code>CO_CANinit(CO_2nd)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L593">CO_main_basic.c:593</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L600">:600</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L844">CANopen.c:844</a></td><td>打开 <code>can0</code> 的 SocketCAN 句柄并绑到 epoll。<code>CANptr</code> 里带 <code>can_ifindex</code>、<code>epoll_fd</code>。</td><td>两套对象各持一个 CANmodule，但<b>共用同一个 fd</b>（同一根总线）。这一步只是"接上线"，<b>还没放开收发</b>。</td></tr>
+<tr><td>3</td><td><code>CO_LSSinit()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L614">CO_main_basic.c:614</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L867">CANopen.c:867</a><br>其内部再调 <code>CO_LSSslave_init()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L879">CANopen.c:879</a>）</td><td>取 <code>0x1018</code> 身份对象（厂商/产品/版本/序列号），建 LSS 收发槽，准备接收节点号与波特率分配。</td><td>LSS 是"给节点发身份证"的通道。<b>注意它是在 <code>CO_CANopenInit()</code> 之前单独调的</b>：因为下面 §2.3 的 init 内部要先判"节点号配没配"，得先有 LSS 对象。</td></tr>
+<tr><td>4</td><td><code>CO_CANopenInit(CO, NULL, NULL, …)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L626-L637">CO_main_basic.c:626-637</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L896">CANopen.c:896</a></td><td>核心接线：按固定顺序把各模块 init、把 OD 参数读进来（见 §2.3）。</td><td>这一步"把协议栈装到节点上"——决定这个节点有几个 NMT、有没有 SYNC、SDO 超时多少。<code>NMT_CONTROL</code>/<code>FIRST_HB_TIME</code> 在这里生效。</td></tr>
+<tr><td>5</td><td><code>CO_CANopenInit(CO_2nd, CO-&gt;NMT, CO-&gt;em, …)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L649-L660">CO_main_basic.c:649-660</a></td><td>同样初始化第二套 OD，但 <b>NMT 与 EM 指针直接复用第一套</b>（传的是 <code>CO-&gt;NMT</code>、<code>CO-&gt;em</code>）。</td><td>见 §2.4——这正是本工程"双 OD、只有一个 NMT / 一个 EMCY 生产者"的由来。</td></tr>
+<tr><td>6</td><td><code>CO_CANopenInitPDO()</code> ×2<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L751">CO_main_basic.c:751</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L768">:768</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1206">CANopen.c:1206</a></td><td>解析 <code>0x1400/0x1600/0x1800/0x1A00</code>，把 PDO 收发与 OD 映射接上。</td><td><b>PDO 单独一步、且排在最后</b>：PDO 的收发要引用已建好的 SYNC/EM，必须等 <code>CO_CANopenInit()</code> 全部跑完才安全。</td></tr>
+<tr><td>7</td><td><code>CO_CANsetNormalMode()</code> ×2<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L787-L788">CO_main_basic.c:787-788</a> → <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L179">CO_driver.c:179</a></td><td>放开收发、置 <code>CANnormal = true</code>；随后 <code>reset = CO_RESET_NOT</code>，进入内层循环。</td><td><b>就是"上线"的那一瞬间</b>：此前所有帧都发不出去、收到的也不处理；<b>boot-up 也在这之后才发出</b>（协议：INITIALIZING 期间不发别帧）。</td></tr>
+</tbody>
+</table>
+
+<h3>2.3 <code>CO_CANopenInit()</code> 内部：接线的依赖顺序（为什么不能乱）</h3>
+
+<p><code>CO_CANopenInit()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L896-L1204">CANopen.c:896-1204</a>）自己不做业务，只按固定顺序给每个模块"发号 + 登记回调"。顺序不是随手排的，它其实是一张<strong>依赖图</strong>：谁要引用谁，谁就必须先建。下表按源码里的真实顺序列（"守卫"= 外面那层 <code>if (CO_GET_CNT(…) == 1)</code>）。</p>
+
+<table class="cols-4b">
+<caption>表 2-3　各模块 init 的调用顺序与依赖理由</caption>
+<thead><tr><th>序 · 模块</th><th>init 调用（位置）</th><th>建了什么 / 谁调它</th><th>为什么排在这个位置（依赖）</th></tr></thead>
+<tbody>
+<tr><td>0 · 前置<br>alternatives</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L919-L925">CANopen.c:919-925</a></td><td><code>if (CO_GET_CNT(NMT)==0) co-&gt;NMT = NMT;</code><br><code>if (em == NULL) em = co-&gt;em;</code></td><td>先把"外来 / 复用"的 NMT、EM 指针定下来。<b>第二套 OD 就是靠这里把 NMT/EM 指回第一套</b>（§2.4），所以后面这两步的 init 会被守卫跳过。</td></tr>
+<tr><td>0.5 · 节点号<br>校验与门闩</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L927-L937">CANopen.c:927-937</a>（校验）<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L946-L949">CANopen.c:946-949</a>（门闩）</td><td>校验传进来的 <code>nodeId</code>：<code>nodeId&lt;1 || nodeId&gt;127</code> 直接返回 <code>CO_ERROR_ILLEGAL_ARGUMENT</code>；若 <code>nodeId == CO_LSS_NODE_ID_ASSIGNMENT</code> 则置 <code>co-&gt;nodeIdUnconfigured = true</code>，并在 :947 <b>直接 <code>return CO_ERROR_NODE_ID_UNCONFIGURED_LSS</code>，底下所有 init 一律不跑</b>。</td><td><b>必须先校验、再建槽</b>：后面每个模块的 COB-ID（<code>0x80+n / 0x180+n / 0x580+n …</code>）都靠这个 nodeId 算出来，ID 不合法就整个不能建。第二套传的是 <code>CO_activeNodeId+1</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L659">CO_main_basic.c:659</a>，见 §2.4），所以它到这里是 nodeId=2。</td></tr>
+<tr><td>1 · Emergency</td><td><code>CO_EM_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L953">CANopen.c:953</a>（守卫 :952）</td><td>建 EMCY 生产者：读 <code>0x1014</code>（COB-ID）、<code>0x1001</code>（错误寄存器）、<code>0x1003</code>（历史）。COB-ID = <code>0x80+nodeId</code>（本机 <code>0x081</code>）。</td><td><b>排第一，因为 NMT 要引用它</b>：状态机要读"错误寄存器"来决定是否退出 OPERATIONAL，EM 必须先存在。</td></tr>
+<tr><td>2 · NMT / 心跳</td><td><code>CO_NMT_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L984">CANopen.c:984</a>（守卫 :983）</td><td>建两个槽：NMT 收帧槽（<code>0x000</code>）、心跳发送槽（<code>DLC=1</code>）；读 <code>0x1017</code> 算 <code>HBproducerTime_us</code>；初始状态 = <code>INITIALIZING</code>。</td><td>依赖上一步的 <code>em</code>（入参传的就是它）。它是整机唯一的"总开关"，心跳 / boot-up 都从这里出。</td></tr>
+<tr><td>3 · 心跳消费者</td><td><code>CO_HBconsumer_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1007">CANopen.c:1007</a></td><td>建"监听别人心跳"的槽；监控哪些节点由 <code>0x1016</code> 决定。</td><td>与心跳生产者方向相反：负责看<b>别的</b>节点有没有超时。</td></tr>
+<tr><td>4 · SDO server</td><td><code>CO_SDOserver_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1023">CANopen.c:1023</a></td><td>建 <code>0x601</code> 收 / <code>0x581</code> 发的槽。</td><td>被动应答别人对本机参数的读写（分段 / 超时在运行期处理）。</td></tr>
+<tr><td>5 · SDO client</td><td><code>CO_SDOclient_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1041">CANopen.c:1041</a></td><td>建 <code>0x581</code> 收 / <code>0x601</code> 发的槽。</td><td>本机主动读写别人时的通道，与 server 对称。</td></tr>
+<tr><td>6 · TIME</td><td><code>CO_TIME_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1057">CANopen.c:1057</a></td><td>建 <code>0x100</code> 时间戳槽。</td><td>可选功能，本工程用不到，但槽照建。</td></tr>
+<tr><td>7 · SYNC</td><td><code>CO_SYNC_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1072">CANopen.c:1072</a></td><td>读 <code>0x1005/0x1006/0x1007/0x1019</code>；算出 <code>CAN_ID</code> 与 <code>isProducer</code>；建 <code>0x080</code> 收发槽。</td><td><b>排在靠后是有原因的</b>：紧接着的 <code>CO_CANopenInitPDO()</code> 建的 PDO 要拿 SYNC 的节拍，所以 SYNC 必须先于 PDO。</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>看懂"守卫"就懂了本工程的一个关键设计：</strong>每个 init 外面都套着 <code>if (CO_GET_CNT(某模块) == 1)</code>——<b>配置表里写了几，就建几个</b>。第一套 OD 的配置表 <code>OD_INIT_CONFIG</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L674-L700">OD.h:674-700</a>）把 <code>CNT_NMT/CNT_EM/CNT_SYNC</code> 都设为 1；而第二套的 <code>OD_2nd_INIT_CONFIG</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD_2nd.h#L591-L630">OD_2nd.h:591-630</a>）把它们全设为 <b>0</b>，只留 <code>CNT_RPDO=4 / CNT_TPDO=4</code>。于是同一个 <code>CO_CANopenInit()</code> 跑第二遍时，NMT/EM/SYNC/SDO 的 init 全部被守卫挡掉，第二套只建了 PDO。这就是"双对象字典"能用同一套代码实现的原因——<b>不是加分支，而是改配置表</b>。</p>
+</div>
+
+<h3>2.4 关键：本机有<strong>两套对象字典，但只有一套 NMT / EMCY</strong></h3>
+
+<p>回到 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L649-L651">CO_main_basic.c:649-651</a>：传进去的第 2、3 个参数是 <code>CO-&gt;NMT</code>、<code>CO-&gt;em</code>，也就是<strong>第一套的 NMT 和 EM 对象</strong>（源码里叫 "alternate NMT / alternate em"）。配合 §2.3 的 alternatives，效果是：</p>
+
+<ul>
+<li>整机<strong>只有一个 NMT 状态机、一个 EMCY 生产者</strong>——左右电机共用 nodeId=1 的身份对外，状态绑在一起。</li>
+<li>第二套 OD 只负责自己的 PDO / SDO 数据（左电机），它的 nodeId 由 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L659">CO_main_basic.c:659</a> 设为 <code>CO_activeNodeId + 1</code> = 2。</li>
+<li>这解释了周期链里的一个细节：主循环对 <code>CO_2nd</code> 调了 <code>CO_epoll_processRT()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L799-L800">CO_main_basic.c:799-800</a>），但它的 <code>CO_epoll_processMain()</code> 被注释掉了（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L806">CO_main_basic.c:806</a>）——它不需要自己的 NMT/EM（那些在第一套上已跑过），而它需要的 <strong>SYNC / RPDO / TPDO 恰好都在 <code>processRT</code> 里处理</strong>。</li>
+</ul>
+
+<div class="note">
+<p><strong>变量就地说到这儿：</strong>本册涉及的所有"配置型变量"其实只有三类——① 编译期常量（<code>MAIN_THREAD_INTERVAL_US</code>、<code>NMT_CONTROL</code>、<code>FIRST_HB_TIME</code>）；② 从 OD 读出来的值（<code>0x1005/0x1006/0x1014/0x1017/0x1019</code>）；③ 运行期状态（<code>operatingState</code>、<code>CANnormal</code>、<code>nodeIdUnconfigured</code>）。后续每节遇到的变量，都在它出现的地方说明，不再单独汇总。</p>
+</div>
+
+<h2 class="pgbreak">3　周期运行链：一轮循环里谁调谁</h2>
+
+<p>初始化跑完（<code>CANnormal = true</code>），程序进入<strong>内层循环</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L795-L812">CO_main_basic.c:795-812</a>）：每 100&nbsp;ms、或被一帧 CAN 唤醒，就转一圈。<b>这一圈就是"协议跑起来"的地方</b>——收进来的帧在这里分发、状态机在这里推进、要发的帧在这里出去。</p>
+
+<div class="note">
+<p><strong>看懂这一轮，就懂了整个协议栈的运行方式：</strong>它同时被两种东西驱动——① <b>事件驱动</b>：总线上来了帧（NMT 命令 / SDO / PDO…）就立即处理；② <b>时间驱动</b>：没帧时也要按 100&nbsp;ms 的节拍跑一遍，检查"心跳该不该发、SYNC 该不该发、别人的心跳超没超时"。所以一轮的骨架必然是<strong>"先收 → 再跑状态机 → 最后算下次什么时候醒"</strong>。下面的代码结构正是这三段。</p>
+</div>
+
+<pre>main() 内层循环（一轮 ≈ 100 ms）        ← CO_main_basic.c:795-812
+  │
+  ├─ CO_epoll_wait(&amp;epMain)                       ① 等：来帧了 或 100ms 到了
+  │
+  ├─ CO_epoll_processRT(&amp;epMain, CO,     false)    ② 实时段（收帧 + 同步类）
+  ├─ CO_epoll_processRT(&amp;epMain, CO_2nd, false)      └ 左右两套各来一遍
+  │      ├─ CO_CANrxFromEpoll()  → 按 COB-ID 找到接收槽 → 调该槽登记的回调
+  │      └─ CO_process_SYNC() → CO_process_RPDO() → CO_process_TPDO()
+  │            入口处有状态门控：nodeIdUnconfigured / CANnormal 为真才往下走
+  │
+  ├─ CO_epoll_processGtw()
+  ├─ CO_epoll_processMain(&amp;epMain, CO, GATEWAY_ENABLE, &amp;reset)  ③ 周期段
+  │      └─ CO_process()
+  │            ├─ CO_CANmodule_process()   ← 补发上一轮积压的帧（§3.3）
+  │            ├─ CO_LSSslave_process()
+  │            ├─ CO_EM_process()          ← §7  （先刷新错误寄存器）
+  │            ├─ CO_NMT_process()         ← §4/§5（再据此推状态机 + 发心跳/boot-up）
+  │            ├─ CO_SDOserver_process()   ← 之后全用"刚更新过的 NMT 状态"做门控
+  │            ├─ CO_HBconsumer_process()  ← §5
+  │            ├─ CO_TIME_process()
+  │            └─ CO_GTWA_process()
+  │
+  ├─ CO_epoll_processLast()                      ④ 算：下一次该什么时候醒
+  └─ app_programAsync()                             应用自己的周期性动作</pre>
+
+<h3>3.1 收帧只有一条入口：<code>CO_CANrxFromEpoll()</code>（事件驱动的起点）</h3>
+
+<p>一轮从"收帧"开始。协议栈在这里的设计很干净：<strong>全进程只有一个函数去 read socket</strong>，读上来后按 COB-ID 找到"接收槽"，再调该槽登记的回调——<b>各模块谁都不自己去 read</b>。</p>
+
+<table class="cols-4b">
+<caption>表 3-1　收帧段：两个函数，一条通道</caption>
+<thead><tr><th>序</th><th>函数（位置）</th><th>干了什么 / 谁调它 → 它调谁</th><th>为什么这样设计（协议含义）</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>CO_epoll_processRT(ep, co, realtime)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L314-L352">CO_epoll_interface.c:314-352</a></td><td>main 每轮调它两次（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L799-L800">CO_main_basic.c:799-800</a>），分别传 <code>CO</code> / <code>CO_2nd</code>。① 若 epoll 报了可读 → 收帧；② 在 OD 锁保护下依次跑 SYNC → RPDO → TPDO。<code>ep-&gt;epoll_new</code>＝"有新事件待处理"；<code>ep-&gt;timeDifference_us</code>＝本轮与上轮的时间差，喂给各定时器。</td><td>为什么把"收帧"和"跑 PDO"放在同一段：<b>PDO 是实时数据</b>，收到就该立刻按映射写进 OD，不能等到后面的状态机段。</td></tr>
+<tr><td>2</td><td><code>CO_CANrxFromEpoll(CANmodule, ev, …)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L927-L965">CO_driver.c:927-965</a></td><td>驱动层：从 socket 读一帧，用帧里的 COB-ID 到接收槽数组里找匹配的槽（槽在 init 时登记过 <code>ident/mask/callback</code>），命中就调该槽的回调，把解析好的 <code>msg</code> 交给它。</td><td><b>全进程唯一的收帧入口</b>。要改"收哪些帧"，只需改接收槽的 COB-ID，这段代码一行都不用动（见下方灰框的例子）。</td></tr>
+</tbody>
+</table>
+
+<p><strong>这就是"收帧只有一条通道"的含义</strong>：NMT、心跳消费者、EMCY、SYNC、TIME、SDO、RPDO 的<strong>收帧全部由这一个函数分发</strong>，各模块谁都不自己去 read socket——它们只是把回调函数登记进接收槽。</p>
+
+<table class="cols-4b">
+<caption>表 3-2　本工程实际登记的接收槽（帧进来后各回各家）</caption>
+<thead><tr><th>帧 COB-ID</th><th>登记的回调</th><th>交到谁手里</th><th>协议角色 / 为什么</th></tr></thead>
+<tbody>
+<tr><td><code>0x000</code></td><td><code>CO_NMT_receive</code></td><td>NMT 状态机（§4）</td><td>全总线唯一"谁都能听"的广播控制帧。<b>只把命令存起来，不改状态</b>——真正的迁移留给后面的 <code>CO_NMT_process()</code>。</td></tr>
+<tr><td><code>0x081</code></td><td><code>CO_EM_receive</code></td><td>EMCY 消费者</td><td>收<b>别人</b>发的紧急报文；本机自己发的那条见 §7。</td></tr>
+<tr><td><code>0x080</code></td><td><code>CO_SYNC_receive</code></td><td>SYNC（§6）</td><td>同步节拍，用于让各节点的 PDO 对齐发送时刻。</td></tr>
+<tr><td><code>0x100</code></td><td><code>CO_TIME_receive</code></td><td>TIME 时间戳</td><td>可选功能，本工程用不到，但槽照建。</td></tr>
+<tr><td><code>0x700+n</code></td><td><code>CO_HBcons_receive</code></td><td>心跳消费者（§5）</td><td>监听<b>别的</b>节点是否还活着；监控谁由 <code>0x1016</code> 决定。</td></tr>
+<tr><td><code>0x601</code></td><td><code>CO_SDO_receive</code></td><td>SDO server</td><td>被动应答别人对本机参数的读写。</td></tr>
+<tr><td><code>0x581</code></td><td><code>CO_SDOclient_receive</code></td><td>SDO client</td><td>本机主动读写别人时的应答。</td></tr>
+<tr><td><code>0x38A</code> / <code>0x38B</code></td><td><code>CO_PDO_receive</code></td><td>RPDO</td><td>实时数据通道：收下即按映射写进 OD（左 / 右电机各一条，第 3 站展开）。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p>注意最后一行：本工程的 RPDO 不是默认的 <code>0x200+nodeId</code>，而是在 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L91-L121">CO_application.c:91/121</a> 里把 COB-ID 改成了 <code>0x38A</code>（右）/ <code>0x38B</code>（左）。<strong>只要改 COB-ID，接收槽的匹配条件就跟着变，收帧入口本身不用动</strong>——这就是把"匹配"交给数据（槽）而不是交给代码的好处。</p>
+</div>
+
+<h3>3.2 周期段：<code>CO_process()</code> 一轮按写死的顺序跑完所有"慢"模块</h3>
+
+<p>这一段是<strong>时间驱动</strong>的核心：每次 <code>CO_epoll_wait()</code> 醒来，<code>CO_epoll_processMain()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L291-L310">CO_epoll_interface.c:291-310</a>）无条件调一次 <code>CO_process()</code>，把 <code>timeDifference_us</code>（距上次的微秒数）交给它。它自己几乎不做事，只是把 <code>CO_process()</code> 的返回值抄给 <code>reset</code>，并在"还有帧没发出去"时把下一轮唤醒时间压短，好尽快把帧挤出去。<br>下表不是"函数清单"，而是<strong>一轮的执行轨迹</strong>——按"序"从上往下读，就是 CPU 一帧一帧走过的路径。顺序是写死在 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1291-L1402">CANopen.c:1291-1402</a> 里的，<strong>不能颠倒，因为模块之间有数据依赖</strong>。</p>
+
+<table class="cols-4b">
+<caption>表 3-3　<code>CO_process()</code> 一轮的执行轨迹（定义处 → 调用处）</caption>
+<thead><tr><th>序</th><th>函数（定义 → 调用位置）</th><th>干了什么 / 谁调它 → 它调谁</th><th>为什么必须排在这个位置（协议含义）</th></tr></thead>
+<tbody>
+<tr><td>0</td><td><code>CO_CANmodule_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L777-L814">CO_driver.c:777-814</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1302-L1303">CANopen.c:1303</a></td><td>把上一轮没挤出去的 <code>bufferFull</code> 槽逐个重发（§3.3）；顺带把驱动的 <code>CANerrorStatus</code> 抄进模块</td><td><strong>必须第一</strong>：先把上轮积压的帧送出去，否则本轮新帧永远排在旧帧后面，总线延迟会一轮轮滚大。<code>CO_epoll_processMain()</code> 还会在它跑完后（<code>CANtxCount&gt;0</code>）把下次唤醒压到 <code>CANSEND_DELAY_US</code>，配合它尽快清空</td></tr>
+<tr><td>1</td><td><code>CO_LSSslave_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/305/CO_LSSslave.c">CO_LSSslave.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1305-L1311">CANopen.c:1307</a>（守卫 :1306）</td><td>LSS 从站：处理"改节点号 / 改波特率"；需要时返回真，令 <code>reset = CO_RESET_COMM</code></td><td>LSS 是<strong>上线前的身份配置</strong>阶段。只要还在配身份，本节点的状态就不可信，必须最先判，并允许它直接触发一次通信复位（重新走 §2.2 那条复位链）</td></tr>
+<tr><td>门闩</td><td><code>if (co-&gt;nodeIdUnconfigured) return reset;</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1346-L1349">CANopen.c:1347-1348</a></td><td>节点号还没配置，整轮就此打住</td><td>协议硬规则：<strong>节点号没定，不许做任何通信</strong>（EMCY / NMT / 心跳都不发）。这是"还没上线"状态的门闩——上线的开关见 §2 的 <code>CO_CANsetNormalMode()</code></td></tr>
+<tr><td>2</td><td><code>CO_EM_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c">CO_Emergency.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1351-L1357">CANopen.c:1353</a>（守卫 :1352）</td><td>EMCY 生产者：把攒下的错误组成紧急帧发出去；只有 <code>NMTisPreOrOperational</code> 为真才干活</td><td><strong>必须早于 NMT</strong>：EM 先把<strong>错误寄存器</strong>更新好，紧接着的 NMT 才能读到最新值，据此决定是否把状态回退。顺序反了，NMT 读到的就是上一轮的旧错误，状态回退会迟一拍</td></tr>
+<tr><td>3</td><td><code>CO_NMT_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c">CO_NMT_Heartbeat.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1359-L1365">CANopen.c:1361</a>（守卫 :1360）</td><td>NMT 状态机 + 心跳 / boot-up 发送（§4）；进出都用同一个 <code>NMTstate</code></td><td>排在 EM 之后（读它刚更新的错误寄存器）。它这一轮可能发生<strong>实际的状态迁移</strong>（如 PRE-OP → OP），而状态正是后面所有模块的门控来源 ⇒ 必须先跑、再算门控</td></tr>
+<tr><td>重算</td><td><code>NMTisPreOrOperational = (NMTstate == PRE \|\| NMTstate == OP)</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1366-L1367">CANopen.c:1366-1367</a></td><td>用 NMT 处理<strong>后</strong>的新状态重算门控标志</td><td>NMT 可能刚刚切了状态。后面 SDO / 心跳 / TIME 必须按<strong>新</strong>状态决定干不干活，不能沿用进函数时那个旧值——这一步就是"改完状态立刻刷新门控"</td></tr>
+<tr><td>4</td><td><code>CO_SDOserver_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SDOserver.c">CO_SDOserver.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1369-L1375">CANopen.c:1371</a></td><td>SDO server 的分段 / 超时处理；以刚重算的 <code>NMTisPreOrOperational</code> 门控</td><td>协议规定 SDO <strong>只在 PRE-OP / OPERATIONAL 有效</strong>（STOPPED / INITIALIZING 下不应答），所以它必须吃"最新状态"这个门控</td></tr>
+<tr><td>5</td><td><code>CO_HBconsumer_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_HBconsumer.c">CO_HBconsumer.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1377-L1384">CANopen.c:1379</a>（守卫 :1378）</td><td>心跳消费者：判<b>别人</b>是否超时（§5）；同样吃状态门控</td><td>同为"通信类"模块，受 NMT 状态门控。本工程 <code>0x1016</code> 全 0 ⇒ 实际不监控任何节点，代码照跑但不产生效果（§5）</td></tr>
+<tr><td>6</td><td><code>CO_TIME_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_TIME.c">CO_TIME.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1386-L1390">CANopen.c:1388</a>（守卫 :1387）</td><td>TIME 生产者 / 消费者（可选功能）</td><td>本工程用不到，但代码路径在；同为通信模块，放在状态门控段内</td></tr>
+<tr><td>7</td><td><code>CO_GTWA_process()</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/309/CO_gateway_ascii.c">CO_gateway_ascii.c</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1392-L1399">CANopen.c:1394</a>（守卫 :1393）</td><td>ASCII 网关（<code>co_gateway</code>）：处理外部调试命令；<code>enableGateway</code> 由 main 传入</td><td>调试口放最后：它是"给人看的"，不影响实时链，摆在最尾以免拖慢前面几个真正收发帧的模块</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>一轮的因果链，连起来读就是 CANopen 的"慢节奏"：</strong>补发旧帧（0）→ 判 LSS 与"节点号是否已配"（1／门闩）→ <strong>EM 更新错误寄存器（2）→ NMT 据此决定状态迁移（3）→ 用新状态重算门控（重算）→ SDO／心跳／TIME 在门控下依次干活（4~6）</strong> → 调试口收尾（7）。两个"绝对不能换"的点：<br>① <code>CO_CANmodule_process()</code> 必须第一——本轮各模块新写的帧要靠<strong>下一轮</strong>的它发出去，排在末尾就得多等一轮；<br>② <code>CO_EM_process()</code> 必须早于 <code>CO_NMT_process()</code>——NMT 读的必须是 EM <strong>刚写好</strong>的错误寄存器。</p>
+</div>
+
+<h3>3.3 发帧的唯一出口：全部模块 → <code>CO_CANsend()</code> → <code>send()</code></h3>
+
+<p>表 3-3 里每一个 <code>..._process()</code>，只要它这一轮要发帧，动作都一样：先把自己的数据写进本模块的发送槽 <code>CO_CANtx_t</code>，再调 <code>CO_CANsend()</code>。真正落到内核 socket 的 <code>send()</code> <strong>只在这一个函数里</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L714-L763">CO_driver.c:714-763</a>），<strong>没有任何模块绕过它直接写 socket</strong>。所以读代码时只要认准这一个出口，就能顺着它反查"这一帧是谁发的、什么时候发的"。</p>
+
+<table class="cols-4b">
+<caption>表 3-4　发帧链上的两个函数（定义 → 调用位置）</caption>
+<thead><tr><th>序</th><th>函数（定义 → 调用位置）</th><th>干了什么 / 谁调它 → 它调谁</th><th>协议含义 / 为什么这么设计</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>CO_CANsend(dev, buffer)</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L714-L763">CO_driver.c:714-763</a></td><td>立刻试发一帧，用 <code>send(MSG_DONTWAIT)</code>：<br>· 成功（<code>errno==0 &amp;&amp; n==CAN_MTU</code>）→ 清 <code>bufferFull</code>、<code>CANtxCount--</code>；<br>· 忙（<code>EINTR/EAGAIN/ENOBUFS</code>）→ 置 <code>bufferFull=true</code>、<code>CANtxCount++</code>，留给下一轮重发；<br>· 其它错误 → 记 <code>CANerrorStatus |= CO_CAN_ERRTX_OVERFLOW</code>、返回 <code>CO_ERROR_SYSCALL</code>。</td><td>CANopen 任何一帧（boot-up／心跳／EMCY／SDO／PDO／SYNC／LSS）最后都走这一条路径。<code>MSG_DONTWAIT</code> 意味着"发不出去不算错"——不阻塞、不等 socket，保证周期链不被一帧卡住，代价是要靠下面的 <code>CO_CANmodule_process()</code> 补发</td></tr>
+<tr><td>2</td><td><code>CO_CANmodule_process(dev)</code><br>定义 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L777-L814">CO_driver.c:777-814</a><br>调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1302-L1303">CANopen.c:1303</a>（表 3-3 第 0 步）</td><td>当 <code>CANtxCount &gt; 0</code> 时，遍历模块的发送槽，把 <code>bufferFull</code> 的那几个逐个重新交给 <code>CO_CANsend()</code>；顺带把驱动的 <code>CANerrorStatus</code> 抄到模块上。</td><td>这是 CANopenNode 的"<strong>补发</strong>"机制：把"发送失败"从错误变成"下一轮再试"（<code>bufferFull</code>＋<code>CANtxCount</code> 成对置位/清除）。<strong>它是表 3-3 里唯一排第一的模块，正是为了优先清空上一轮积压</strong>——实时系统不丢帧的关键就在这一步</td></tr>
+</tbody>
+</table>
+
+<p>顺着 <code>CO_CANsend()</code> 这个出口反查，全工程的"谁在发帧"就一目了然——这也正是 CANopen 协议在总线上表现出的全部报文类型：</p>
+
+<table class="cols-3b">
+<caption>表 3-5　谁在发帧：每种报文对应的发送者与触发条件</caption>
+<thead><tr><th>报文（COB-ID）</th><th>发送者（定义位置）</th><th>什么时候发（协议条件 / 触发点）</th></tr></thead>
+<tbody>
+<tr><td>boot-up / 心跳 <code>0x700+n</code></td><td><code>CO_NMT_process()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L240-L242">CO_NMT_Heartbeat.c:242</a></td><td>由表 3-3 第 3 步驱动。<strong>上电只发一次 boot-up</strong>（数据 <code>00</code>）；之后只有 <code>0x1017≠0</code> 才周期发心跳。本工程 <code>0x1017=0</code>，实测只抓到一帧 <code>701 [1] 00</code>（§4）。<br>注：<b>从站不发 NMT 命令</b>；发命令的是主站函数 <code>CO_NMT_sendCommand()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L332-L350">CO_NMT_Heartbeat.c:349</a>，仅在编译 NMT_MASTER 时存在），本机是从站，走不到那一段</td></tr>
+<tr><td>EMCY <code>0x080+n</code></td><td><code>CO_EM_process()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L650-L650">CO_Emergency.c:650</a></td><td>由表 3-3 第 2 步驱动；<code>NMTisPreOrOperational</code> 为真（PRE-OP 或 OP）才发。所以 EMCY 是少数"不等进 OP"就能发的报文（§7）</td></tr>
+<tr><td>SYNC <code>0x080</code></td><td><code>CO_SYNCsend()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.h#L225-L231">CO_SYNC.h:230</a></td><td>不在这张周期表里：由 <code>CO_epoll_processRT()</code> → <code>CO_process_SYNC()</code> 驱动（紧贴收帧，§6）。本机是 SYNC 生产者，<code>0x1006=100000µs</code>，周期发（§6）</td></tr>
+<tr><td>TPDO</td><td><code>CO_TPDO_process()</code> → <code>CO_TPDOsend()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L1313-L1313">CO_PDO.c:1313</a>（在 <code>CO_TPDOsend()</code> 内，<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_PDO.c#L1226-L1314">:1226-1314</a>）</td><td><strong>PDO 只在 OPERATIONAL 发</strong>（协议硬性规定，见 §2 note）；受 SYNC / 事件 / 应用触发（第 3 站展开）</td></tr>
+<tr><td>SDO server 应答 <code>0x580+n</code></td><td><code>CO_SDOserver_process()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SDOserver.c#L1230-L1230">CO_SDOserver.c:1230</a>（多处，同型）</td><td>收到 <code>0x600+n</code> 请求后应答；只在 PRE-OP / OPERATIONAL 响应（表 3-3 第 4 步的状态门控）</td></tr>
+<tr><td>SDO client 请求 <code>0x600+n</code></td><td><code>CO_SDOclient_*()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SDOclient.c#L937-L937">CO_SDOclient.c:937</a>（多处，同型）</td><td>应用主动读写<b>别人</b>参数时发（本机作为主控去配电机驱动器时会用）</td></tr>
+<tr><td>LSS <code>0x7E5</code></td><td><code>CO_LSSslave_process()</code> → <code>CO_CANsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/305/CO_LSSslave.c#L492-L492">CO_LSSslave.c:492</a>（另一处在 :171）</td><td>上线前的身份配置阶段（表 3-3 第 1 步），答"设节点号 / 设波特率"（§2 复位链）</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>记住这三个变量：<code>bufferFull</code> / <code>CANtxCount</code> / <code>CANerrorStatus</code>。</strong>它们决定了"一帧到底有没有出去"：<code>bufferFull</code> 是单个槽的"还没发成功"标记，<code>CANtxCount</code> 是全局待发计数，两者由 <code>CO_CANsend()</code> 和 <code>CO_CANmodule_process()</code> 成对地置位 / 清除。§7 里那条假的 <code>081 [8] …</code> 就是栽在<strong>第三个分支</strong>（未知错误）上——原因在 §7 讲。</p>
+</div>
+
+<h2 class="pgbreak">4　NMT：总线上的"总开关"</h2>
+
+<h3>4.1 定位</h3>
+
+<p>NMT 管的是<strong>节点状态</strong>（这个节点现在是"运行 / 停止 / 预运行 / 初始化"）。它在 CANopen 里有一个特殊地位：</p>
+<ul>
+<li><strong>收</strong>：所有节点都在同一帧 <code>COB-ID = 0x000</code> 上听命令，帧格式固定 <code>命令[1] + 节点号[1]</code>（DLC=2），节点号 0 表示"广播"。这是全总线唯一一条"谁都能听"的控制帧。</li>
+<li><strong>发</strong>：节点自己<strong>不发 NMT 命令</strong>（那是主站的事）；它发的是<strong>心跳 / boot-up</strong>，用的是 <code>0x700+nodeId</code>。</li>
+</ul>
+
+<p>所以 <code>CO_NMT_Heartbeat.c</code> 一个文件里其实塞了两件事：<strong>NMT 状态机</strong>（收命令、改状态）和<strong>心跳生产者</strong>（周期性报平安）。它俩共用同一个 <code>CO_NMT_t</code> 对象、同一个 <code>CO_NMT_process()</code> 函数，理由在 4.4。</p>
+
+<h3>4.2 调用关系</h3>
+
+<pre>收命令                          周期处理                              对外
+──────────────────────────      ──────────────────────────────       ─────────────────
+0x000 帧进来                      CO_process() 第 3 步                 0x700+nodeId
+  │                                   │                                  │
+  └─ CO_NMT_receive()                 └─ CO_NMT_process()                └─ CO_CANsend()
+       └─ 只写 internalCommand            ├─ 到点 → 发心跳 / boot-up
+                                          ├─ 处理 internalCommand → 新状态
+                                          └─ 按错误寄存器判是否回退状态
+                            状态一变 ──► NmtChangedCallback()（应用侧回调）</pre>
+
+<h3>4.3 四个函数</h3>
+
+<table class="cols-3a">
+<caption>表 4-1　NMT 模块的函数（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c">CO_NMT_Heartbeat.c</a>）</caption>
+<thead><tr><th>函数</th><th>干什么（含就地变量）</th><th>被谁调用 → 调用了谁</th></tr></thead>
+<tbody>
+<tr>
+<td><code>CO_NMT_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L83-L189">:83-189</a></td>
+<td>建两个收发槽、读两个 OD 值、挂一个 OD 写钩子：<br>· 收槽 <code>0x000</code>（mask <code>0x7FF</code>，回调 <code>CO_NMT_receive</code>）；<br>· 发槽 <code>0x700+nodeId</code>，<strong>DLC=1</strong>（心跳 / boot-up 就一个字节）；<br>· 读 <code>0x1017</code>（Producer heartbeat time）算出 <code>HBproducerTime_us</code>；<br>· 初始 <code>operatingState = CO_NMT_INITIALIZING</code>；<br>· 给 <code>0x1017</code> 挂上 <code>OD_write_1017</code> 钩子（见下）。</td>
+<td>被 <code>CO_CANopenInit()</code> 调用（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L982-L1010">CANopen.c:982-1010</a>，参数 <code>NMT_CONTROL=0x2111</code>、<code>FIRST_HB_TIME=500</code>）→ 调用 <code>CO_CANrxBufferInit()</code>、<code>CO_CANtxBufferInit()</code>、<code>OD_get_u16()</code>、<code>OD_extension_init()</code></td>
+</tr>
+<tr>
+<td><code>CO_NMT_receive()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L36-L54">:36-54</a><br><em>static，收帧回调</em></td>
+<td>每收到一帧 <code>0x000</code> 就被调一次。只做一件事：<strong>条件满足时把命令存进 <code>internalCommand</code></strong>。条件是 <code>DLC==2 且 (nodeId==0 或 == 自己的 nodeId)</code>。<br>就地变量：<code>data[0]</code>=命令，<code>data[1]</code>=目标节点号，<code>NMT-&gt;nodeId</code>=本机节点号。</td>
+<td>被 <code>CO_CANrxFromEpoll()</code> → 收帧分发链调用（表 3-2）→ 除写 <code>internalCommand</code> 和点一下 <code>pFunctSignalPre</code> 外<strong>不调用任何函数</strong></td>
+</tr>
+<tr>
+<td><code>OD_write_1017()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L62-L79">:62-79</a><br><em>static，OD 写钩子</em></td>
+<td>别人（SDO / 网关）写 <code>0x1017</code> 时被触发。除了把值存回 OD，还<strong>立刻让心跳生效</strong>：<code>HBproducerTime_us = 值×1000</code>、<code>HBproducerTimer = 0</code> ⇒ 下一轮 <code>CO_NMT_process()</code> 马上发一次心跳。</td>
+<td>被 OD 层在写 <code>0x1017</code> 时调用 → 调用 <code>OD_writeOriginal()</code></td>
+</tr>
+<tr>
+<td><code>CO_NMT_process()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L221-L327">:221-327</a></td>
+<td>NMT 的<strong>心脏</strong>，一段里干三件事：<br>① <strong>发心跳 / boot-up</strong>：先给 <code>HBproducerTimer</code> 减掉本轮耗时；若"首次上电"或"周期到点"或"状态刚变"，就 <code>data[0]=当前状态</code> 并 <code>CO_CANsend()</code>；<br>② <strong>处理命令</strong>：把 <code>internalCommand</code> 翻译成新状态（表 4-2），翻译完立刻清成 <code>CO_NMT_NO_COMMAND</code>；<br>③ <strong>按错误寄存器回退</strong>：见 4.4。<br>返回 <code>resetCommand</code>（<code>CO_RESET_APP</code>=129 / <code>CO_RESET_COMM</code>=130 / 否则 <code>CO_RESET_NOT</code>）。</td>
+<td>被 <code>CO_process()</code> 第 3 步调用（每轮一次）→ 调用 <code>CO_CANsend()</code>、<code>CO_isError()</code>、<code>CO_getErrorRegister()</code>，状态变化时调 <code>pFunctNMT()</code> ⇒ 应用侧 <code>NmtChangedCallback()</code>（main 在 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L686-L692">CO_main_basic.c:689</a> 注册）</td>
+</tr>
+<tr>
+<td><code>CO_NMT_sendCommand()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L332-L350">:332-350</a><br><em>主站 API</em></td>
+<td>主站侧：往 <code>0x000</code> 发一条命令（本地 <code>0x000</code> 帧），并按需对<strong>自己</strong>也生效。</td>
+<td><strong>本工程运行链上不调用它</strong>；只有 ASCII 网关收到 NMT 命令时才用（<code>CO_gateway_ascii.c</code>）。列在这里是为了说明"<code>0x000</code> 帧从哪来"——现场用 <code>canopen</code> / 网关敲命令走的就是它。</td>
+</tr>
+</tbody>
+</table>
+
+<h3>4.4 三个必须记住的点</h3>
+
+<table class="cols-3a">
+<caption>表 4-2　命令值 → 状态值（CANopen 规定，本工程实测一致）</caption>
+<thead><tr><th>收到的命令（<code>data[0]</code>）</th><th>状态变成（<code>operatingState</code>）</th><th>备　　注</th></tr></thead>
+<tbody>
+<tr><td><code>1</code> ENTER_OPERATIONAL</td><td><code>5</code> OPERATIONAL</td><td>PDO 才能真正收发数据</td></tr>
+<tr><td><code>2</code> ENTER_STOPPED</td><td><code>4</code> STOPPED</td><td>停 PDO，只留 NMT / 心跳</td></tr>
+<tr><td><code>128</code> ENTER_PRE_OPERATIONAL</td><td><code>127</code> PRE-OPERATIONAL</td><td>只跑 SDO，不跑 PDO</td></tr>
+<tr><td><code>129</code> RESET_NODE</td><td>不改状态，返回 <code>CO_RESET_APP</code></td><td>整机重启：走 §2.2 那条复位链重跑</td></tr>
+<tr><td><code>130</code> RESET_COMMUNICATION</td><td>不改状态，返回 <code>CO_RESET_COMM</code></td><td>只重跑通信初始化</td></tr>
+<tr><td><code>0</code> NO_COMMAND</td><td>—</td><td>空闲值，不是命令</td></tr>
+</tbody>
+</table>
+
+<p><strong>① 为什么"收命令"和"改状态"要分成两步？</strong><code>CO_NMT_receive()</code> 跑在<strong>收帧分发</strong>里（随时可能被调），<code>CO_NMT_process()</code> 跑在<strong>周期链</strong>的固定位置（每 100&nbsp;ms 一次）。状态切换只在后者发生，意味着：状态永远只在"一轮的同一个时刻"变，不会在半路（收帧上下文）被改掉——所有模块读到的状态在一轮内是一致的。<code>internalCommand</code> 就是这个"跨上下文的信箱"。</p>
+
+<p><strong>② boot-up 和心跳是同一段代码发出来的。</strong>上电后 <code>operatingState == CO_NMT_INITIALIZING</code>，<code>CO_NMT_process()</code> 第一次被调用时走"首次"分支：发一帧 <code>data[0]=0</code>——<strong>这就是 boot-up</strong>；紧接着按 <code>NMT_CONTROL</code> 的 bit8 决定初始状态进 OPERATIONAL 还是 PRE-OPERATIONAL。之后 <code>operatingState</code> 不再是 0，同一段代码就变成了"按 <code>0x1017</code> 周期发心跳"。所以 <strong>boot-up = 值为 0 的一次心跳</strong>。</p>
+
+<div class="cpp">
+<p><strong>③ <code>NMT_CONTROL = 0x2111</code> 的三个位（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L66-L73">CO_main_basic.c:66-73</a>）：</strong></p>
+<ul>
+<li><code>0x0100</code> <code>STARTUP_TO_OPERATIONAL</code>：上电直接进 OPERATIONAL，不用等主站给命令（本项目就要这样，AGV 独立启动）。</li>
+<li><code>0x2000</code> <code>ERR_ON_ERR_REG</code>：一旦错误寄存器命中掩码，就把状态从 OPERATIONAL 拉出来。</li>
+<li><code>0x0001 | 0x0010</code>（<code>CO_ERR_REG_GENERIC_ERR</code> / <code>CO_ERR_REG_COMMUNICATION</code>）：这<strong>既是错误寄存器的位，又被当作掩码用</strong>。<code>CO_NMT_process()</code> 里 <code>errRegMasked = (CO_getErrorRegister(em) &amp; NMTcontrol) != 0</code>——用同一个 <code>NMTcontrol</code> 去 <code>&amp;</code> 错误寄存器，意思是"只要错误寄存器里 bit0 或 bit4 置起来了，就认为该回退"。回退到哪个状态由 <code>CO_NMT_ERR_TO_STOPPED</code>(<code>0x4000</code>) 决定——本工程没设这一位，所以是回退到 <strong>PRE-OPERATIONAL</strong>。</li>
+</ul>
+</div>
+
+<div class="note">
+<p><code>operatingStatePrev</code> 只干一件事：让 <code>CO_NMT_process()</code> 知道"状态刚变过"，于是立刻补发一次心跳、并把下一个定时器压成 0。没有它，状态变了也要等满一个心跳周期外面才知道。</p>
+</div>
+
+<h2 class="pgbreak">5　心跳：一条码，两端各管一头</h2>
+
+<h3>5.1 定位</h3>
+
+<p>心跳只有一个字节，帧就是 <code>0x700+nodeId</code>，<code>data[0]</code> 是发送方的 NMT 状态值。<strong>同一条帧，两端做的是两件完全不同的事</strong>：</p>
+<ul>
+<li><strong>生产端</strong>（本机）：周期性地"报自己的平安"——告诉外面"我还活着，现在是 OPERATIONAL"。</li>
+<li><strong>消费端</strong>（本机也可以）：盯着<strong>别人</strong>的心跳，超时没到就认为对方掉线，上报错误。</li>
+</ul>
+
+<div class="warn">
+<p><strong>本工程的实际配置要特别记住，否则看不懂抓包：</strong></p>
+<ul>
+<li><code>0x1017</code>（Producer heartbeat time）= <strong>0</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L33">OD.c:33</a> 默认值，应用没改）⇒ <strong>没有周期心跳</strong>，上电后只发一帧 boot-up（就是 §4.4② 那帧 <code>701 [1] 00</code>）。</li>
+<li><code>0x1016</code>（Consumer heartbeat time）8 个子项<strong>全 0</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L31-L32">OD.c:31-32</a>）⇒ <strong>本机不监控任何节点</strong>，心跳消费者的功能虽然编进去了，但一个槽都没启用。</li>
+</ul>
+<p>所以现场抓包里"只有一帧 701"不是漏抓，而是配置使然。</p>
+</div>
+
+<h3>5.2 生产端：还是 <code>CO_NMT_process()</code>（不另起函数）</h3>
+
+<p>心跳的发送<strong>没有自己的函数</strong>，就长在 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_NMT_Heartbeat.c#L234-L256">CO_NMT_process():234-256</a> 里。相关的就地变量：</p>
+
+<table class="cols-3a">
+<caption>表 5-1　心跳生产端用到的变量（都在 <code>CO_NMT_t</code> 里）</caption>
+<thead><tr><th>变量</th><th>含义 / 从哪来</th><th>谁在改它</th></tr></thead>
+<tbody>
+<tr><td><code>HBproducerTime_us</code></td><td>心跳周期（微秒）。init 时读 <code>0x1017</code>×1000 得来；本工程 = <strong>0</strong>（表示"不发周期心跳"）</td><td><code>CO_NMT_init()</code>；运行期由 <code>OD_write_1017()</code> 改</td></tr>
+<tr><td><code>HBproducerTimer</code></td><td>倒计时。init 给 <code>FIRST_HB_TIME(500)</code>，process 里每轮<strong>递减</strong>；减到 0 就发心跳</td><td><code>CO_NMT_init()</code> / <code>CO_NMT_process()</code> / <code>OD_write_1017()</code></td></tr>
+<tr><td><code>HB_TXbuff</code></td><td>心跳 / boot-up 的发送槽，<strong>DLC=1</strong>；发送前把 <code>data[0]</code> 填成当前状态</td><td><code>CO_NMT_process()</code></td></tr>
+<tr><td><code>operatingStatePrev</code></td><td>上一轮状态。和当前状态不等时立刻补发一次心跳</td><td><code>CO_NMT_process()</code>（每轮末更新）</td></tr>
+</tbody>
+</table>
+
+<p>发送条件写成一行就是：<code>首次上电 || (周期≠0 且 (倒计时到 0 || 状态刚变))</code>。因为本工程 <code>周期=0</code>，只有"首次上电"能成立 ⇒ 只发一帧 boot-up，之后彻底安静。</p>
+
+<h3>5.3 消费端：<code>CO_HBconsumer_*</code>（盯着别人）</h3>
+
+<table class="cols-3a">
+<caption>表 5-2　心跳消费端的三个函数（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_HBconsumer.c">CO_HBconsumer.c</a>）</caption>
+<thead><tr><th>函数</th><th>干什么（含就地变量）</th><th>被谁调用 → 调用了谁</th></tr></thead>
+<tbody>
+<tr><td><code>CO_HBconsumer_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_HBconsumer.c#L115-L160">:115-160</a></td><td>按 <code>0x1016</code> 的子项逐个建"监听槽"：每个子项是一个 <code>nodeId(高16位) + 超时ms(低16位)</code> 的 32 位值。子项为 0 ⇒ 该槽 <code>CO_HBconsumer_UNCONFIGURED</code>（禁用）。<br>就地变量：<code>monitoredNodes</code>（监听条目数组）、<code>numberOfMonitoredNodes</code>（有效条目数，本工程 8）、<code>HBstate</code>（每条的连接状态）。</td><td>被 <code>CO_CANopenInit()</code> 调用 → 调用 <code>OD_get_u32()</code>、<code>CO_CANrxBufferInit()</code>（每个条目一个 <code>0x700+nodeId</code> 槽）</td></tr>
+<tr><td><code>CO_HBcons_receive()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_HBconsumer.c#L43-L59">:43-59</a><br><em>static，收帧回调</em></td><td>每收到一帧被别人发来的心跳：<code>DLC==1</code> 时把 <code>data[0]</code> 存进 <code>NMTstate</code>，并置 <code>CANrxNew</code> 标志。<strong>只登记"收到了"，判断留给 process。</strong></td><td>被 <code>CO_CANrxFromEpoll()</code> → 收帧分发链调用 → 不调用其它函数</td></tr>
+<tr><td><code>CO_HBconsumer_process()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_HBconsumer.c#L359-L430">:359-430</a></td><td>对每个启用的条目做状态机：<br>· <code>CANrxNew</code> 且状态值=0 → 对方刚 boot-up，上报 <code>CO_EM_HB_CONSUMER_REMOTE_RESET</code>；<br>· <code>CANrxNew</code> 且状态值≠0 → 正常心跳，<code>HBstate=ACTIVE</code>、重置倒计时；<br>· 倒计时耗尽 → 超时，上报 <code>CO_EM_HEARTBEAT_CONSUMER</code>、<code>HBstate=TIMEOUT</code>。</td><td>被 <code>CO_process()</code> 第 5 步调用 → 调用 <code>CO_errorReport()</code> / <code>CO_errorReset()</code>（错误经由 EM 汇总，见 §7）</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>消费端超时最后会怎样影响 NMT？</strong>答案是"绕一圈"：<code>CO_errorReport()</code> 把错误写进错误寄存器（communication 位，<code>0x10</code>）→ 下一轮 <code>CO_NMT_process()</code> 里 <code>errRegMasked</code> 命中（因为 <code>NMT_CONTROL=0x2111</code> 的掩码里就有 <code>0x10</code>）→ 状态从 OPERATIONAL 回退到 PRE-OPERATIONAL。<code>0x2111</code> 里没设 <code>CO_NMT_ERR_ON_BUSOFF_HB(0x1000)</code>，所以这条"心跳断线直接回退"的<strong>快捷路径没开</strong>，只能走错误寄存器这条一般路径。</p>
+</div>
+
+<h2 class="pgbreak">6　SYNC：给整条总线对表</h2>
+
+<h3>6.1 定位</h3>
+
+<p>SYNC 帧就一帧 <code>COB-ID = 0x080</code>。它不带业务数据，唯一作用是<strong>"打一个节拍"</strong>——同步型 PDO 只允许在 SYNC 之后的窗口里发。本工程的配置决定了它长什么样：</p>
+
+<table class="cols-3b">
+<caption>表 6-1　SYNC 的三个 OD 参数（默认值 vs 应用改写值）</caption>
+<thead><tr><th>对象</th><th>默认值</th><th>本工程实际值 / 含义</th></tr></thead>
+<tbody>
+<tr><td><code>0x1005</code> COB-ID SYNC</td><td><code>0x00000080</code></td><td>被 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L82">CO_application.c:82</a> 改成 <code>0x40000080</code>。<strong>bit30 置上 = 本机是 SYNC 生产者</strong>，低 11 位 = <code>0x80</code> 是帧 ID。</td></tr>
+<tr><td><code>0x1006</code> 通信周期</td><td><code>0x00000000</code></td><td>被 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L76">CO_application.c:76</a> 改成 <code>100000</code>（µs）= <strong>每 100&nbsp;ms 发一次 SYNC</strong>。</td></tr>
+<tr><td><code>0x1019</code> 计数器溢出值</td><td><code>0x00</code></td><td>保持 0 ⇒ <strong>SYNC 帧不带计数字节，DLC=0</strong>。这就是抓包里 <code>080 [0]</code> 的来历。</td></tr>
+</tbody>
+</table>
+
+<p>换句话说：<strong>这台 Linux 控制器是总线上的"节拍器"</strong>——它一边做 NMT 从站，一边主动往 <code>0x080</code> 发 SYNC，两个电机节点跟着这个节拍走。</p>
+
+<h3>6.2 调用链</h3>
+
+<p>注意 SYNC <strong>不在 <code>CO_process()</code> 里</strong>，而是在 <code>CO_epoll_processRT()</code> 里、紧跟收帧之后（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L336-L347">CO_epoll_interface.c:336-347</a>）。因为"对表"必须贴着收帧时刻进行，放进 100&nbsp;ms 的慢链会失真。</p>
+
+<pre>收帧分发 ──► CO_process_SYNC()  ──► CO_SYNC_process()  ──┬─ 收到 SYNC → syncWas=true ──► CO_process_RPDO / TPDO
+                                                          ├─ 到周期 → CO_SYNCsend() → CO_CANsend()
+                                                          ├─ 超时   → CO_errorReport(SYNC_TIME_OUT)
+                                                          └─ 出窗口 → PASSED_WINDOW
+                                                                          └─ CO_CANclearPendingSyncPDOs()</pre>
+
+<h3>6.3 四个函数</h3>
+
+<table class="cols-3a">
+<caption>表 6-2　SYNC 模块的函数（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.c">CO_SYNC.c</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.h">CO_SYNC.h</a>）</caption>
+<thead><tr><th>函数</th><th>干什么（含就地变量）</th><th>被谁调用 → 调用了谁</th></tr></thead>
+<tbody>
+<tr><td><code>CO_SYNC_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.c#L205-L337">:205-337</a></td><td>读四个 OD 值再建槽：<br>· <code>0x1005</code> → <code>isProducer = (值 &amp; 0x40000000)!=0</code>、<code>CAN_ID = 值 &amp; 0x7FF</code>；<br>· <code>0x1006</code> / <code>0x1007</code> → 只存<strong>指针</strong>（<code>OD_1006_period</code> / <code>OD_1007_window</code>），运行期直接读，改了立刻生效；<br>· <code>0x1019</code> → <code>counterOverflowValue</code>（0 保持；1 变 2；&gt;240 截到 240）；<br>· 建 rx 槽（回调 <code>CO_SYNC_receive</code>）+（生产者时）建 tx 槽，<strong>tx 的 DLC = OVF?1:0</strong>。</td><td>被 <code>CO_CANopenInit()</code> 调用 → 调用 <code>OD_get_u32/u8()</code>、<code>OD_getPtr()</code>、<code>CO_CANrxBufferInit()</code>、<code>CO_CANtxBufferInit()</code></td></tr>
+<tr><td><code>CO_SYNC_receive()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.c#L37-L74">:37-74</a><br><em>static，收帧回调</em></td><td>校验长度：<code>OVF==0</code> 要求 <code>DLC==0</code>；<code>OVF!=0</code> 要求 <code>DLC==1</code> 并取 <code>data[0]</code> 作计数。长度不对就记 <code>receiveError = DLC|0x40/0x80</code>（留给 process 上报）。成功则<strong>翻转 <code>CANrxToggle</code></strong>、置 <code>CANrxNew</code>。</td><td>被 <code>CO_CANrxFromEpoll()</code> → 收帧分发链调用 → 不调用其它函数</td></tr>
+<tr><td><code>CO_SYNCsend()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.h#L225-L231">CO_SYNC.h:225-231</a><br><em>inline，生产者用</em></td><td>发一帧 SYNC：<code>counter</code> 自增（超过 <code>counterOverflowValue</code> 回 1）、<code>timer=0</code>、翻转 <code>CANrxToggle</code>、<code>data[0]=counter</code>，然后 <code>CO_CANsend()</code>。</td><td>被 <code>CO_SYNC_process()</code> 调用 → 调用 <code>CO_CANsend()</code>（§3.3 的唯一出口）</td></tr>
+<tr><td><code>CO_SYNC_process()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SYNC.c#L356-L457">:356-457</a></td><td>SYNC 的心脏：<br>① <code>timer</code> 累加本轮耗时；<br>② 收到过（<code>CANrxNew</code>）→ <code>timer=0</code>、返回 <code>CO_SYNC_RX_TX</code>；<br>③ <strong>自己是生产者且 <code>timer ≥ 0x1006</code></strong> → <code>CO_SYNCsend()</code>、返回 <code>CO_SYNC_RX_TX</code>；<br>④ 超时（超过 1.5×<code>0x1006</code>）→ <code>CO_errorReport(CO_EM_SYNC_TIME_OUT)</code>；<br>⑤ 过了窗口（<code>0x1007</code>）→ 返回 <code>CO_SYNC_PASSED_WINDOW</code>；<br>⑥ <code>receiveError</code> → <code>CO_errorReport(CO_EM_SYNC_LENGTH)</code>。</td><td>被 <code>CO_process_SYNC()</code> 调用 → 调用 <code>CO_SYNCsend()</code>、<code>CO_errorReport()</code> / <code>CO_errorReset()</code></td></tr>
+<tr><td><code>CO_process_SYNC()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1409-L1438">CANopen.c:1409-1438</a><br><em>包装层</em></td><td>把 <code>CO_SYNC_process()</code> 的返回值翻译成对外的动作：<code>RX_TX</code> → 返回 <code>syncWas=true</code>；<code>PASSED_WINDOW</code> → 调 <code>CO_CANclearPendingSyncPDOs()</code>（窗口外把还没发的同步 PDO 丢掉）。</td><td>被 <code>CO_epoll_processRT()</code> 调用 → 调用 <code>CO_SYNC_process()</code>、<code>CO_CANclearPendingSyncPDOs()</code></td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong><code>syncWas</code> 为什么要一路传下去？</strong><code>CO_epoll_processRT()</code> 拿到 <code>syncWas</code> 后，紧接着传给 <code>CO_process_RPDO()</code> 和 <code>CO_process_TPDO()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L337-L347">CO_epoll_interface.c:337-347</a>）。含义是：<strong>"这一轮确实对过表了，同步型 PDO 才可以发"</strong>。事件型 PDO 不看这个标志，随时能发——这是 SYNC 与 PDO 之间唯一的接口，第 3 站讲 PDO 时会接上这里。</p>
+</div>
+
+<div class="note">
+<p>SYNC 的 5 个状态量都在同一个 <code>CO_SYNC_t</code> 里，就地认识一下：<code>timer</code>＝距上次对表的时长；<code>counter</code>／<code>counterOverflowValue</code>＝SYNC 序号与溢出值（本工程不用序号）；<code>CANrxNew</code>＝"收到过 SYNC"标志；<code>CANrxToggle</code>＝收发都翻转的双缓冲区开关，用来让 PDO 侧区分"上一拍 / 这一拍"的数据。</p>
+</div>
+
+<h2 class="pgbreak">7　EMCY：出错时谁来喊一嗓子</h2>
+
+<h3>7.1 定位</h3>
+
+<p>EMCY 是<strong>应急报文</strong>，COB-ID = <code>0x080 + nodeId = 0x081</code>（本机 nodeId=1），<strong>DLC 固定 8</strong>，四个字段各司其职：</p>
+
+<pre>[0..1] 错误码 errorCode（小端）   [2] 错误寄存器（= OD 0x1001）   [3] 错误位 errorBit   [4..7] 厂商附加信息</pre>
+
+<p>本机<strong>既是生产者</strong>（<code>0x1014</code> 默认 <code>0x80</code>，init 时 <code>+= nodeId</code> ⇒ 实发 ID <code>0x081</code>），<strong>又是消费者</strong>（建了 <code>0x080</code>/mask <code>0x780</code> 的接收槽，能收全网 EMCY）。但别忘了 §2.4 的结论：<strong>整个节点只有一套 NMT/EM</strong>——两台电机共用同一条 <code>0x081</code> 通道，帧里不带"哪台电机"，EMCY 只表达<strong>"这个节点出事了"</strong>。</p>
+
+<div class="warn">
+<p><strong>坑｜EMCY 不是"随时发"的。</strong>本工程 <code>0x1015</code>（抑制时间）<code>0x1003</code>（历史）都是 0，正常上电<strong>一帧 EMCY 都不该有</strong>；一旦看到 <code>0x081</code>，说明真的报了错。§7.5 那条是沙箱造的假货。</p>
+</div>
+
+<h3>7.2 调用链</h3>
+
+<p>EMCY 的设计精髓是<strong>"记录"与"发送"分离</strong>：报错可能发生在收帧回调（中断上下文）里，那时只能安全地"记一笔"，真正发帧挪到周期任务里做。</p>
+
+<pre>【记录】任何异常点（收帧回调里也可能报错）
+   CO_errorReport(em, errorBit, errorCode, info)   宏 → 展开成 CO_error(em, true, …)
+        └─► CO_error()   只写两处：errorStatusBits 里的对应位 + em→fifo 一条 msg
+                         ↑ 此刻还不发帧！
+
+【发送】周期运行链 CO_process() 的第 2 步
+        └─► CO_EM_process()  ├─ ① 比对 CANerrorStatus，把驱动级错误翻译成 CO_error()
+                             ├─ ② 重算 errorRegister → 写进 OD 0x1001
+                             └─ ③ fifo 有货 → 补上 errorRegister → memcpy → CO_CANsend()
+
+【接收】收帧分发（0x080+x）
+        └─► CO_EM_receive() →（应用若注册了）pFunctSignalRx 回调；本工程没注册，收下即丢</pre>
+
+<h3>7.3 四个函数（+ 两个宏）</h3>
+
+<table class="cols-3a">
+<caption>表 7-1　EMCY 模块的函数（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c">CO_Emergency.c</a>）</caption>
+<thead><tr><th>函数</th><th>干什么（含就地变量）</th><th>被谁调用 → 调用了谁</th></tr></thead>
+<tbody>
+<tr><td><code>CO_EM_init()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L344-L522">:344-522</a></td><td>取五样 OD 再建两个槽：<br>· <code>em-&gt;errorRegister = OD_getPtr(0x1001)</code>：存的是<strong>指针不是副本</strong>，写它就等于<strong>直接改 OD 0x1001</strong>，主站一读就能看到错误寄存器；<br>· <code>0x1014</code> → <code>producerCanId</code>（默认 <code>0x80</code>；等于 <code>CO_CAN_ID_EMERGENCY</code> 时 <code>+= nodeId</code> ⇒ 实发 <code>0x81</code>，而 <code>em-&gt;producerCanId</code> 仍存 <code>0x80</code> 供 0x1014 回读显示"默认值"）；<br>· <code>0x1015</code> → <code>inhibitEmTime_us = 值 × 100</code>（抑制时间，本工程 0）；<br>· <code>0x1003</code> 历史场、statusBits 错误位；<br>· 建 tx 槽 <code>CO_CANtxBufferInit(…, 8, …)</code>（<strong>DLC 固定 8</strong>）；消费者时建 rx 槽 <code>CO_CANrxBufferInit(…, 0x080, 0x780, …, CO_EM_receive)</code>。</td><td>被 <code>CO_CANopenInit()</code> 调用（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L951-L980">CANopen.c:951-980</a>，只有 <code>CO_GET_CNT(EM)==1</code> 才执行 ⇒ 双 OD 下<strong>只 init 一次</strong>，nodeId=1）→ 调用 <code>OD_getPtr</code>/<code>OD_get_u32</code>/<code>OD_get_u16</code>、<code>OD_extension_init</code>、<code>CO_CANtxBufferInit</code>、<code>CO_CANrxBufferInit</code></td></tr>
+<tr><td><code>CO_EM_receive()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L318-L339">:318-339</a><br><em>static，收帧回调</em></td><td>收到 <code>0x080+x</code>。先<strong>忽略 <code>0x80</code></strong>（SYNC 和 EMCY 同段不同义，靠这一句区分）；再从 8 字节还原 <code>errorCode</code>（[0..1]，<code>CO_SWAP_16</code>）、<code>data[2]</code> 错误寄存器、<code>data[3]</code> errorBit、<code>infoCode</code>（[4..7]），整包交给 <code>em-&gt;pFunctSignalRx</code>。</td><td>被 <code>CO_CANrxFromEpoll()</code> 收帧分发链调用（槽位见 §3.1 表 3-2）→ 调用 <code>em-&gt;pFunctSignalRx</code>（若已注册）</td></tr>
+<tr><td><code>CO_error()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L713-L792">:713-792</a><br>宏 <code>CO_errorReport</code>/<code>CO_errorReset</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.h#L621-L629">CO_Emergency.h:621-629</a></td><td>全栈统一的"报错入口"。<br>· 就地变量 <code>errorBit</code>：错误位编号（如 <code>CO_EM_CAN_TX_OVERFLOW = 0x14</code>），拆成 <code>index = errorBit&gt;&gt;3</code>、<code>bitmask = 1&lt;&lt;(errorBit&amp;7)</code> ⇒ <strong>一位代表一类错误</strong>，存进 <code>errorStatusBits[]</code>；同类错误重复报会被"已置位就直接返回"挡掉。<br>· 就地变量 <code>errMsg</code>：把 <code>errorBit</code>（最高字节）+ <code>errorCode</code>（低两字节，小端）拼成 32 位；<code>errorRegister</code> 先留空，等 <code>CO_EM_process()</code> 再补。<br>· 把 <code>errMsg</code> 推进环形缓冲 <code>em-&gt;fifo</code>，<strong>不发帧</strong>。宏 <code>CO_errorReset</code> 只是把位清掉、errorCode 用 <code>CO_EMC_NO_ERROR</code>。</td><td>被 <code>CO_EM_process()</code>、<code>CO_SYNC_process()</code>、<code>CO_HBconsumer_process()</code>、NMT 等调用 → 调用 <code>CO_LOCK_EMCY/CO_UNLOCK_EMCY</code>、写 <code>errorStatusBits[]</code>、写 <code>em-&gt;fifo</code></td></tr>
+<tr><td><code>CO_EM_process()</code><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L554-L709">:554-709</a></td><td>CO_process 的第 2 步，EMCY 的"发动机"：<br>① 比 <code>CANerrorStatus</code> 与 <code>errorStatusOld</code>，把<strong>变化了的驱动错误</strong>翻译成 <code>CO_error()</code>（如 <code>CO_CAN_ERRTX_OVERFLOW(0x0008)</code> → <code>CO_EM_CAN_TX_OVERFLOW(0x14)</code> + <code>CO_EMC_CAN_OVERRUN(0x8110)</code>）；<br>② 重算 <code>*em-&gt;errorRegister</code>——由 <code>CO_CONFIG_ERR_CONDITION_*</code> 决定亮哪几位（见 §7.4）；<br>③ 若 <code>NMTisPreOrOperational</code> 为真、fifo 有货、<code>!bufferFull</code>、且过了抑制时间 → <code>msg |= errorRegister&lt;&lt;16</code>、<code>memcpy</code> 到 tx 缓冲、<code>CO_CANsend()</code>。</td><td>被 <code>CO_process()</code> 调用（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L1353-L1359">CANopen.c:1353-1359</a>，<code>CO_GET_CNT(EM)==1</code> ⇒ <strong>每轮一次</strong>）→ 调用 <code>CO_error()</code>、<code>CO_CANsend()</code>、<code>em-&gt;pFunctSignalRx</code>（自己也消费一份）</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>可以写进简历：</strong>「EMCY 采用"上报—发送"解耦：错误发生点（可能在收帧回调/中断上下文）只置一位状态 + 写一条 FIFO，真正的 CAN 发送挪到周期任务 <code>CO_EM_process()</code>，由它统一补错误寄存器后发出。既保证中断上下文安全，又保证 <code>0x1001</code> 错误寄存器与 EMCY 帧内容始终一致。」</p>
+</div>
+
+<h3>7.4 字节级破解：实测帧 <code>081 [8] 10 81 10 14 00 00 00 00</code></h3>
+
+<table class="cols-4a">
+<caption>表 7-2　这一帧的 8 个字节分别是什么</caption>
+<thead><tr><th>字段</th><th>字节</th><th>值</th><th>含义与依据</th></tr></thead>
+<tbody>
+<tr><td>errorCode</td><td><code>[0..1]</code></td><td><code>10 81</code></td><td>小端读出 = <code>0x8110</code> = <code>CO_EMC_CAN_OVERRUN</code>（CAN 报文丢失/溢出）。<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.h#L178">CO_Emergency.h:178</a></td></tr>
+<tr><td>errorRegister</td><td><code>[2]</code></td><td><code>10</code></td><td><code>CO_ERR_REG_COMMUNICATION</code>（bit4）——当时只有"通信类"错误被点亮。<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.h#L118-L125">CO_Emergency.h:118-125</a></td></tr>
+<tr><td>errorBit</td><td><code>[3]</code></td><td><code>14</code></td><td><code>CO_EM_CAN_TX_OVERFLOW</code>（发送缓冲溢出）。<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.h#L289">CO_Emergency.h:289</a></td></tr>
+<tr><td>infoCode</td><td><code>[4..7]</code></td><td><code>00 00 00 00</code></td><td>厂商附加信息，本工程恒 0。</td></tr>
+</tbody>
+</table>
+
+<p>这 4 个字节不是随便摆的，代码里是"拼"出来的——把这段推导看懂，就等于同时读懂了 <code>CO_error()</code> 和 <code>CO_EM_process()</code>：</p>
+
+<pre>errMsg  = (errorBit 0x14) &lt;&lt; 24 | errorCode 0x8110    // CO_error() :748，本机 CO_SWAP_16 是恒等
+        = 0x14008110
+errMsg |= (errorRegister 0x10) &lt;&lt; 16                 // CO_EM_process() :645 补进 byte2
+        = 0x14108110
+memcpy(data, &amp;errMsg, 8)                             // 小端落到 8 字节
+        = 10 81 10 14 00 00 00 00</pre>
+
+<div class="note">
+<p><strong>为什么 <code>CO_SWAP_16</code> 在这里"没用"：</strong><code>CO_SWAP_16(x)</code> 在本工程（x86 小端）是<strong>恒等宏</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver_target.h#L219-L231">CO_driver_target.h:219-231</a>）。所以 <code>0x8110</code> 原样进低两字节，memcpy 到内存后正好是 CANopen 要的小端顺序 <code>10 81</code>。换到真·大端 CPU 上跑时，这个宏才会真正换序——这正是 CANopenNode 用 SWAP 宏而不是直接赋值的用意。</p>
+</div>
+
+<div class="note">
+<p><strong>为什么 byte2 是 <code>0x10</code>（只亮通信位）：</strong>错误寄存器不是硬编码的，而是由一组条件宏现算（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L596-L621">CO_Emergency.c:596-621</a>）：<code>CO_CONFIG_ERR_CONDITION_GENERIC</code> 看 <code>errorStatusBits[5]</code>（=0，不亮）、<code>..._COMMUNICATION</code> 看 <code>errorStatusBits[2]||[3]</code>。错误位 <code>0x14</code> 落在 <code>errorStatusBits[2]</code>（bit4）里 ⇒ 通信位被点亮 ⇒ <code>0x10</code>。</p>
+</div>
+
+<h3>7.5 这条 EMCY 是"假的"——沙箱假故障因果链</h3>
+
+<p><strong>真机不会出现这条帧</strong>，它是沙箱环境造的。搞清它的来路，价值在于：它<strong>意外地把整条 EMCY 通路端到端跑了一遍</strong>。因果链如下：</p>
+
+<table class="cols-3a">
+<caption>表 7-3　从 <code>send()</code> 到 <code>081</code> 帧的五步</caption>
+<thead><tr><th>步骤</th><th>发生了什么</th><th>关键判据</th></tr></thead>
+<tbody>
+<tr><td>① 沙箱拦截</td><td>沙箱用 <code>LD_PRELOAD=sbox.so</code> 拦 <code>send()</code>：<strong>返回值仍是 16（成功），却把 <code>errno</code> 改写成 <code>EOPNOTSUPP(95)</code></strong>。</td><td><code>n == CAN_MTU</code> 成立，但 <code>errno != 0</code></td></tr>
+<tr><td>② 第一个 if 不成立</td><td><code>CO_CANsend()</code> 的成功判据是 <code>errno==0 &amp;&amp; n==CAN_MTU</code>，因 <code>errno≠0</code> 被否。</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L736-L744">CO_driver.c:736-744</a></td></tr>
+<tr><td>③ 第二个 else-if 也不成立</td><td><code>EOPNOTSUPP</code> 不在 <code>EINTR/EAGAIN/ENOBUFS</code> 之列，所以落到 <strong>else「未知错误」兜底分支</strong>。</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L745-L760">CO_driver.c:745-760</a></td></tr>
+<tr><td>④ 兜底分支置错</td><td>该分支执行 <code>CANerrorStatus |= CO_CAN_ERRTX_OVERFLOW</code>，返回 <code>CO_ERROR_SYSCALL</code>。</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver.c#L753-L760">CO_driver.c:753-760</a></td></tr>
+<tr><td>⑤ EMCY 被触发</td><td>下一轮 <code>CO_EM_process()</code> 发现 <code>CANerrorStatus</code> 变了 → <code>CO_error(… CO_EM_CAN_TX_OVERFLOW, CO_EMC_CAN_OVERRUN …)</code> → 组帧发出 <code>081</code>。</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_Emergency.c#L580-L582">CO_Emergency.c:580-582</a></td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>结论：</strong>沙箱把"成功"伪装成"未知错误"，骗过了 <code>CO_CANsend()</code> 的兜底分支。真机上 <code>send()</code> 正常返回 16 且 <code>errno==0</code> ⇒ 永远走成功分支 ⇒ <strong>不会有这条 EMCY</strong>。顺带一提：也正是 <code>NMT_CONTROL=0x2111</code> 里含 <code>CO_ERR_REG_COMMUNICATION</code> 掩码，这条假故障会让错误寄存器命中 mask，把节点从 OPERATIONAL 拉回 PRE-OPERATIONAL（详见 §4.4）——这条 EMCY 与那次状态回退是同一根因。</p>
+</div>
+
+<h2 class="pgbreak">8　自测：合上文档，你能否答上这五问</h2>
+
+<p>这五问覆盖本册全部主线（链路 → NMT → 心跳 → SYNC → EMCY），答得出就说明报文层通了。</p>
+
+<ol>
+<li>本工程 CAN 模块的 <code>rxSize</code> / <code>txSize</code> 各是多少？分别由哪些槽位凑出来？</li>
+<li>抓包里 <code>701 [1] 00</code> 的 <code>data[0]</code> 为什么是 <code>0x00</code>，而不是 <code>0x7F</code> 或 <code>0x05</code>？</li>
+<li><code>080</code> 为什么每 100&nbsp;ms 一帧？它为什么是 <code>[0]</code> 长度？本机在这里扮演什么角色？</li>
+<li>把 <code>081 [8] 10 81 10 14 …</code> 的 4 个字节逐个破解，并说明它是怎么被"拼"出来的。</li>
+<li>本节点上电后为什么先到 OPERATIONAL，后来又被拉回 PRE-OPERATIONAL？</li>
+</ol>
+
+<div class="note">
+<p><strong>答案要点：</strong></p>
+<p><strong>①</strong> <code>rx=20</code>、<code>tx=13</code>，由 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/CANopen.c#L257-L286">CANopen.c:257-286</a> 的槽位宏按 COB-ID 优先级（NMT 最先）累加：rx = NMT 1 + SYNC 1 + EM_CONS 1 + TIME 1 + RPDO 4 + SDO_SRV 1 + SDO_CLI 1 + HB_CONS 8 + LSS_SLV 1 + LSS_MST 1；tx = NMT_MST 1 + SYNC 1 + EM_PROD 1 + TIME 1 + TPDO 4 + SDO_SRV 1 + SDO_CLI 1 + HB_PROD 1 + LSS_SLV 1 + LSS_MST 1。</p>
+<p><strong>②</strong> 发送时 <code>NMTstateCpy</code> 还停在 <code>CO_NMT_INITIALIZING(0)</code>，<strong>发完才切到 OPERATIONAL</strong>——所以 boot-up 帧的 <code>data[0]</code> 恒为 <code>0x00</code>，它表示"我回来了"，不是"我已运行"（见 §4.4、§5.2）。</p>
+<p><strong>③</strong> 应用把 <code>0x1005</code> 改成 <code>0x40000080</code>（bit30=1 ⇒ <strong>本机是 SYNC 生产者</strong>）、<code>0x1006=100000µs</code> ⇒ <code>CO_SYNC_process()</code> 到点就 <code>CO_SYNCsend()</code>；<code>0x1019=0</code> ⇒ tx 槽 DLC=0 ⇒ 帧长 <code>[0]</code>（见 §6）。</p>
+<p><strong>④</strong> <code>10 81</code>=errorCode <code>0x8110</code>(CAN_OVERRUN)、<code>10</code>=errorRegister 通信位、<code>14</code>=errorBit <code>CO_EM_CAN_TX_OVERFLOW</code>、<code>00×4</code>=infoCode。拼法：<code>(errorBit&lt;&lt;24)|errorCode</code> 再 <code>|=errorRegister&lt;&lt;16</code> ⇒ <code>0x14108110</code>，小端 memcpy 得 <code>10 81 10 14</code>（见 §7.4）。</p>
+<p><strong>⑤</strong> <code>NMT_CONTROL=0x2111</code> 含 <code>CO_NMT_STARTUP_TO_OPERATIONAL(0x0100)</code>（开机自启动进 OPERATIONAL）与 <code>CO_NMT_ERR_ON_ERR_REG(0x2000)</code> + <code>CO_ERR_REG_COMMUNICATION(0x10)</code> 掩码；沙箱假故障点亮了通信错误位，命中 mask，而 <code>CO_NMT_ERR_TO_STOPPED</code> 未设 ⇒ 按默认退化到 PRE-OPERATIONAL（见 §4.4、§7.5）。</p>
+</div>
+
+<p><strong>下一站（第 3 站）：对象字典（OD）与 SDO。</strong>本站反复出现的 <code>0x1005/0x1006/0x1014/0x1017</code> 到底存在哪、谁读谁写，主站又是怎么一条条把参数写进来的——这些都靠 OD 与 SDO。届时 §6.3 的 <code>syncWas</code> 会接上 PDO 的收发（同步型 PDO 只在 SYNC 后发）。</p>
+
+<div class="footnote">
+<p>本篇是《松下 AGV（CANopen）学习地图》第 2 站的补充册。写法上以<strong>函数</strong>为单位，只回答"干什么 / 被谁调用 / 调用了谁"，变量在出现处就地说明，不做集中总表；主线是整机运行链路（初始化链 → 周期链 → 复位链），不是单行实现。所有行号对应本工程当前源码（CANopenNode/301 下的 CO_NMT_Heartbeat.c、CO_HBconsumer.c、CO_SYNC.c、CO_Emergency.c、CANopen.c，以及工程根的 CO_epoll_interface.c、CO_driver.c、CO_main_basic.c、CO_application.c、application/OD.c）。§3.1 接收槽结论、§7.4 字节级破解、§7.5 假故障因果链均经"本机 vcan 实测 + 源码双向核对"。</p>
+</div>
+
+</body>
+</html>

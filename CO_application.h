@@ -95,9 +95,13 @@ void app_programAsync(CO_t *co, uint32_t timer1usDiff);
  * with app_programAsync.
  *
  * @param co CANopen object.
- * @param timer1usDiff Time difference since last call in microseconds
+ * @param timerLate_us Lateness of this timer tick in microseconds: time when
+ *        timer fired minus its ideal time on the period grid. Valid only when
+ *        @p timerEvent is true. Always in range [0, timer interval).
+ * @param timerEvent true if this call was triggered by the timer, false if it
+ *        was triggered by some other event (e.g. cross-thread wakeup).
  */
-void app_programRt(CO_t *co, uint32_t timer1usDiff);
+void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent);
 
 /** @} */ /* CO_applicationLinux */
 

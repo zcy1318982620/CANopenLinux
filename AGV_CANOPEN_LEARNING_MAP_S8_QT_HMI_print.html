@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 8 站 · Qt 上位机：位姿显示与指令下发（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:22%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:22%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:18%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 8 站 · Qt 上位机：位姿显示与指令下发</h1>
+
+<div class="meta">
+<p><strong>本站定位</strong>：阶段 C「上位机 &amp; 上板」的第一站。前七站全在从站（板子）一侧：收帧、协议、实时、里程计。算出来的位姿 <code>x,y,θ</code> 目前只活在本进程的静态变量里，外网看不到。本站搭一个 Qt 上位机，把它<strong>显出来</strong>，并能对节点下几条命令。</p>
+<p><strong>一句话概括</strong>：不去重写一套网络协议，而是直接复用 <code>canopend</code> 自带的 <strong>CiA 309-3 ASCII 网关</strong>——它把「对象字典读写」变成「一行文本」，Qt 只要连上它的 socket、发一行、读一行。</p>
+<p><strong>为什么值得单独一站</strong>：① 这是工程里第一次出现「人机界面」，是简历上最好讲的一环；② 它牵出两个真实工程问题——<strong>协议怎么复用</strong>（别自己造轮子）和<strong>跨线程怎么取数</strong>（RT 线程写、界面线程读，必须加锁）；③ 它是第 9 站「交叉编译上板」的直接前置（界面跑在 PC，节点跑在板子）。</p>
+<p><strong>阅读顺序</strong>：§1 讲界面要什么、数据从哪来（不看代码）→ §2 讲板端那一半（网关服务端）→ §3 讲客户端原型 <code>cocomm</code> → §4 才是 Qt 侧架构 → §5/§6 诚实交代缺口与联调。</p>
+</div>
+
+<h2>§0 一页地图：本站改了什么、在哪改</h2>
+
+<p>先看全景。上站（第 7 站）结束时，位姿已经在板子的 RT 线程里算出来了，但它「出不来」。本站要做的，就是在板子和 PC 之间架一条<strong>已经存在、不用自己写</strong>的通道。</p>
+
+<pre>
+【第 7 站结束时】                          【第 8 站结束时】
+
+ 板子(i.MX6ULL)                            板子(i.MX6ULL)
+ ┌─────────────────────────┐              ┌─────────────────────────┐
+ │ canopend                │              │ canopend                │
+ │  ├ RT 线程 1ms 拍        │              │  ├ RT 线程 1ms 拍        │
+ │  │   └ app_programRt()  │              │  │   └ app_programRt()  │
+ │  │        └ odom_x/y/th │              │  │        └ odom_x/y/th │
+ │  ├ 主线程 epoll 循环     │              │  ├ 主线程 epoll 循环     │
+ │  └ …（没有出口）         │              │  │   └ + ASCII 网关  ◄──┐ │
+ └─────────────────────────┘              │  └ (由 -c tcp-60000 开启)│ │
+                                          └──────────────┬─────────┘ │
+                                                         │ TCP/socket │
+                                          ┌──────────────▼─────────┐ │
+                                          │ PC：Qt 上位机            │ │
+                                          │  ├ UI 线程（窗口/画轨迹）│ │
+                                          │  └ 通信线程（socket）  ──┘ │
+                                          └────────────────────────┘
+</pre>
+
+<table class="cols-3">
+<caption>表 8-1 本站改哪三处</caption>
+<thead><tr><th>位置</th><th>改什么</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>板端启动参数</td><td>给 <code>canopend</code> 加 <code>-c "tcp-60000"</code>（或 local socket）</td><td>一行参数就打开了整个命令网关，<strong>不改一行 C 代码</strong></td></tr>
+<tr><td>板端 OD（唯一增量）</td><td>新增一个厂商段数组条目，把 <code>odom_x/y/th</code> 写进去</td><td>网关只能读「对象字典里的东西」；位姿现在不在 OD 里（见 §5，这是全站唯一的板端缺口）</td></tr>
+<tr><td>PC 端（新建 <code>hmi/</code>）</td><td>一个 Qt 工程：连 socket、发命令、解析回复、画轨迹</td><td>工程里目前<strong>没有</strong> <code>hmi/</code> 目录，从零新建</td></tr>
+</tbody>
+</table>
+
+<div class="note"><strong>先记住一句话</strong>：第 8 站的主角不是 Qt，而是 <strong>canopend 里那个叫「ASCII 网关」的模块</strong>。Qt 只是它的一个客户端。理解了网关，Qt 侧就只剩「Qt 的网络编程」这件常规事。</div>
+
+<h2>§1 界面要什么、数据从哪来</h2>
+
+<h3>1.1 界面要显示/下发什么</h3>
+
+<table class="cols-2">
+<caption>表 8-2 HMI 的功能清单（与十站地图一致）</caption>
+<thead><tr><th>功能</th><th>要的数据 / 动作</th></tr></thead>
+<tbody>
+<tr><td><strong>显示位姿</strong></td><td>实时的 <code>x, y, θ</code>（来自第 7 站算出的 <code>odom_x/odom_y/odom_th</code>）</td></tr>
+<tr><td><strong>画轨迹</strong></td><td>把 <code>(x,y)</code> 历史点连成线，直观看到「车走过哪」</td></tr>
+<tr><td><strong>看状态</strong></td><td>节点 NMT 状态（OPERATIONAL / PRE-OP / STOPPED）、是否报错</td></tr>
+<tr><td><strong>发指令</strong></td><td>协议层命令：启动 / 停止 / 进 pre-op / 复位节点。⚠ 注意：<strong>不是</strong>「让车走」的运动指令（见 §5 诚实说明）</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 数据从哪来：三种「取数路子」怎么选</h3>
+
+<p>要让 PC 拿到板子上的数，常识上有三条路。先摆出来，再解释为什么本工程选第 ② 条。</p>
+
+<table class="cols-3">
+<caption>表 8-3 上位机取数的三条路</caption>
+<thead><tr><th>路子</th><th>怎么做</th><th>评价</th></tr></thead>
+<tbody>
+<tr><td>① PC 直连 CAN</td><td>PC 插 USB-CAN，自己跑一个 CANopen 主站，直接读 <code>0x6064</code> 等</td><td>等于<strong>再写一整套协议栈 + 主站逻辑</strong>。工作量最大，且与板子重复。</td></tr>
+<tr><td>② 走板子的「命令网关」（★本工程选它）</td><td>PC 连板子上的 <code>canopend</code> 开的 socket，发文本命令，网关替你走 SDO/CAN</td><td><strong>零新增协议代码</strong>。板端早已内置，只要加 <code>-c</code> 参数打开。</td></tr>
+<tr><td>③ 板子自己写个 TCP 服务</td><td>自己 socket + 自定义报文格式推位姿</td><td>可行但要自己维护协议；只在「需要高频主动上报」时才值得。</td></tr>
+</tbody>
+</table>
+
+<div class="note"><strong>为什么本工程能选 ② 这个「便宜的」路子</strong>：<code>canopend</code> 编译时已把网关全功能打开——见 [CO_driver_target.h:129-137](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver_target.h#L129-L137) 的 <code>CO_CONFIG_GTW</code>：<code>ASCII | ASCII_SDO | ASCII_NMT | ASCII_LSS | ASCII_LOG | ASCII_ERROR_DESC | ASCII_PRINT_HELP | ASCII_PRINT_LEDS</code>；且 <code>CO_CONFIG_SDO_CLI_LOCAL</code> 已开（[:105-108](file:///home/zcy/Project/panasonic_canopen_agv/CO_driver_target.h#L105-L108)），网关<strong>可以直接读本机对象字典</strong>，不必真上 CAN 绕一圈。</div>
+
+<h3>1.3 用 ASCII 网关取一条数据的完整链路</h3>
+
+<p>先建立直觉：PC 发一行文本，板子回一行文本。中间它替你干了 SDO 那套事。</p>
+
+<pre>
+PC(Qt/cocomm)                    板子 canopend
+   │                                  │
+   │ ① connect(板子IP:60000)           │
+   │─────────────────────────────────►│  CO_epoll_processGtw() accept4()
+   │                                  │
+   │ ② 发一行: "1 r 0x1017 0 u16\r\n"  │
+   │─────────────────────────────────►│  read() → CO_GTWA_write()
+   │                                  │        └ 网关解析文本
+   │                                  │        └ 转成 SDO 上传
+   │                                  │           (本地: 直取 OD)
+   │                                  │
+   │ ③ 回一行: "1 OK 0\r\n"            │
+   │◄─────────────────────────────────│  gtwa_write_response() → write()
+   │                                  │
+   │ ④ 解析出数值 0，刷新界面           │
+</pre>
+
+<div class="note">这条链路里，<strong>②之前全是 Qt 的常规 socket 编程</strong>，<strong>②之后全是 canopend 的现成代码</strong>。本站要写的「新东西」只有 Qt 那一小段（§4）。</div>
+
+<h2>§2 板端那一半：canopend 的 CiA 309-3 网关</h2>
+
+<h3>2.1 怎么打开它：一个启动参数</h3>
+
+<p>网关由 <code>-c</code> 选项启用，三种形态任选：</p>
+
+<table class="cols-2">
+<caption>表 8-4 <code>-c</code> 的三种形态（出处 <code>CO_main_basic.c:249-262</code> 帮助文本）</caption>
+<thead><tr><th>取值</th><th>含义 / 用途</th></tr></thead>
+<tbody>
+<tr><td><code>-c "stdio"</code></td><td>用标准输入输出当命令口。人在终端里手敲命令，调试用。等价 <code>CO_COMMAND_IF_STDIO</code>。</td></tr>
+<tr><td><code>-c "local-/tmp/CO_command_socket"</code></td><td>建一个 Unix 域本地 socket。<strong>同机</strong>客户端连它，最快、最安全。</td></tr>
+<tr><td><code>-c "tcp-60000"</code></td><td>监听 TCP 端口。<strong>跨机</strong>（PC↔板子）就用这个。<code>-T &lt;ms&gt;</code> 可设连接超时。</td></tr>
+</tbody>
+</table>
+
+<p>命令示例（README 里就是这么写的）：</p>
+<pre>
+# 板子上（run 在开发板）
+./canopend can0 -i 1 -c "tcp-60000"
+
+# 或本地 socket 形态
+./canopend can0 -i 1 -c "local-/tmp/CO_command_socket"
+</pre>
+
+<h3>2.2 参数是怎么被吃进去的</h3>
+
+<p>对照主程序 <code>main()</code> 的三个函数：</p>
+
+<table class="cols-2">
+<caption>表 8-5 启动参数的解析链路</caption>
+<thead><tr><th>函数 / 位置</th><th>做了什么</th></tr></thead>
+<tbody>
+<tr><td><code>printUsage()</code><br><code>CO_main_basic.c:229-267</code></td><td>打印帮助。<code>-c</code>/<code>-T</code> 两段被 <code>#if (CO_CONFIG_GTW)&amp;CO_CONFIG_GTW_ASCII</code> 包着——<strong>网关没开编译，这俩选项根本不会出现</strong>。这解释了「为什么它是可选的」。</td></tr>
+<tr><td><code>getopt(argc,argv,"i:p:rc:T:s:")</code><br><code>CO_main_basic.c:338</code></td><td>解析命令行。字母里 <code>c:</code> 和 <code>T:</code> 就是网关用的（带冒号=要跟参数）。</td></tr>
+<tr><td><code>case 'c'</code><br><code>CO_main_basic.c:353-378</code></td><td>把字符串翻译成数字句柄：<code>"stdio"</code>→<code>CO_COMMAND_IF_STDIO</code>；<code>"local-"</code>前缀→<code>CO_COMMAND_IF_LOCAL_SOCKET</code> 且把 <code>&amp;optarg[6]</code> 当路径；<code>"tcp-"</code>前缀→<code>sscanf</code> 出端口号，直接把<strong>端口号本身</strong>当句柄（<code>commandInterface = port</code>）。</td></tr>
+<tr><td><code>case 'T'</code><br><code>CO_main_basic.c:380-382</code></td><td><code>socketTimeout_ms = strtoul(...)</code>，连接空闲超时。</td></tr>
+<tr><td><code>CO_epoll_createGtw()</code><br><code>CO_main_basic.c:565-572</code></td><td>真正「开网关」：<code>CO_epoll_createGtw(&amp;epGtw, epMain.epoll_fd, commandInterface, socketTimeout_ms, localSocketPath)</code>。注意它挂的是 <strong>epMain</strong>（主线程）的 epoll。</td></tr>
+</tbody>
+</table>
+
+<div class="warn"><strong>一个容易看漏的细节</strong>：<code>case 'c'</code> 里 <code>commandInterface</code> 同时承担两种含义——<code>stdio</code>/<code>local</code> 时它是枚举常量，<code>tcp</code> 时它<strong>就是端口号</strong>。所以后面判断 TCP 用的是范围判定 <code>CO_COMMAND_IF_TCP_SOCKET_MIN .. MAX</code>，而不是相等判定。</div>
+
+<h3>2.3 服务端在哪建 socket：<code>CO_epoll_createGtw()</code></h3>
+
+<p>位置 [CO_epoll_interface.c:405-538](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L405-L538)。它只干「建监听口」这件事，逐个分支：</p>
+
+<table class="cols-3">
+<caption>表 8-6 createGtw 的三个分支</caption>
+<thead><tr><th>分支</th><th>位置</th><th>关键调用</th></tr></thead>
+<tbody>
+<tr><td>stdio</td><td>[:427-430](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L427-L430)</td><td>直接 <code>gtwa_fd = STDIN_FILENO</code>，不建 socket。</td></tr>
+<tr><td>local socket</td><td>[:431-467](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L431-L467)</td><td><code>socket(AF_UNIX, SOCK_STREAM|SOCK_NONBLOCK)</code> → <code>bind()</code> → <code>listen(LISTEN_BACKLOG=50)</code>；并 <code>signal(SIGPIPE,SIG_IGN)</code>（防客户端断开时写崩）。</td></tr>
+<tr><td>TCP socket</td><td>[:468-511](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L468-L511)</td><td><code>socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK)</code> + <code>SO_REUSEADDR</code> → <code>bind(INADDR_ANY, htons(port))</code> → <code>listen()</code>。</td></tr>
+</tbody>
+</table>
+
+<p>最后（[:516-535](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L516-L535)）把监听 fd <code>gtwa_fdSocket</code> 注册进主线程 epoll，事件用 <code>EPOLLIN | EPOLLONESHOT</code>（「来一次连接就摘一次」，避免重复触发）。</p>
+
+<h3>2.4 服务端怎么处理连接与命令：<code>CO_epoll_processGtw()</code></h3>
+
+<p>位置 [CO_epoll_interface.c:574-707](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L574-L707)。它是<strong>主线程 epoll 循环里的一个处理函数</strong>，节奏跟 §2.2 的 <code>epMain</code> 一致。看它的三段判断：</p>
+
+<pre>
+CO_epoll_processGtw(epGtw, co, ep)
+ │
+ ├─(A) 有新事件 且 fd 是监听口 gtwa_fdSocket？
+ │        └ accept4(..., SOCK_NONBLOCK)   ← 收下这台客户端 (L592)
+ │        └ epoll_ctl(ADD, 新fd)          ← 把它也纳入监听 (L605)
+ │
+ ├─(B) 有新事件 且 fd 是已连上的 gtwa_fd？
+ │        └ read(buf, space)              ← 读客户端发来的一行命令 (L627)
+ │        └ CO_GTWA_write(co->gtwa, ...)  ← ★把文本喂给网关状态机 (L668)
+ │           （stdio 形态会先补 "[0] " 前缀，L636-650）
+ │        └ 若读到 EOF(s==0)：DEL+close+重新允许 accept (L652-666)
+ │
+ └─(C) 空闲超过 socketTimeout_us？
+          └ DEL + close + 重新允许 accept   ← 超时踢人 (L686-706)
+</pre>
+
+<table class="cols-2">
+<caption>表 8-7 processGtw 里两个「状态机」要点</caption>
+<thead><tr><th>点</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>CO_GTWA_write()</code></td><td>这是网关的「入口」。它把收到的字节当 ASCII 命令解析，内部再驱动 <code>CO_SDOclient</code>/NMT 等去访问 CAN 或本机 OD。<strong>Qt 侧完全不用碰这一层</strong>。</td></tr>
+<tr><td><code>gtwa_write_response()</code><br>[:367-391](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L367-L391)</td><td>网关算完，回调这个函数，把响应文本 <code>write()</code> 回客户端 fd。它就是「§1.3 链路图里的第 ③ 步」。</td></tr>
+<tr><td><code>CO_epoll_initCANopenGtw()</code><br>[:564-571](file:///home/zcy/Project/panasonic_canopen_agv/CO_epoll_interface.c#L564-L571)</td><td><code>CO_GTWA_initRead(co->gtwa, gtwa_write_response, &amp;epGtw->gtwa_fd)</code> —— 把上面那个回调挂上去。</td></tr>
+</tbody>
+</table>
+
+<div class="note"><strong>谁在主循环里叫它</strong>：<code>CO_main_basic.c</code> 主循环 <code>:797 CO_epoll_wait(&amp;epMain)</code> → <code>:803 CO_epoll_processGtw(&amp;epGtw, CO, &amp;epMain)</code> → <code>:805 CO_epoll_processMain(...)</code>。即<strong>先处理网关、再跑协议栈主逻辑</strong>，都在主线程里顺序执行，天然不抢 RT 线程。</div>
+
+<h3>2.5 和网关「对话」的语法（CiA 309-3）</h3>
+
+<p>权威出处：[CO_gateway_ascii.h:76-141](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/309/CO_gateway_ascii.h#L76-L141)。你只要记住几条常用的。</p>
+
+<table class="cols-2">
+<caption>表 8-8 常用命令语法</caption>
+<thead><tr><th>命令</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>[&lt;seq&gt;] [&lt;net&gt;] &lt;node&gt; r &lt;index&gt; &lt;sub&gt; [&lt;dtype&gt;]</code></td><td>读对象字典条目。<code>r</code> = read，<code>dtype</code> 可省（让网关按 OD 自判）。</td></tr>
+<tr><td><code>&lt;node&gt; w &lt;index&gt; &lt;sub&gt; &lt;dtype&gt; &lt;value&gt;</code></td><td>写对象字典条目。</td></tr>
+<tr><td><code>&lt;node&gt; start</code> / <code>stop</code> / <code>preop</code></td><td>发 NMT 命令，切节点状态。</td></tr>
+<tr><td><code>&lt;node&gt; reset node</code> / <code>reset comm</code></td><td>NMT 复位（节点 / 通信）。</td></tr>
+<tr><td><code>help</code> / <code>led</code> / <code>log</code></td><td>网关自身帮助 / 看 LED / 看日志。</td></tr>
+</tbody>
+</table>
+
+<table class="cols-2">
+<caption>表 8-9 响应格式（出处 <code>CO_gateway_ascii.h:96-98</code>）</caption>
+<thead><tr><th>响应</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>[&lt;seq&gt;] OK</code></td><td>写类 / 动作类命令成功。</td></tr>
+<tr><td><code>[&lt;seq&gt;] &lt;value&gt;</code></td><td>读类命令成功，<code>value</code> 就是读到的值。</td></tr>
+<tr><td><code>[&lt;seq&gt;] ERROR:&lt;code&gt;</code></td><td>失败，<code>code</code> 见 <code>CO_GTWA_respErrorCode_t</code>（[:168-223](file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/309/CO_gateway_ascii.h#L168-L223)）。</td></tr>
+</tbody>
+</table>
+
+<p>数值类型写法（出处同表 8-8）：<code>b</code>、<code>i8..i64</code>、<code>u8..u64</code>、<code>x8..x64</code>（十六进制）、<code>r32/r64</code>（浮点）、<code>vs</code>（可见字符串）等。<strong>命令与响应都以 <code>\r\n</code> 结尾</strong>，<code>#</code> 开头是注释。</p>
+
+<div class="note"><strong>读一条心跳周期的实例</strong>（README 给的例子）：<code>1 read 0x1017 0 u16</code> → 回 <code>1 OK 0</code>。因为本工程 <code>0x1017=0</code>（第 2 站结论：周期心跳关闭）。这就是「用上位机验证前面几站结论」的用法。</div>
+
+<h2 class="pgbreak">§3 客户端原型：<code>cocomm</code></h2>
+
+<p>工程里已经躺着一个完整的网关客户端 <code>cocomm</code>（[cocomm/cocomm.c](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c)，564 行）。<strong>Qt 上位机要写的那点东西，它全示范过了</strong>——建议把它当「参考实现」读一遍，比看 Qt 文档快。</p>
+
+<h3>3.1 建连：两种 socket 二选一</h3>
+
+<table class="cols-3">
+<caption>表 8-10 cocomm 的建连逻辑</caption>
+<thead><tr><th>类型</th><th>位置</th><th>调用序列</th></tr></thead>
+<tbody>
+<tr><td>TCP（<code>-t host -p port</code>）</td><td>[:325-359](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L325-L359)</td><td><code>getaddrinfo()</code> → <code>socket(AF_INET)</code> → <code>connect()</code></td></tr>
+<tr><td>本地 socket（<code>-s path</code>）</td><td>[:360-376](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L360-L376)</td><td><code>socket(AF_UNIX, SOCK_STREAM)</code> → <code>connect()</code></td></tr>
+</tbody>
+</table>
+
+<p>默认值：socket 路径 <code>/tmp/CO_command_socket</code>（[:206](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L206)）、TCP 端口 <code>60000</code>（[:208](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L208)）——<strong>和 §2.1 板端 <code>-c</code> 的取值一一对应</strong>，两边必须写一致。</p>
+
+<h3>3.2 收发：一个「发一行、读一行」的循环</h3>
+
+<p><code>main()</code> 的三种命令来源（命令行参数 / <code>-f</code> 文件 / stdin，[:411-530](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L411-L530)）都走同一个模式：</p>
+
+<pre>
+write(fd_gtw, commBuf, len);   // 发一行命令
+printReply(fd_gtw);            // 阻塞读一行回复，解析
+</pre>
+
+<table class="cols-2">
+<caption>表 8-11 <code>printReply()</code> 的解析规则（出处 <code>cocomm.c:92-198</code>）</caption>
+<thead><tr><th>判断</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>含 <code>"] ERROR:"</code></td><td>出错，打到 stderr。</td></tr>
+<tr><td>含 <code>"] OK\r\n"</code></td><td>成功（写类/动作类）。</td></tr>
+<tr><td>否则取 <code>"] "</code> 之后到 <code>"\r\n"</code> 之间</td><td>那就是读到的<strong>数值</strong>，打到 stdout。</td></tr>
+</tbody>
+</table>
+
+<div class="note">它把「状态」和「数据」分开：<strong>错误走 stderr、数值走 stdout</strong>。所以终端里能 <code>cocomm "1 r 0x6064 0 i32" &gt; pos.txt</code> 只拿数。Qt 侧也应照这个思路——一次交互拆成「成功/失败」+「负载值」两件事处理。</div>
+
+<div class="warn"><strong>两个必须抄走的坑</strong>：① <code>signal(SIGPIPE, SIG_IGN)</code>（[:319-322](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L319-L322)）——客户端也会在对方断开时被 SIGPIPE 杀掉，必须忽略；② 命令没写序号 <code>[n]</code> 时要自动补 <code>[&lt;i&gt;] </code>（[:456-459](file:///home/zcy/Project/panasonic_canopen_agv/cocomm/cocomm.c#L456-L459)），否则网关认不出这是新命令。</div>
+
+<h2>§4 Qt 侧架构：UI 线程 与 通信线程 分离</h2>
+
+<h3>4.1 为什么必须分线程</h3>
+
+<p>socket 的 <code>read()</code> 是<strong>阻塞</strong>的（cocomm 里就是裸阻塞读）。如果直接在 Qt 的 UI 线程里循环读，窗口会卡死、按钮不响应。所以标准做法是：</p>
+
+<pre>
+┌────────────── Qt 主线程（UI） ──────────────┐
+│  MainWindow                                   │
+│   ├ 控件：位姿数值、轨迹画布(QPainter)          │
+│   └ 槽：onPoseUpdated(x,y,th)  ← 只负责"画"    │
+└───────────────▲──────────────────────────────┘
+                │ 跨线程信号槽（Qt 自动排队投递）
+                │ signal poseUpdated(double,double,double)
+┌───────────────┴──────────────────────────────┐
+│  工作线程：CommWorker                          │
+│   ├ QTcpSocket（或 QLocalSocket）              │
+│   ├ 定时器 QTimer：每 N ms 发一条 "1 r ..."     │
+│   ├ 收：readyRead() → 解析 → 拼出一帧位姿       │
+│   └ 发：按钮触发 → 组命令字符串 → write()       │
+└───────────────────────────────────────────────┘
+</pre>
+
+<div class="note"><strong>关键点</strong>：Qt 的「信号槽 + <code>QueuedConnection</code>」天生解决跨线程，<strong>不需要自己加锁</strong>（别把 socket 和界面控件塞进同一个线程再手动锁，那是最常见的新手错）。工作线程只管「收发+解析」，主线程只管「显示」。</div>
+
+<h3>4.2 工作线程要实现的 4 件事</h3>
+
+<table class="cols-3">
+<caption>表 8-12 CommWorker 的职责（对应 §3 的 cocomm）</caption>
+<thead><tr><th>职责</th><th>对应 cocomm</th><th>要点</th></tr></thead>
+<tbody>
+<tr><td>建连</td><td><code>connect()</code> 两分支</td><td>Qt 用 <code>QTcpSocket::connectToHost(ip,60000)</code> 一行搞定，不用手写 getaddrinfo。</td></tr>
+<tr><td>发命令</td><td><code>write()</code></td><td>拼字符串，<code>append("1 r 0x6064 0 i32\r\n")</code>。<strong>别忘 <code>\r\n</code></strong>。</td></tr>
+<tr><td>收响应</td><td><code>printReply()</code></td><td><code>readyRead()</code> 里按 <code>\r\n</code> 切行；判 <code>OK</code>/<code>ERROR</code>/数值。</td></tr>
+<tr><td>节拍</td><td>（cocomm 是一次性）</td><td>用 <code>QTimer</code> 每 100ms 轮询一次位姿（或改板端为主动推，见 §5）。</td></tr>
+</tbody>
+</table>
+
+<h3>4.3 一个最小可跑的界面草图</h3>
+
+<pre>
+MainWindow
+ ├ QLabel  x = 1.234 m
+ ├ QLabel  y = 0.567 m
+ ├ QLabel  θ = 12.3 °
+ ├ QLabel  NMT = OPERATIONAL
+ ├ PathCanvas (QWidget，重写 paintEvent，把 (x,y) 列表画成折线)
+ └ QPushButton [启动] [停止] [进入 Pre-OP]     ← §5 说明这些命令的边界
+
+CommWorker(独立 QThread)
+ ├ QTimer(100ms) ─► write("1 r 0x2100 0 ...")   // 读位姿条目(需板端先加, §5)
+ ├ readyRead()   ─► 解析 ─► emit poseUpdated(x,y,th)
+ └ 按钮点击     ─► write("1 start\r\n") 等
+</pre>
+
+<div class="note"><strong>坐标怎么画</strong>：轨迹就是一堆 <code>(x,y)</code> 点。把画布中心当 <code>(0,0)</code>，按「多少像素 = 1 米」缩放，把历史点<strong>先记录再画折线</strong>。注意 y 轴方向——数学的 +y 朝上，屏幕的 +y 朝下，画之前给 y 取个负号，不然图是上下颠倒的。</div>
+
+<h2>§5 位姿怎么从板子出去：本站唯一的板端增量</h2>
+
+<h3>5.1 诚实交代现状</h3>
+
+<div class="warn"><strong>现状</strong>：第 7 站算出的 <code>odom_x/odom_y/odom_th</code> 是 <code>CO_application.c</code> 里的 <code>static</code> 变量（[:52-59](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L52-L59)），<strong>它们不在对象字典里</strong>。而网关只能读「对象字典里的东西」。查 [OD.h:54-64](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L54-L64) 的 <code>OD_CNT_ARR_*</code> 列表：只有 <code>1003/1010/1011/1016/607B/607D/.../60FE</code>，<strong>没有任何 <code>0x2xxx</code> 厂商数组</strong>。所以「Qt 一上来就读到位姿」这件事，现在<strong>还差一步</strong>。</div>
+
+<h3>5.2 三条补法（按工作量排序）</h3>
+
+<table class="cols-3">
+<caption>表 8-13 把位姿暴露出去的三种做法</caption>
+<thead><tr><th>做法</th><th>怎么做</th><th>代价 / 适用</th></tr></thead>
+<tbody>
+<tr><td>① 新增 OD 数组条目（★推荐起步）</td><td>在 <code>OD.c</code>/<code>OD.h</code> 加一个厂商段数组（如 <code>0x2100</code> 存 x/y/th），在 <code>app_programRt</code> 里写它。Qt 用 <code>1 r 0x2100 1 r32</code> 轮询读。</td><td>改动小、复用现成网关；SDO 是偶发请求，实时性一般。适合「看一眼 / 画轨迹」。</td></tr>
+<tr><td>② 用 TPDO 主动上报</td><td>映射一个 TPDO 带位姿三项，靠 100ms 的 SYNC（第 5 站：<code>0x1006=100000µs</code> 已在发 <code>0x080</code>）周期广播。</td><td>延迟低、周期准；要改 OD + TPDO 映射，Qt 侧还得会收 CAN——复杂，暂不必。</td></tr>
+<tr><td>③ 板端自写 TCP 直推</td><td>不用网关，另开线程把位姿按自定义格式推给 PC。</td><td>最灵活但要自维护协议，等于放弃 §2 的白捡便宜。<strong>不推荐</strong>。</td></tr>
+</tbody>
+</table>
+
+<h3>5.3 加进 OD 时绕不开的两件事</h3>
+
+<ol>
+<li><strong>跨线程加锁</strong>：位姿由 <strong>RT 线程写</strong>（<code>app_programRt</code>，[:209](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L209)）、由 <strong>主线程读</strong>（网关处理 SDO 时）。这正是第 7 站 §5 埋的伏笔——<strong>写侧/读侧都必须用 <code>CO_LOCK_OD()</code> / <code>CO_UNLOCK_OD()</code> 包住</strong>。第 7 站内部闭环不跨线程，所以那时不加锁是对的；<strong>本站是真正引入锁的地方</strong>。</li>
+<li><strong>别在 RT 拍里做重活</strong>：只做「把三个 double 写进 OD 条目」这一下即可，不要在里面格式化字符串、不要打印（第 7 站 §4.6 的 warn：每拍 printf 会毁掉第 6 站的实时性）。</li>
+</ol>
+
+<div class="note"><strong>为什么不用现成的 <code>0x6064</code>（实际位置）？</strong> 因为那是<strong>单个电机的原始计数</strong>，不是「车在世界里的 x,y,θ」。要知道车在哪，必须走第 7 站的差速运动学。<code>0x6064</code> 只能当「轮子转了多少」用。</div>
+
+<h3>5.4 「发指令」这条功能，边界在哪（必须说清）</h3>
+
+<div class="warn"><strong>能做</strong>：通过网关下发协议层命令——<code>1 start</code> / <code>1 stop</code> / <code>1 preop</code> / <code>1 reset node</code>（NMT），以及 SDO 写任何 OD 条目。<br>
+<strong>不能做</strong>：让 AGV「按速度/按目标点跑起来」。原因见第 7 站后的结论——<strong>本工程全链路「只收不发」，没有任何下发速度指令的代码</strong>（<code>CO_application.c</code> 里配的 RPDO 都是「收」，OD 里 TPDO 0x1A00 虽预留了 <code>0x6040+0x60FF</code>，但无人触发）。真正的运动指令需要<strong>一个控制器站</strong>，那是你之前明确选择「先不做」的部分。</div>
+
+<p>所以第 8 站的「发指令」应如实定位为：<strong>下协议层命令（启停/复位）+ 用 SDO 做参数读写</strong>，而不是「遥控开车」。</p>
+
+<h2>§6 联调与自测 · 衔接第 9 站</h2>
+
+<h3>6.1 建议的动手顺序（由易到难，每步都可验收）</h3>
+
+<table class="cols-3">
+<caption>表 8-14 第 8 站的四个里程碑</caption>
+<thead><tr><th>步骤</th><th>做什么</th><th>验收标准</th></tr></thead>
+<tbody>
+<tr><td>M1</td><td>板端加 <code>-c "tcp-60000"</code> 跑 <code>canopend</code>；PC 上先用现成 <code>cocomm</code> 连它</td><td><code>cocomm -t &lt;板子IP&gt; -p 60000 "1 r 0x1017 0 u16"</code> 回 <code>1 OK 0</code></td></tr>
+<tr><td>M2</td><td>Qt 只做一件事：连上、发一条读命令、把回复显示在界面上</td><td>界面能显示「读到的值」，且断开重连不崩</td></tr>
+<tr><td>M3</td><td>板端加 <code>0x2100</code> 位姿数组条目（§5.2 做法①），Qt 改成周期轮询</td><td>界面数值随手动推轮子而变化</td></tr>
+<tr><td>M4</td><td>加轨迹画布 + 启停按钮</td><td>推一圈车，画布出现轨迹；点 [停止] 后节点转 STOPPED</td></tr>
+</tbody>
+</table>
+
+<h3>6.2 应能回答的问题</h3>
+<ol>
+<li>为什么不自己写 CAN 主站，而是用 <code>canopend -c</code>？—— 网关已内置、零新增协议代码，见 §1.2 三条路对比。</li>
+<li><code>-c stdio / local-&lt;path&gt; / tcp-&lt;port&gt;</code> 三种形态分别何时用？—— 终端手敲调试 / 同机客户端 / 跨机 PC。见 §2.1。</li>
+<li>网关收到文本后，具体由谁去访问 CAN？—— <code>CO_epoll_processGtw</code> → <code>CO_GTWA_write</code> → 内部驱动 <code>CO_SDOclient</code>（本机 OD 走 <code>SDO_CLI_LOCAL</code>）。见 §2.4。</li>
+<li>响应怎么区分「成功、值、失败」？—— <code>"] OK"</code> / <code>"] &lt;value&gt;"</code> / <code>"] ERROR:&lt;code&gt;"</code>。见 §2.5 表 8-9、§3.2 表 8-11。</li>
+<li>为什么 Qt 一定要分线程？—— socket <code>read()</code> 阻塞会卡死 UI；用「工作线程收发 + 信号槽投递」即可，无需手写锁。见 §4.1。</li>
+<li>位姿为什么现在读不到、要怎么补？—— 它不在 OD 里（<code>OD.h:54-64</code> 无 <code>0x2xxx</code> 数组）；需新增数组条目并跨线程加锁。见 §5.1/§5.3。</li>
+<li>上位机能「遥控开车」吗？—— 不能，只能下协议层命令。见 §5.4。</li>
+</ol>
+
+<h3>6.3 本站在整个工程里的位置</h3>
+<ul>
+<li><strong>承接第 7 站</strong>：显示它算出的 <code>x,y,θ</code>；并兑现第 7 站 §5 的伏笔——<strong>在这里引入 <code>CO_LOCK_OD()</code>/<code>CO_UNLOCK_OD()</code></strong>。</li>
+<li><strong>本站产出</strong>：一个能看位姿、画轨迹、下发协议层命令的 Qt 上位机；工程第一次有了「人机界面」。</li>
+<li><strong>交给第 9 站</strong>：界面跑在 PC、节点跑在 i.MX6ULL——两台机器。
+第 9 站（交叉编译 &amp; 部署）要做的就是把 <code>canopend</code> 交叉编成 ARM 版、放到板子上跑，
+让「PC 的 Qt ←→ 板子的 canopend」这条 <code>tcp-60000</code> 链路在真实硬件上打通。本站先把链路在 PC 上验证通，第 9 站再搬上板。</li>
+</ul>
+
+<h3>6.4 与前面几站的呼应（速查）</h3>
+<table class="cols-2">
+<caption>表 8-15 本站用到的「旧知识」</caption>
+<thead><tr><th>来自</th><th>本站怎么用</th></tr></thead>
+<tbody>
+<tr><td>第 4 站（对象字典）</td><td>网关读的就是 OD 条目；要暴露位姿就得先有 OD 条目。</td></tr>
+<tr><td>第 5 站（SYNC/PDO）</td><td>若将来走做法②用 TPDO 上报，靠的正是 100ms 那帧 <code>0x080</code>。</td></tr>
+<tr><td>第 6 站（实时性）</td><td>主线程做网关/网络，RT 线程管 1ms 节拍，互不干扰；别在 RT 拍里做 IO。</td></tr>
+<tr><td>第 7 站（里程计）</td><td>直接显示它的输出，并在此处补上跨线程锁。</td></tr>
+</tbody>
+</table>
+
+<div class="footnote">
+<p><strong>取证位置汇总（便于对照源码）</strong></p>
+<ul>
+<li>网关编译开关：<code>CO_driver_target.h:105-108</code>（<code>CO_CONFIG_SDO_CLI_LOCAL</code>）、<code>:129-137</code>（<code>CO_CONFIG_GTW</code> 全开）、<code>:138-140</code>（缓冲大小）。</li>
+<li>板端参数：<code>CO_main_basic.c:229-267</code>（<code>printUsage</code>，<code>-c</code>/<code>-T</code> 帮助）、<code>:338</code>（<code>getopt "i:p:rc:T:s:"</code>）、<code>:353-378</code>（<code>case 'c'</code>）、<code>:380-382</code>（<code>case 'T'</code>）、<code>:565-572</code>（<code>CO_epoll_createGtw</code> 调用）。</li>
+<li>主循环：<code>CO_main_basic.c:797</code>（<code>CO_epoll_wait(&amp;epMain)</code>）、<code>:803</code>（<code>CO_epoll_processGtw</code>）、<code>:805</code>（<code>CO_epoll_processMain</code>）。</li>
+<li>网关服务端：<code>CO_epoll_interface.c:405-538</code>（<code>CO_epoll_createGtw</code>：stdio :427-430、local :431-467、tcp :468-511、注册 epoll :516-535）、<code>:540-563</code>（<code>CO_epoll_closeGtw</code>）、<code>:564-571</code>（<code>CO_epoll_initCANopenGtw</code>）、<code>:574-707</code>（<code>CO_epoll_processGtw</code>：accept4 :592、读命令→<code>CO_GTWA_write</code> :627/:668、EOF :652-666、超时 :686-706）、<code>:367-391</code>（<code>gtwa_write_response</code>）。</li>
+<li>协议语法：<code>CANopenNode/309/CO_gateway_ascii.h:76-141</code>（命令语法）、<code>:96-98</code>（响应格式）、<code>:109-119</code>（datatype）、<code>:168-223</code>（错误码）、<code>:151-152</code>（<code>CO_GTWA_RESP_BUF_SIZE=200</code>）。</li>
+<li>客户端原型：<code>cocomm/cocomm.c:92-198</code>（<code>printReply</code>）、<code>:206/:208</code>（默认 socket/port）、<code>:319-322</code>（SIGPIPE）、<code>:325-359</code>（TCP 建连）、<code>:360-376</code>（local 建连）、<code>:411-530</code>（三种命令来源）、<code>:456-459</code>（自动补序号）；<code>cocomm/README.md:24-27/:51-63</code>（用法与 10 步通信路径）。</li>
+<li>位姿现状：<code>CO_application.c:52-59</code>（<code>odom_*</code> 静态变量）、<code>:209</code>（<code>app_programRt</code>）、<code>:265-296</code>（积分）；<code>application/OD.h:54-64</code>（<code>OD_CNT_ARR_*</code> 无 <code>0x2xxx</code>，需新增）。</li>
+</ul>
+<p><strong>阅读顺序建议</strong>：先读 §1（要什么、从哪来）→ §2（板端网关）→ §3（客户端原型）→ §4（Qt 架构）→ §5/§6（缺口与联调）。上一站：第 7 站《里程计》。下一站：第 9 站《交叉编译 &amp; 部署 i.MX6ULL》。</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 6 站（上）· 实时性改造：打开多线程 + SCHED_FIFO（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:17%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:23%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:22%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 6 站（上）· 实时性改造 —— 打开多线程，给 RT 线程提优先级</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— CANopenNode V4 的 CANopen 从站（Linux 用户态 + SocketCAN，进程名 <code>canopend</code>）。</p>
+<p><strong>本篇定位：</strong>第 6 站 = <strong>开始改代码</strong>。第 1~5 站都在「读」现成的代码；这一站开始动手。改造目标一句话：<strong>让「收 CAN 帧 + 跑 PDO」这件事，能以稳定的 1ms 节拍、不受其它杂事干扰地执行</strong>。</p>
+<p><strong>拆成上下两篇：</strong>
+  <br>· <strong>上篇（本文）</strong>：为什么要实时 → 打开多线程 → 给 RT 线程设 SCHED_FIFO 实时优先级（=「把路修好」）。
+  <br>· <strong>下篇</strong>：RT 线程靠什么被准时叫醒（timerfd + epoll）→ 抖动从哪来 → 动手写抖动统计（=「验证准不准」）。</p>
+<p><strong>怎么读：</strong>每段只回答：<span class="star">这段在干什么 → 关键函数传什么/返回什么 → 被谁调用 → 调用了谁</span>。<strong>不做字节级拆帧</strong>，重点看流程图。行号格式 <code>文件:行号</code>。</p>
+<p><strong>标记：</strong><span class="star">★★★</span> 必会 / <span class="star">★★</span> 重要 / <span class="star">★</span> 知道即可。灰框=补充，红框=坑。</p>
+</div>
+
+<h2>§0 一页地图：这次改造到底改什么</h2>
+
+<p>先说结论：<strong>这份工程现在的 Makefile 是「单线程模式」，第 5 站讲的那条 RT 线程根本没被编译进来。</strong>所谓「实时性改造」，第一步就是把它打开，第二步给它一个实时优先级。</p>
+
+<pre>【现状】Makefile:54      OPT += -DCO_SINGLE_THREAD=1
+    │
+    ▼
+  ┌──────────────────────────────────────────────┐
+  │  单线程：只有主线程，100ms 一圈                │
+  │  收 CAN 帧 / 处理 PDO / 跑 SDO / 写日志 ……    │
+  │  全都挤在这一根时间线上（互相拖）              │
+  └──────────────────────────────────────────────┘
+    │
+    │  改造三步
+    ▼
+  ① 打开多线程     —— 改 Makefile：去掉 -DCO_SINGLE_THREAD=1，打开 -pthread
+  ② 提实时优先级   —— 运行时加 -p 80 → pthread_setschedparam(SCHED_FIFO)
+  ③ 量抖动（下篇） —— 在 app_programRt 里统计每周期实际耗时</pre>
+
+<p class="note"><strong>先明确一个概念：这里的「实时」不是「快」，而是「准」。</strong>是「每 1ms 一定跑一次，最坏情况也不超过某个上限」。跑得平均很快但偶尔卡 20ms，这在实时系统里叫失败。</p>
+
+<h2>§1 为什么非要把这件事单独拆出来</h2>
+
+<h3>1.1 本工程有两个节拍</h3>
+
+<table class="cols-3">
+<caption>表 6A-1　两条线程的节拍</caption>
+<thead><tr><th>节拍</th><th>宏 / 位置</th><th>干什么</th></tr></thead>
+<tbody>
+<tr><td>100ms（慢）</td><td><code>MAIN_THREAD_INTERVAL_US</code>，CO_main_basic.c:60</td><td>主线程。跑 SDO 服务/客户端、NMT、心跳、EMCY、TIME、网关命令行。这些都是「用户交互 / 诊断」性质，慢一点无所谓。</td></tr>
+<tr><td>1ms（快）</td><td><code>TMR_THREAD_INTERVAL_US</code>，CO_main_basic.c:63</td><td>RT 线程。只管「收 CAN 帧」和「SYNC / RPDO / TPDO」。这是每次运动控制都要走的通道，必须准时。</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 为什么不能「一根线 100ms 包打天下」</h3>
+
+<p>因为 <strong>CAN 帧是「随时到」的，不是「到点来」的</strong>。右电机那帧 <code>0x38A</code>（第 4 站讲过：状态字 + 实际位置）可能在你正处理 SDO 请求、正要写日志的任意时刻到达。</p>
+
+<p>单线程下的连锁反应是：</p>
+<pre>一帧 0x38A 到达
+   │
+   ▼
+socket 收包缓冲区（内核里排队，能存几百帧）
+   │
+   │  ← 主线程此刻正在干别的：算 SDO、写日志、等网关输入……
+   │     这帧只能**在缓冲区里等着**
+   ▼
+主线程忙完这一圈（最多要等 100ms），才回头把帧取走
+   │
+   ▼
+「收到帧 → 处理完」的延迟 = 不确定（可能几 µs，也可能几十 ms）</pre>
+
+<p>这就是问题所在：<strong>延迟没有上限</strong>。对 AGV 来说，位置反馈晚到 50ms 和晚到 5ms，是两种完全不同的车。</p>
+
+<h3>1.3 抖动的直觉：平均对 ≠ 每次都对</h3>
+
+<pre>目标节拍：|← 1ms →|← 1ms →|← 1ms →|← 1ms →|
+
+情况 A（好）：│**│**│**│**│         每次都很接近 1ms —— 抖动小
+情况 B（坏）：│*│******│*│****│     平均下来也是 1ms，但单次忽快忽慢 —— 抖动大</pre>
+
+<p><strong>实时性看的是「最坏那一次」，也就是情况 B 里那个最长的一格。</strong>所以在下篇里，我们统计抖动时重点看 <code>max</code>（最大值），而不是平均值。</p>
+
+<h3>1.4 拆成两条线程之后，谁保护谁</h3>
+
+<p>改造完的分工是这样的（<strong>主线程管杂事，RT 线程管节拍</strong>）：</p>
+<pre>一条 can0 总线
+      │
+      ├───────────────────────────────┐
+      ▼                               ▼
+ RT 线程（epRT，1ms）            主线程（epMain，100ms）
+ SCHED_FIFO 高优先级             SCHED_OTHER 普通优先级
+      │                               │
+ · 收 CAN 帧（0x38A / 0x38B）    · SDO 服务/客户端
+ · SYNC / RPDO / TPDO 处理        · NMT / 心跳 / EMCY / TIME
+ · app_programRt（应用钩子）       · 网关命令行（-c stdio）
+      │                               │
+      └──────── 共用一个 OD ──────────┘
+              （用锁 CO_LOCK_OD 保护）</pre>
+
+<p><strong>关键点：RT 线程优先级高，主线程干活干得再久，也抢不走 RT 线程的时间片。</strong>反过来，RT 线程跑完就阻塞在 epoll 上，把 CPU 让回给主线程。这样「杂事」就再也拖不累「节拍」了。</p>
+
+<h2 class="pgbreak">§2 改造第一步：把多线程打开（改 Makefile）</h2>
+
+<p>现状在 [Makefile](file:///home/zcy/Project/panasonic_canopen_agv/Makefile)：</p>
+<pre>Makefile:54    OPT += -DCO_SINGLE_THREAD=1      ← 定义了这个宏 = 单线程
+Makefile:66    #LDFLAGS += -pthread             ← 被注释掉（用线程就得开）</pre>
+
+<p><strong>改法（两行）：</strong>把 :54 删掉（或注释），把 :66 的 <code>-pthread</code> 打开。</p>
+
+<pre># Makefile:54 删掉/注释
+#OPT += -DCO_SINGLE_THREAD=1
+...
+# Makefile:66 打开
+LDFLAGS += -pthread</pre>
+
+<p class="note"><strong>为什么是「删掉宏」而不是「写成 =0」？</strong>代码里用的是 <code>#ifndef CO_SINGLE_THREAD</code>（没有定义才编译进来）。看的是「有没有定义」，不是「值是多少」。所以 <code>-DCO_SINGLE_THREAD=0</code> 也算定义了，照样走单线程分支。<strong>必须不定义。</strong></p>
+
+<h3>2.1 这个宏管着哪些代码</h3>
+
+<table class="cols-3">
+<caption>表 6A-2　<code>CO_SINGLE_THREAD</code> 控制的代码（未定义时=多线程才生效）</caption>
+<thead><tr><th>位置</th><th>这段代码的作用</th><th>单线程时</th></tr></thead>
+<tbody>
+<tr><td>CO_main_basic.c:130-134</td><td>声明 RT 线程专属的 epoll 对象 <code>epRT</code> 和线程函数 <code>rt_thread()</code></td><td>不存在</td></tr>
+<tr><td>CO_main_basic.c:276-279</td><td>声明 <code>pthread_t rt_thread_id</code>（线程号）和 <code>int rtPriority = -1</code>（命令行传来的优先级）</td><td>不存在</td></tr>
+<tr><td>CO_main_basic.c:346-349</td><td>让 getopt 认识 <code>-p</code> 选项</td><td>不认 <code>-p</code></td></tr>
+<tr><td>CO_main_basic.c:420-427</td><td>校验 <code>-p</code> 的值在 SCHED_FIFO 合法范围内</td><td>不校验</td></tr>
+<tr><td>CO_main_basic.c:554-561</td><td>创建 <code>epRT</code>（1ms 定时器），并把 <strong>CAN 收帧的 fd 挂到 epRT 上</strong>（<code>CANptr.epoll_fd = epRT.epoll_fd</code>）</td><td>改走 :562 <code>#else</code>：挂到 epMain（100ms）</td></tr>
+<tr><td>CO_main_basic.c:722-741</td><td>创建 RT 线程 + 用 <code>pthread_setschedparam</code> 设优先级</td><td>不创建</td></tr>
+<tr><td>CO_main_basic.c:885-911</td><td><code>rt_thread()</code> 函数本体（收帧 + SYNC/RPDO/TPDO 主循环）</td><td>整段被删</td></tr>
+<tr><td>CO_epoll_interface.c:241-288</td><td>给 NMT/心跳/EMCY/SDO/TIME 注册 <code>wakeupCallback</code>（跨线程唤醒，见 §4）</td><td>不注册</td></tr>
+</tbody>
+</table>
+
+<pre>【编译期发生的事】
+
+ 未定义 CO_SINGLE_THREAD ──► 上面 8 处 #ifndef 内的代码 **全部编进程序**
+                              → 程序里有一个主线程 + 一个 RT 线程
+
+ 定义   CO_SINGLE_THREAD=1 ──► 上面 8 处代码 **被预处理器整段删除**
+                              CO_main_basic.c:562  #else 生效：
+                                   CANptr.epoll_fd = epMain.epoll_fd
+                              → 程序里只有主线程，收帧也归它
+                                （CO_epoll_interface.c:288 之后 RT 相关函数成空壳）</pre>
+
+<h3>2.2 变量就地说明：epMain 与 epRT</h3>
+
+<p>两个都是 <code>CO_epoll_t</code> 结构体（定义在 CO_epoll_interface.h:87-112），可以理解成「一条线程的定时器 + 闹钟 + 收信箱」三合一：</p>
+
+<table class="cols-4">
+<caption>表 6A-3　epMain / epRT 对照</caption>
+<thead><tr><th>变量</th><th>在哪创建</th><th>节拍</th><th>挂的收帧 fd</th></tr></thead>
+<tbody>
+<tr><td><code>epMain</code></td><td>CO_main_basic.c:548 <code>CO_epoll_create(&amp;epMain, 100000)</code></td><td>100ms</td><td>不挂（多线程时）</td></tr>
+<tr><td><code>epRT</code></td><td>CO_main_basic.c:555 <code>CO_epoll_create(&amp;epRT, 1000)</code></td><td>1ms</td><td>挂 CAN fd（:561）</td></tr>
+</tbody>
+</table>
+
+<p>里面几个关键字段（下篇会用）：<code>timerInterval_us</code>（目标周期）、<code>timeDifference_us</code>（上一圈实际耗时，就是抖动测量点）、<code>timerEvent</code>（这次醒是不是因为定时到点）。</p>
+
+<h2 class="pgbreak">§3 改造第二步：给 RT 线程一个实时优先级（<code>-p</code>）</h2>
+
+<p>打开多线程后，RT 线程默认还是「普通线程」（SCHED_OTHER），照样会被别的进程抢。<strong>要让它「有事就立刻执行」，得给它 SCHED_FIFO 实时调度策略 + 一个优先级数字。</strong></p>
+
+<h3>3.1 完整链路（命令行 → 线程属性）</h3>
+
+<pre>命令行：  sudo ./canopend can0 -i 1 -p 80
+                              │
+   ① 解析        getopt        │  case 'p'    CO_main_basic.c:347
+                              ▼
+                  rtPriority = strtol("80") = 80
+                  （变量默认值 -1，声明在 :278）
+                              │
+   ② 校验        :421          │  if (rtPriority != -1 &&
+                              │      (rtPriority < min || rtPriority > max))
+                              │        min = sched_get_priority_min(SCHED_FIFO) = 1
+                              │        max = sched_get_priority_max(SCHED_FIFO) = 99
+                              ▼  不合法 → 打日志 + printUsage + 退出
+                        合法（80 在 1~99 内）
+                              │
+   ③ 首次运行块  :719          │  if (firstRun) {
+       建线程    :724          │      pthread_create(&rt_thread_id, NULL, rt_thread, NULL)
+       设策略    :730          │      if (rtPriority > 0) {
+       （下详）  :733          │          param.sched_priority = 80;
+                 :734          │          pthread_setschedparam(rt_thread_id, SCHED_FIFO, &param);
+                              ▼      }
+                    rt_thread()（:885）开始以 SCHED_FIFO:80 运行</pre>
+
+<h3>3.2 涉及的三个函数，各管什么</h3>
+
+<table class="cols-3">
+<caption>表 6A-4　优先级设置涉及的函数</caption>
+<thead><tr><th>函数</th><th>作用 / 参数含义</th><th>返回值 / 失败处理</th></tr></thead>
+<tbody>
+<tr><td><code>sched_get_priority_min(SCHED_FIFO)</code><br><code>sched_get_priority_max(SCHED_FIFO)</code><br>（CO_main_basic.c:421-422）</td><td>问操作系统：SCHED_FIFO 策略允许的优先级范围。Linux 上固定是 <strong>1 ~ 99</strong>（数字越大越优先）。</td><td>返回 int。这里只用来做区间校验。</td></tr>
+<tr><td><code>pthread_create(&tid, NULL, rt_thread, NULL)</code><br>（:724）</td><td>创建 RT 线程。第 2 个参数 <code>NULL</code> = 用默认线程属性（默认是 SCHED_OTHER）；第 3 个是要跑的函数；第 4 个是传给它的参数（这里没传）。</td><td>成功返回 0，失败返回错误码 → 代码打日志、置 <code>programExit=EXIT_FAILURE</code>、<code>CO_endProgram=1</code>，然后 <code>continue</code> 跳出。</td></tr>
+<tr><td><code>pthread_setschedparam(tid, SCHED_FIFO, &amp;param)</code><br>（:734）</td><td><strong>给已存在的线程改调度策略</strong>。<code>param.sched_priority</code> 就是要设的优先级数字。</td><td>同上：失败即报错退出。<strong>最常见失败原因是没有权限</strong>（见下面红框）。</td></tr>
+</tbody>
+</table>
+
+<h3>3.3 <code>if(rtPriority &gt; 0)</code> 为什么这么写</h3>
+
+<p><code>rtPriority</code> 默认 <code>-1</code>（:278），含义是「用户没传 <code>-p</code>」。逻辑链条是：</p>
+
+<pre>-p 没传          → rtPriority = -1  → :421 跳过校验，:730 条件为假 → **不设策略**（线程保持 SCHED_OTHER）
+-p 0             → :421 校验失败（0 &lt; 1）→ **直接报错退出**（0 在 SCHED_FIFO 里是非法值）
+-p 1 .. -p 99    → :421 通过        → :730 条件为真 → **设成 SCHED_FIFO**</pre>
+
+<p>所以到 :730 时，<code>rtPriority</code> 只可能是 -1 或 1~99。<code>&gt; 0</code> 就等价于「用户确实想要实时优先级」。</p>
+
+<div class="warn">
+<p><strong>坑：没有权限，<code>-p</code> 会让进程直接退出。</strong>给线程设 SCHED_FIFO 需要 <strong>root 权限</strong>（或 <code>CAP_SYS_NICE</code> 能力）。普通用户执行 <code>pthread_setschedparam</code> 会返回 <code>EPERM</code>，而代码在 :735-739 的处理是「打 CRIT 日志 + 置退出标志」，于是程序立刻结束。</p>
+<p><strong>两种解法：</strong>① <code>sudo ./canopend ...</code>；② 一次性授权：<code>sudo setcap cap_sys_nice+ep ./canopend</code>，之后普通用户也能跑。</p>
+</div>
+
+<h3>3.4 SCHED_FIFO 到底是什么</h3>
+
+<p>Linux 有三种常见调度策略，区别在「谁来抢谁」：</p>
+
+<table class="cols-3">
+<caption>表 6A-5　三种调度策略</caption>
+<thead><tr><th>策略</th><th>规则</th><th>本工程用在哪</th></tr></thead>
+<tbody>
+<tr><td><code>SCHED_OTHER</code></td><td>默认的「分时」策略。所有普通进程排队轮流用 CPU，公平但延迟不确定。</td><td>主线程（不设，就是它）</td></tr>
+<tr><td><code>SCHED_FIFO</code></td><td>实时策略。<strong>只要它有活干，就立刻抢占所有 SCHED_OTHER 线程</strong>；同级之间按「先到先跑，跑完/主动让出才轮到下一个」，不会被打断。</td><td>RT 线程（<code>-p</code> 设的）</td></tr>
+<tr><td><code>SCHED_RR</code></td><td>也是实时策略，但同级之间按时间片轮转（round-robin）。</td><td>本工程没用</td></tr>
+</tbody>
+</table>
+
+<pre>【SCHED_FIFO:80 的 RT 线程 vs 普通线程】
+
+ 就绪队列（数字大 = 优先）
+   ┌───────────────────────────────┐
+   │ SCHED_FIFO 80  │ RT 线程       │  ← 只要它是「就绪」态
+   ├───────────────────────────────┤     立刻上 CPU，别人全让开
+   │ SCHED_FIFO 1   │ （无）        │
+   ├───────────────────────────────┤
+   │ SCHED_OTHER    │ 主线程/别的进程│  ← 只有在没有就绪的实时线程时才能跑
+   └───────────────────────────────┘
+
+ 时间轴：
+   主线程跑 ────────┬───────────────┬────────── 继续跑
+                    │ RT 定时到点     │
+                    ▼   （内核立刻切过去）
+              [RT 线程执行 1ms 的活] ──► 干完阻塞在 epoll_wait
+                                          │
+                                          ▼  交还 CPU
+                                     主线程接着跑</pre>
+
+<p class="note"><strong>为什么这套是安全的（不会卡死系统）？</strong>因为 <code>rt_thread()</code> 里是一个「<code>CO_epoll_wait</code> 阻塞 → 处理 → 再阻塞」的循环（CO_main_basic.c:888-907）。它<strong>不忙等</strong>：没事件时线程是「睡眠」状态，CPU 完全还给别人。只有当 1ms 定时到点、或 CAN 帧到达、或被唤醒时才短暂占用 CPU。</p>
+
+<h3>3.5 优先级数字该给多少</h3>
+
+<table class="cols-2">
+<caption>表 6A-6　优先级取值建议</caption>
+<thead><tr><th>取值</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>为什么不用 99</td><td>99 是实时最高档，会和内核的一些高优先级线程（如中断迁移、看门狗）同级甚至压过它们，风险大。</td></tr>
+<tr><td>为什么常给 80 左右</td><td>足够高（稳压过所有普通进程），又给内核线程留了空间。够用就好，不必顶格。</td></tr>
+<tr><td>为什么主线程不提优先级</td><td>主线程跑 SDO/日志/网关，允许被抢占。它的活晚一点没关系；<strong>只要它别去拖 RT 线程</strong>——而提了 RT 优先级之后，它想拖也拖不动了。</td></tr>
+</tbody>
+</table>
+
+<h2 class="pgbreak">§4 改造后：两条线程怎么协作</h2>
+
+<h3>4.1 各跑各的循环</h3>
+
+<pre>【主线程】CO_main_basic.c:795-834 内层 while         【RT 线程】CO_main_basic.c:885-910
+        │                                                    │
+   CO_epoll_wait(&epMain)   ← 阻塞等 3 件事           CO_epoll_wait(&epRT)   ← 阻塞等 3 件事
+        │   · timerfd 100ms 到点                            │   · timerfd 1ms 到点
+        │   · eventfd 被对方唤醒                            │   · CAN 帧到达（0x38A/0x38B）
+        │   · 网关 socket 有输入                            │   · eventfd 被对方唤醒
+        ▼                                                    ▼
+   CO_epoll_processGtw()                                CO_epoll_processRT(&epRT, CO, true)
+   CO_epoll_processMain()  → CO_process(CO, …)              │  CO_CANrxFromEpoll   收帧
+        │   SDO 服务/客户端、NMT、心跳、                     │  CO_process_SYNC      （CO_epoll_interface.c:337）
+        │   EMCY、TIME、网关                               │  CO_process_RPDO      （:341）← 命中 H6064_write
+        │   ★ 不含 PDO（PDO 归 RT 线程）                    │  CO_process_TPDO      （:345）
+        ▼                                                    ▼
+   CO_epoll_processLast()                               CO_epoll_processLast()
+        │                                                    │
+   app_programAsync(CO)                                 app_programRt(CO, epRT.timeDifference_us) ← 应用钩子
+        │                                                    │   （下篇的抖动统计就写在这）
+        └────────────── 都访问同一个 OD ────────────────────┘
+                    RT 侧用 CO_LOCK_OD/CO_UNLOCK_OD 加锁
+                    （见 CO_epoll_interface.c:332/350）</pre>
+
+<p><strong>主线程为什么不含 PDO？</strong>因为在多线程模式下，PDO 的处理被挪到了 RT 线程的 <code>CO_epoll_processRT</code> 里。这也是第 5 站那个结论的由来：<code>CO_process()</code>（主线程）管 SDO/NMT/心跳/EMCY/TIME/网关，<strong>PDO 不在里面</strong>。</p>
+
+<h3>4.2 跨线程「敲门」：wakeupCallback + eventfd</h3>
+
+<p>两个线程各自阻塞在自己 epoll 上，怎么互相通知？靠 <code>eventfd</code>。开线程后，CO_epoll_interface.c:241-288 会给每个慢速模块（NMT / 心跳 / EMCY / SDO 服务端 / SDO 客户端 / TIME）注册一个回调 <code>wakeupCallback</code>（定义在 CO_epoll_interface.c:226）。</p>
+
+<pre>主线程里某个模块状态变了（比如 SDO 服务端收到了请求）
+        │
+        ▼
+   wakeupCallback()  →  往 event_fd 写一个数
+        │
+        ▼
+   RT 线程的 epoll 被唤醒 → CO_epoll_wait 检测到 event_fd 事件
+        │
+        ▼
+   （不是定时事件，所以 timerEvent=false）
+   如果是纯唤醒事件，CO_epoll_processRT 不会重复跑 PDO
+   （靠 CO_epoll_interface.c:329 的 if (!realtime || ep->timerEvent) 把关，下篇详讲）</pre>
+
+<p class="note"><strong>单线程模式为什么不需要这套？</strong>因为只有一个线程，不存在「叫醒对方」的问题，所以 :241-288 这整段唤醒注册被 <code>#ifndef CO_SINGLE_THREAD</code> 包着，单线程时是空函数。</p>
+
+<h2>§5 小结 · 自测 · 衔接下篇</h2>
+
+<h3>5.1 本站（上篇）三句话</h3>
+<ol>
+<li><strong>现状是单线程</strong>：Makefile:54 定义了 <code>-DCO_SINGLE_THREAD=1</code>，第 5 站讲的那条 RT 线程根本没被编译进去，收帧和 PDO 都挤在主线程 100ms 的循环里，延迟无上限。</li>
+<li><strong>改造第一步</strong>：删掉 <code>-DCO_SINGLE_THREAD=1</code> 宏 + 打开 <code>-pthread</code>，编译后多出一条 1ms 的 RT 线程，CAN 收帧 fd 改挂到它上面（CO_main_basic.c:561）。</li>
+<li><strong>改造第二步</strong>：运行时 <code>-p 80</code> → 校验 1~99 → <code>pthread_setschedparam(SCHED_FIFO)</code>，让 RT 线程「有事就抢占普通线程」。需要 root 或 <code>CAP_SYS_NICE</code>。</li>
+</ol>
+
+<h3>5.2 自测（能答上来就算过）</h3>
+<ol>
+<li>为什么 <code>-DCO_SINGLE_THREAD=0</code> 达不到「打开多线程」的效果？</li>
+<li><code>CANptr.epoll_fd = epRT.epoll_fd</code>（:561）这一句为什么是「收帧归 RT 线程」的关键？</li>
+<li><code>pthread_create</code> 和 <code>pthread_setschedparam</code> 为什么必须分两步、且顺序是先 create 后 setschedparam？</li>
+<li>为什么 <code>rt_thread()</code> 里用「阻塞 epoll」而不是 <code>while(1){}</code> 忙等，就不会把系统跑死？</li>
+<li>主线程不提优先级，会牺牲什么？为什么可以接受？</li>
+</ol>
+
+<h3>5.3 衔接下篇</h3>
+<p>上篇只是「把路修好」——线程开出来了、优先级也给了。但<strong>「修好了」不等于「真的准」</strong>。下篇回答三个问题：</p>
+<ul>
+<li>RT 线程到底靠什么被「准时叫醒」？（答案：timerfd + epoll，比 <code>sleep</code> 准）</li>
+<li>抖动从哪来？（调度、缺页、调频、中断、跨核迁移……）</li>
+<li>怎么把抖动「量」出来？（在 <code>app_programRt</code> 里统计 <code>epRT.timeDifference_us</code>，自己写几行代码）</li>
+</ul>
+
+<div class="footnote">
+<p><strong>本册主要取证位置：</strong>Makefile:54/66；CO_main_basic.c:60/63（节拍常量）、:130-134、:276-279、:346-349、:420-427（宏相关）、:548/:555/:561（epoll 创建）、:719-742（建线程+设优先级）、:795-834（主循环）、:885-911（rt_thread）；CO_epoll_interface.c:55、:226、:236-288、:291-310、:314-352；CO_epoll_interface.h:87-112。</p>
+<p><strong>阅读顺序：</strong>第 1 站（全局地图）→ 第 2 站（NMT/心跳/SYNC/EMCY）→ 第 3 站（OD &amp; SDO）→ 第 4 站（PDO 映射 &amp; CiA402）→ 第 5 站（启动链路走读）→ <strong>第 6 站·上（本文）</strong>→ 第 6 站·下（定时精度 &amp; 抖动实测）→ 第 7 站（里程计）。</p>
+</div>
+
+</body>
+</html>

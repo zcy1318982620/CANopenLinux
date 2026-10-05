@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 5 站 · 启动链路走读（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:17%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:23%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:22%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.cols-5 th:nth-child(1),.cols-5 td:nth-child(1){width:18%}
+.cols-5 th:nth-child(2),.cols-5 td:nth-child(2){width:22%}
+.cols-5 th:nth-child(3),.cols-5 td:nth-child(3){width:20%}
+.cols-5 th:nth-child(4),.cols-5 td:nth-child(4){width:10%}
+.cols-5 th:nth-child(5),.cols-5 td:nth-child(5){width:30%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 5 站 · 启动链路走读 —— 进程从开机到跑起来</h1>
+
+<div class="meta">
+<p><strong>工程：</strong>panasonic_canopen_agv —— 松下「実験用 AGV」双轮差速底盘，基于 CANopenNode V4 的 CANopen 从站（Linux 用户态 + SocketCAN，进程名 <code>canopend</code>）。</p>
+<p><strong>本篇定位：</strong>第 5 站 = <strong>把整个进程从头到尾串一遍</strong>。前面第 1~4 站是「拆开看零件」，本站是「装回去看整机」——从命令行敲下 <code>canopend can0 -i 1 -c stdio</code>，到终端打出 <code>posR/posL</code>，中间到底经过哪些步骤、哪一步在哪、为什么这么排。</p>
+<p><strong>为什么先看启动链路？</strong>因为后面第 6 站（实时性）、第 7 站（里程计）都是<strong>往这条链上加东西</strong>。不知道链长什么样，就不知道该往哪儿插。</p>
+<p><strong>怎么读：</strong>本册以一个<strong>主文件</strong>（<code>CO_main_basic.c</code>）为主线，每段只回答：<span class="star">这段在干什么 → 关键函数传什么/返回什么 → 被谁调用 → 它调用了谁</span>。<strong>不做字节级拆帧</strong>，重点看流程图。行号格式 <code>文件:行号</code>。</p>
+<p><strong>标记：</strong><span class="star">★★★</span> 必会 / <span class="star">★★</span> 重要 / <span class="star">★</span> 知道即可。灰框=补充，红框=坑。</p>
+</div>
+
+<h2>0. 一页地图：一个进程，四段 + 两条线程</h2>
+
+<p>先给一句话结论：<strong><code>main()</code> 从头到尾就是「做准备 → 进一个大循环反复初始化 → 进一个小循环一直跑 → 收到退出信号就收摊」</strong>。CANopen 的全部功能都挂在这个骨架上。</p>
+
+<pre>进程总流程图（CO_main_basic.c）
+
+  main()  :273
+   │
+   ├─ ①【读参数】  :338-433   解析命令行：-i 节点号 / -p 实时优先级 / -c 命令口 / -r 重启 …
+   │
+   ├─ ②【做准备】  :330-572   只做一次，之后不再执行
+   │        setlogmask/openlog   开日志
+   │        CO_new()             给左右电机各分配一套 CANopen 对象  ★两套实例
+   │        CO_storageLinux_init 从文件加载「掉电保存」的参数
+   │        app_programStart()   ★写 SYNC/PDO 配置参数 + 给 0x6064 挂钩子（第 4 站讲的）
+   │        signal()             注册 Ctrl-C 退出处理
+   │        CO_epoll_create(x3)  建三套「事件等待器」：主线程 / RT 线程 / 命令口
+   │
+   └─ ③【通信复位循环】 while(reset 不是"退出")   :575   ★可反复执行！
+        │     CO_CANinit → CO_LSSinit → CO_CANopenInit → CO_CANopenInitPDO → 开总线
+        │     （第 1~4 站的初始化全在这里；收到 NMT "reset communication" 会回到这里重来）
+        │
+        └─ ④【正常运行循环】 while(reset == 不重来)  :795
+              ┌── 主线程：CO_epoll_wait → 网关 → CO_epoll_processMain → 应用异步
+              └── RT 线程（另一条，:885）：CO_epoll_wait → CO_epoll_processRT → 应用实时
+                   （PDO/SYNC 在 RT 线程里跑，第 4 站讲过）
+
+   （退出）:838-878   停线程 → app_programEnd → 关 epoll → CO_delete → 可选重启
+
+ 两条线程的分工（本工程真正在跑的两条）：
+   主线程  epMain  100ms 一拍：SDO / NMT / 心跳 / EMCY / 时间 / 网关命令
+   RT 线程 epRT      1ms 一拍：收 CAN 帧 + SYNC + PDO   ← 快、要准，优先级高（-p 可设）
+</pre>
+
+<div class="note">
+<strong>记住这个骨架，本册就成功了一半。</strong>第 1~4 站讲的每个功能，都能在这张图上找到自己的格子：SocketCAN 在 ① 之后、NMT/心跳在 ④ 的主线程里、OD/SDO 在 ② 和 ④、PDO 在 ④ 的 RT 线程里。后面改代码（第 6/7 站），也是往 ② 或 ④ 里加东西。
+</div>
+
+<h2 class="pgbreak">1. 全貌：<code>main()</code> 的四段结构</h2>
+
+<p>打开 [CO_main_basic.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c)，<code>main()</code> 从 :273 开始，一路到 :879。<strong>它不用逐行看，先按「缩进的块」分成四段</strong>，理解每段的任务即可。</p>
+
+<table class="cols-3">
+<caption>表 1-1　main() 的四段（按出现顺序）</caption>
+<thead><tr><th>段</th><th>行号</th><th>这一段的任务</th></tr></thead>
+<tbody>
+<tr><td><strong>① 读参数</strong></td><td>:334-433</td><td>把命令行里的选项（节点号、实时优先级、命令口、存储路径…）翻译成变量，顺便校验合法性。错了就打印用法并退出。</td></tr>
+<tr><td><strong>② 做准备</strong></td><td>:330-572</td><td>只执行一次的「开机准备」：开日志、分配对象、加载存储、<strong>调应用钩子写 PDO 配置</strong>、注册信号、建 epoll。</td></tr>
+<tr><td><strong>③ 通信复位循环</strong></td><td>:575-835<br>（外层）</td><td><strong>可反复执行</strong>的初始化块：把 CAN 和 CANopen 全部对象初始化好，然后开总线。一旦收到 NMT 的 reset 命令，就回到这里重来。</td></tr>
+<tr><td><strong>④ 正常运行循环</strong></td><td>:795-834<br>（内层）</td><td>真正「一直跑」的循环：主线程在这里等事件、处理、干活。RT 线程在另一条线上并行跑（:885-910）。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>为什么分「① / ②」和「③ / ④」？</strong>因为 <strong>② 只做一次，③ 可以重做</strong>。举个例子：现场主站在线用 NMT 命令让本节点「复位通信」，节点不需要退出进程重启，只要回到 ③ 重新初始化 CAN 和 CANopen 就行——② 里那些「分配内存、建线程」没必要重来。这个区分是理解整个文件的关键（§5 专门讲）。
+</div>
+
+<h2 class="pgbreak">2. 第一段：读命令行参数</h2>
+
+<p>程序启动时先看参数。参数不合法立刻退出，这是最省事的做法——宁可开不起来，也别带着坏参数跑。</p>
+
+<table class="cols-4">
+<caption>表 2-1　本工程支持的命令行选项（<code>printUsage</code> CO_main_basic.c:230）</caption>
+<thead><tr><th>选项</th><th>含义</th><th>存到哪个变量</th><th>本项目常用值</th></tr></thead>
+<tbody>
+<tr><td><code>-i &lt;node-id&gt;</code></td><td>CANopen 节点号，1..127；<code>0xFF</code> 表示「还没配，等 LSS 分配」</td><td><code>nodeIdFromArgs</code>（:342）</td><td><code>-i 1</code></td></tr>
+<tr><td><code>-p &lt;优先级&gt;</code></td><td>RT 线程的实时优先级 1..99；不设或 <code>-1</code> 则用普通调度</td><td><code>rtPriority</code>（:347）</td><td>如需硬实时才加</td></tr>
+<tr><td><code>-r</code></td><td>收到 NMT「reset node」命令时重启系统（嵌入式现场常用）</td><td><code>rebootEnable</code>（:350）</td><td>一般不设</td></tr>
+<tr><td><code>-s &lt;前缀&gt;</code></td><td>掉电保存文件的路径前缀</td><td>改写 <code>storageEntries[].filename</code>（:387）</td><td>一般不设</td></tr>
+<tr><td><code>-c &lt;接口&gt;</code></td><td>开命令口（网关）：<code>stdio</code> / <code>local-&lt;路径&gt;</code> / <code>tcp-&lt;端口&gt;</code></td><td><code>commandInterface</code>（:357-373）</td><td><code>-c stdio</code></td></tr>
+<tr><td><code>-T &lt;超时ms&gt;</code></td><td><code>-c</code> 用 socket 时的连接超时</td><td><code>socketTimeout_ms</code>（:381）</td><td>一般不设</td></tr>
+<tr><td>（第一个非选项）</td><td><strong>CAN 设备名</strong>，如 <code>can0</code></td><td><code>CANdevice</code> + <code>CANptr.can_ifindex</code>（:407-408）</td><td><code>can0</code></td></tr>
+</tbody>
+</table>
+
+<h3>2.1 参数校验：三个「不合法就退出」</h3>
+<pre>① 节点号校验 (:411-419)   nodeId 必须是 1..127 或 0xFF(等 LSS 分配)，否则退出
+② 优先级校验 (:421-428)   -p 的值必须在系统允许的实时优先级范围内，否则退出
+③ CAN 设备校验(:430-433)  用 if_nametoindex("can0") 把设备名转成网卡序号；
+                          转不出来（网卡不存在/没起）→ can_ifindex==0 → 退出
+</pre>
+<div class="warn">
+<strong>常见坑：</strong>启动报「no CAN device」类错误，八成不是程序问题，而是 <code>can0</code> 还没起（<code>ip link set can0 up type can bitrate 500000</code>）。程序只是「翻译」设备名，翻译不到就直接退出。
+</div>
+
+<h2 class="pgbreak">3. 第二段：做准备（只做一次）</h2>
+
+<p>这一段全在 <code>main()</code> 里平铺，顺序基本就是「先开日志 → 再分配 → 再配置 → 再建线程设施」。挑关键的说。</p>
+
+<pre>② 准备阶段流程（CO_main_basic.c :330-572）
+
+ setlogmask / openlog        :330-331   日志也能同时打到 stderr，方便调试
+        │
+ CO_new()  ×2                :463 / :475    ★最重要：分配「两套」CANopen 对象
+        │                                    CO（挂 OD，右电机）/ CO_2nd（挂 OD_2nd，左电机）
+        ▼
+ CO_storageLinux_init()      :485-498    从文件读「掉电保存」的参数（如上次存的节点号/波特率）
+        │
+ app_programStart()          :503        ★应用入口：写 SYNC/PDO 参数 + 给 0x6064 挂钩子（第 4 站）
+        │
+ nodeId 覆盖与校验            :517-524    命令行 -i 优先于存储值；非法就退回「待分配」
+        │
+ signal(SIGINT/SIGTERM)      :527-534    注册 Ctrl-C / kill 的处理函数 sigHandler（:138）
+        │
+ clock_gettime(REALTIME)     :536-545    取当前时间 → 换算成 CANopen 的时代（1984 起算）
+        │
+ CO_epoll_create() ×3        :548/555/566 ★建三套「事件等待器」，分别给主线程/RT线程/命令口
+        │
+        ▼（进入 ③ 通信复位循环）
+</pre>
+
+<table class="cols-5">
+<caption>表 3-1　准备阶段的关键模块</caption>
+<thead><tr><th>模块<br>位置</th><th>干什么</th><th>传什么参数（含义）</th><th>返回什么</th><th>被谁调 → 调了谁</th></tr></thead>
+<tbody>
+<tr>
+<td><code>CO_new</code><br>CANopen.c:761</td>
+<td>给「一个 CANopen 节点」整体分配对象：NMT、SDO、PDO、心跳、SYNC、EMCY…都在这一次分配好</td>
+<td><code>config</code>=本节点要用到哪些功能（<code>co_config</code>，由 <code>OD_INIT_CONFIG</code> 生成）；<code>heapMemoryUsed</code>=出参，回填用了多少内存</td>
+<td><code>CO_t*</code><br>（NULL = 失败）</td>
+<td><strong>被</strong> <code>main()</code> (<code>:463</code>右 / <code>:475</code>左)<br><strong>调</strong> 内部一堆 <code>CO_xxx_init</code> 里的分配</td>
+</tr>
+<tr>
+<td><code>CO_storageLinux_init</code><br>CO_storageLinux.c</td>
+<td>把「掉电保存」的对象和文件挂钩，开机时把上次的值读回来</td>
+<td><code>storage</code>=存储管理器；<code>OD_ENTRY_H1010/H1011</code>=「保存/恢复默认」两个标准对象；<code>storageEntries</code>=要保存哪几块数据；<code>storageInitError</code>=出参</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:485</code><br><strong>调</strong> 文件读写</td>
+</tr>
+<tr>
+<td><code>app_programStart</code><br>CO_application.c:65</td>
+<td><strong>应用唯一的配置入口</strong>：写 SYNC 周期、两条 RPDO 的 CAN-ID 和映射、给 0x6064 挂打印钩子</td>
+<td><code>bitRate</code>、<code>nodeId</code>（都是出参，可被应用覆盖）；<code>errInfo</code>=出参，出错时回填哪个对象</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:503</code><br><strong>调</strong> <code>OD_set_*</code>、<code>OD_extension_init</code></td>
+</tr>
+<tr>
+<td><code>CO_epoll_create</code><br>CO_epoll_interface.c:68</td>
+<td>建一个「等待事件」的设施：<code>epoll</code>（多路等待）+ <code>eventfd</code>（被别的线程叫醒）+ <code>timerfd</code>（定时叫醒）</td>
+<td><code>ep</code>=要填的对象；<code>timerInterval_us</code>=定时器周期</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code><br><strong>调</strong> Linux 的 <code>epoll_create</code>/<code>eventfd</code>/<code>timerfd_create</code></td>
+</tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>一个现成的小 bug（看到就行，不用管）：</strong>第二个 <code>CO_new(CO_2nd…)</code> 在 <code>:475</code> 把内存用量写进了<strong>第一个</strong>变量 <code>heapMemoryUsed</code>，而不是旁边刚定义的 <code>heapMemoryUsed_2nd</code>。所以 <code>heapMemoryUsed_2nd</code> 永远是 0。只影响日志打印，不影响功能。
+</div>
+
+<div class="note">
+<strong>关于 <code>CO_epoll_create</code> 的周期：</strong>主线程那套用 <code>MAIN_THREAD_INTERVAL_US = 100000</code>（=100ms，:60）；RT 线程那套用 <code>TMR_THREAD_INTERVAL_US = 1000</code>（=1ms，:63）。<strong>一个 100ms 一拍，一个 1ms 一拍</strong>——这就是「谁快谁慢」的源头，第 6 站实时性改造会盯这个数。
+</div>
+
+<h2 class="pgbreak">4. 第三段：通信复位循环（上电初始化）</h2>
+
+<p>进入 <code>while (reset != CO_RESET_APP &amp;&amp; reset != CO_RESET_QUIT &amp;&amp; CO_endProgram == 0)</code>（:575）。这个循环体就是「把 CAN 和 CANopen 全部初始化好，然后开总线」。<strong>第 1~4 站讲的初始化，基本都在这几十行里</strong>。</p>
+
+<pre>③ 通信复位循环（一次完整初始化）CO_main_basic.c :575-790
+
+ （不是第一次的话）先把 CAN 置为配置模式、关掉 CAN 模块  :580-589
+        │   —— 让 RT 线程先停手，别在初始化途中读数据
+        ▼
+ CO_CANinit(CO, …) / CO_CANinit(CO_2nd, …)   :593 / :600   ★第 1 站：SocketCAN
+        │   打开 can0 的 socket，建 CAN 收发所需的底层结构
+        ▼
+ CO_LSSinit(CO, &lssAddress, …)              :614        ★第 2 站：LSS 层
+        │   准备 LSS 地址（厂商ID/产品码/版本/序列号，取自 0x1018）；
+        │   LSS 是「出厂还没节点号时」用来配节点号和波特率的机制
+        ▼
+ CO_activeNodeId = mlStorage.pendingNodeId   :623
+        │   把「待定节点号」定格为「当前节点号」（后面 PDO 用它算默认 CAN-ID）
+        ▼
+ CO_CANopenInit(CO, …)                       :626        ★核心：第 2/3 站的元件在这装
+        │   初始化 NMT / 心跳 / EMCY / SDO server / SDO client / TIME / 网关…
+        │   传入 OD（右电机字典）、NMT_CONTROL（上电行为）、各种超时
+        ▼
+ CO_CANopenInit(CO_2nd, …)                   :649        （左电机，复用 CO 的 NMT/em）
+        │   注意：左侧的节点号用 CO_activeNodeId+1
+        ▼
+ CO_epoll_initCANopenMain(&epMain, CO)       :674        ★把「叫醒主线程」的回调挂上
+        │   让 NMT/心跳/EMCY/SDO 一起变化就能唤醒主线程（wakeupCallback，:226）
+        ▼
+ 注册各类回调（EM/NMT/心跳变化时打日志）      :686-693
+        │
+ （仅第一次）若 -p 给了优先级：建 RT 线程      :719-742   ★第 6 站的抓手
+        │   pthread_create(rt_thread) + pthread_setschedparam(SCHED_FIFO)
+        ▼
+ app_communicationReset(CO)                  :747        （本工程为空实现）
+        │
+ CO_CANopenInitPDO(CO, …) / (CO_2nd, …)      :751 / :768  ★第 4 站：配 PDO
+        │   解析 0x1400/0x1600… → CO_RPDO_init → 注册接收过滤器
+        ▼
+ CO_CANsetNormalMode(CO->CANmodule) ×2       :787-788    ★开闸：CAN 从"配置"转"正常"
+        │   从这一刻起，总线上 0x38A/0x38B 的帧才真正开始被收
+        ▼
+ reset = CO_RESET_NOT   →  进入 ④ 正常运行循环   :790
+</pre>
+
+<table class="cols-5">
+<caption>表 4-1　初始化链上的模块（第 1~4 站已详述，这里只列「在链条里的位置」）</caption>
+<thead><tr><th>模块<br>位置</th><th>干什么</th><th>传什么参数（含义）</th><th>返回什么</th><th>被谁调 → 调了谁</th></tr></thead>
+<tbody>
+<tr>
+<td><code>CO_CANinit</code><br>CANopen.c:844</td>
+<td>打开 SocketCAN、建 CAN 底层收发结构（第 1 站）</td>
+<td><code>co</code>；<code>CANptr</code>=CAN 设备信息（含 <code>can_ifindex</code>、<code>epoll_fd</code>）；<code>bitRate</code>（本工程传 0，用系统已配的）</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:593/600</code><br><strong>调</strong> 驱动层</td>
+</tr>
+<tr>
+<td><code>CO_LSSinit</code><br>CANopen.c:867</td>
+<td>初始化 LSS 从站/主站，准备「没节点号时」的分配机制（第 2 站）</td>
+<td><code>co</code>；<code>lssAddress</code>=身份四元组；<code>pendingNodeId/pendingBitRate</code>=可被 LSS 改写的「待定值」</td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:614</code><br><strong>调</strong> <code>CO_LSSslave_init</code> 等</td>
+</tr>
+<tr>
+<td><code>CO_CANopenInit</code><br>CANopen.c:896</td>
+<td>把 CANopen 各功能对象一次性初始化（NMT/心跳/EMCY/SDO/TIME/网关…）</td>
+<td><code>co</code>；<code>NMT</code>/<code>em</code>=可复用的别的实例（左电机复用右电机的 NMT/em）；<code>od</code>=对象字典；<code>NMT_CONTROL</code>=上电行为；几个超时；<code>nodeId</code></td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:626/649</code><br><strong>调</strong> 各功能模块的 <code>CO_xxx_init</code></td>
+</tr>
+<tr>
+<td><code>CO_CANopenInitPDO</code><br>CANopen.c:1206</td>
+<td>初始化收发 PDO（第 4 站，配置链的入口）</td>
+<td><code>co</code>；<code>em</code>；<code>od</code>；<code>nodeId</code>（用来算默认 CAN-ID）；<code>errInfo</code></td>
+<td><code>CO_ReturnError_t</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:751/768</code><br><strong>调</strong> <code>CO_RPDO_init</code>/<code>CO_TPDO_init</code></td>
+</tr>
+<tr>
+<td><code>CO_CANsetNormalMode</code><br>CO_driver.h:591</td>
+<td>COS 状态从「配置」切到「正常」：<strong>开始真正收/发总线帧</strong></td>
+<td><code>CANmodule</code>=哪个 CAN 模块</td>
+<td><code>void</code></td>
+<td><strong>被</strong> <code>main()</code> <code>:787</code><br><strong>调</strong> 驱动层 <code>ioctl</code></td>
+</tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>顺序为什么不能乱？</strong>三条硬约束：① <code>CO_CANinit</code> 必须在最前——没有 socket，后面都无从谈起；② <code>CO_CANopenInitPDO</code> 必须在 <code>CO_CANopenInit</code> 之后——PDO 要用到 NMT/SYNC 等兄弟对象；③ <code>CO_CANsetNormalMode</code> 必须放最后——先「把屋子布置好」，再「开门迎客」。任何一步倒了，后面的都白搭，所以代码里每步都 <code>if (err != CO_ERROR_NO) { … continue; }</code>。
+</div>
+
+<h2 class="pgbreak">5. reset 机制：为什么外面还套一层循环</h2>
+
+<p>这是全文件最容易看漏、又最体现 CANopen 设计思想的一点。CANopen 协议里，主站可以随时发 <strong>NMT 复位命令</strong>，让从站「重来一次」。本工程用<strong>两层循环</strong>来优雅应对：</p>
+
+<pre>两层循环与 reset 取值（CO_NMT_reset_cmd_t）
+
+ 外层 while(reset != APP && reset != QUIT && !endProgram)      :575
+   │
+   │   【准备：只做一次】
+   │   注 意：app_programStart()、CO_new()、建线程 都在外层之外/首次路径上
+   │
+   └─ 内层 while(reset == NOT && !endProgram)                  :795
+         │   正常运行：主线程 + RT 线程一直转
+         │
+         └─ reset = CO_process(...)   ← 主线程每轮把它「取回来」
+                 │
+                 ├─ reset == NOT    → 继续跑（最常见）
+                 ├─ reset == COMM   → 内层退出 → 回外层 → ★重新初始化通信（③ 重来一遍）
+                 └─ reset == APP    → 两层都退出 → 程序收摊（可选重启系统）
+                     reset == QUIT → 两层都退出 → 直接结束
+
+ 两个关键点：
+   · 收到 NMT "reset communication" → COMM → 只重跑 ③（CAN/LSS/CANopen/PDO 重初始化），
+                                        ②（分配内存、建线程）不重做。
+   · 收到 NMT "reset application"   → APP  → 直接退出进程（或按 -r 重启系统）。
+   · firstRun 标志 (:719) 保证「建 RT 线程、初次设时间」只做一次，重初始化时不重复建线程。
+</pre>
+
+<table class="cols-3">
+<caption>表 5-1　三类 reset 的差别</caption>
+<thead><tr><th>reset 值</th><th>谁触发</th><th>本程序怎么反应</th></tr></thead>
+<tbody>
+<tr><td><code>CO_RESET_NOT</code></td><td>正常状态</td><td>什么都不做，内层循环继续跑。</td></tr>
+<tr><td><code>CO_RESET_COMM</code></td><td>NMT「reset communication」/ 上电首次</td><td>内层退出 → <strong>回到外层重做初始化</strong>（重新建 CAN、CANopen、PDO），线程和内存不动。</td></tr>
+<tr><td><code>CO_RESET_APP</code> / <code>CO_RESET_QUIT</code></td><td>NMT「reset node」/ 内部要求退出</td><td>两层都退出 → 收摊（若 <code>-r</code> 且是 APP，则重启系统）。</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>这解释了 §3 的一个设计：</strong>为什么 <code>app_programStart()</code> 在<strong>外层循环之外</strong>、只调一次，而 <code>app_communicationReset()</code> 在<strong>外层循环之内</strong>、每次重初始化都调？因为前者是「写 OD 配置、挂钩子」（配一次就够，值还留在 OD 里），后者是「通信层面每次复位后要重做的事」。分工不同，位置就不同。
+</div>
+
+<h2 class="pgbreak">6. 第四段：正常运行（两条线程并行）</h2>
+
+<h3>6.1 主线程循环</h3>
+<pre>④ 主循环  CO_main_basic.c :795-834（主线程）
+
+ while(reset == CO_RESET_NOT && !CO_endProgram) {
+     CO_epoll_wait(&epMain)               :797  ← 在这里"睡"，等事件（定时/被叫醒）
+                                               睡醒后算出"距上次过了多久" timeDifference_us
+     [CO_epoll_processGtw]                :803  ← 处理命令口（-c 开了才有）
+     CO_epoll_processMain(&epMain, CO, GATEWAY_ENABLE, &reset)  :805  ★核心
+                     └─ 调 CO_process()：NMT / 心跳 / EMCY / SDO server / 时间 …
+                        reset 由它返回（就是 §5 说的取回 reset）
+     CO_epoll_processLast(&epMain)        :807  ← 收尾：若应用要求提前唤醒，就调短定时器
+     app_programAsync(CO, …)              :811  ← 应用异步钩子（本工程为空）
+     [掉电自动保存 storage]                :816-832
+ }
+</pre>
+
+<h3>6.2 RT 线程（另一条线，并行跑）</h3>
+<pre>RT 线程  CO_main_basic.c:885-910（由 :724 创建）
+
+ while(!CO_endProgram) {
+     CO_epoll_wait(&epRT)                 :890  ← 等事件（1ms 定时，或 CAN 有帧）
+     CO_epoll_processRT(&epRT, CO, true)  :891  ★核心
+                     └─ 收 CAN 帧 → 若到点：CO_process_SYNC / CO_process_RPDO / CO_process_TPDO
+                        （第 4 站的运行链：帧→CO_PDO_receive→…→打印 posR/posL）
+     CO_epoll_processLast(&epRT)          :892
+     app_programRt(CO, …)                 :904  ← 应用实时钩子（本工程为空）
+ }
+</pre>
+
+<table class="cols-3">
+<caption>表 6-1　两条线程为什么分开</caption>
+<thead><tr><th>维度</th><th>主线程（epMain）</th><th>RT 线程（epRT）</th></tr></thead>
+<tbody>
+<tr><td>节拍</td><td>100ms（<code>MAIN_THREAD_INTERVAL_US</code>）</td><td>1ms（<code>TMR_THREAD_INTERVAL_US</code>）</td></tr>
+<tr><td>干啥</td><td>SDO / NMT / 心跳 / EMCY / 时间 / 网关命令</td><td>收 CAN 帧 / SYNC / PDO</td></tr>
+<tr><td>优先级</td><td>普通</td><td>可由 <code>-p</code> 设成 SCHED_FIFO 实时</td></tr>
+<tr><td>为什么</td><td>偶尔发生、晚点无所谓</td><td>周期性、要准时（AGV 控制靠它）</td></tr>
+</tbody>
+</table>
+
+<h3>6.3 一个「事件等待器」是怎么工作的</h3>
+<p>两条线程都用 <code>CO_epoll_wait()</code> 阻塞等待，靠什么被叫醒？靠 <code>CO_epoll_create()</code>（:68）建的三样东西：</p>
+<pre>epoll_fd   多路等待器：同时盯着好几个"门"，任一个响就去处理
+event_fd   通知门：别的线程/回调想立刻叫醒本线程时，往这写一个数（wakeupCallback :226）
+timer_fd   定时门：每 timerInterval_us 响一次（主 100ms / RT 1ms）
+
+流程：CO_epoll_wait 里做的三件事
+   ① 睡眠等"门"响                :149  epoll_wait(…, -1)  ← -1 = 一直等到有事件
+   ② 醒来算"这一觉睡了多久"        :154-156  → timeDifference_us（给 CANopen 算超时用）
+   ③ 记录"这次是定时门响的吗"      :188  → timerEvent
+   → 主循环/R​​T线程拿这些信息去决定"这一拍要不要处理 PDO/SYNC"
+</pre>
+
+<div class="note">
+<strong>RT 线程里那句 <code>if (!realtime || ep->timerEvent)</code>（CO_epoll_interface.c:329）很关键：</strong>主线程调用时 <code>realtime=false</code>，每轮都处理；RT 线程调用时 <code>realtime=true</code>，<strong>只在定时门响（1ms 到点）时才处理 PDO/SYNC</strong>，其它唤醒（比如只是有 CAN 帧）只收帧、不跑 PDO 逻辑。这就是「PDO 严格按 1ms 节拍走」的实现。
+</div>
+
+<h2 class="pgbreak">7. 退出与重启</h2>
+<pre>退出流程  CO_main_basic.c :838-878
+
+ CO_endProgram = 1                 :840   设标志，让 RT 线程的循环也停下来
+ pthread_join(rt_thread)           :842   等 RT 线程真正结束（别让它在收摊时还跑）
+ app_programEnd()                  :849   应用收尾钩子（本工程为空）
+ 掉电保存（最后一次）                :853
+ CO_epoll_close(epRT / epMain / epGtw) :858-860  关掉事件等待器
+ CO_CANsetConfigurationMode()      :864   把 CAN 切回配置模式（安全）
+ CO_delete(CO)                     :865   释放 CANopen 对象
+ [若 -r 且有 CO_RESET_APP] reboot() :870-876  重启系统（嵌入式现场用）
+ exit(programExit)
+</pre>
+<p>谁会让它退出？两个来源：① 收到 <code>SIGINT</code>/<code>SIGTERM</code>（Ctrl-C、<code>kill</code>）→ <code>sigHandler</code> 把 <code>CO_endProgram</code> 置 1（:138）；② NMT 收到「reset application/node」→ <code>reset</code> 变成 <code>CO_RESET_APP</code>。两条都会让两层循环退出。</p>
+
+<h2 class="pgbreak">8. 小结 · 自测 · 衔接</h2>
+
+<h3>8.1 一页复盘</h3>
+<pre>① main() = 四段：读参数 → 做准备(只一次) → 通信复位循环(可重做) → 正常运行循环。
+② 准备阶段的重点是：CO_new 分配「两套」对象（左右电机）、app_programStart 写 PDO 配置+挂钩子、
+   建三个 epoll（主 100ms / RT 1ms / 命令口）。
+③ 通信复位循环 = 第 1~4 站初始化的集合：
+   CO_CANinit(第1站) → CO_LSSinit(第2站) → CO_CANopenInit(第2/3站)
+   → CO_CANopenInitPDO(第4站) → CO_CANsetNormalMode(开闸)。
+④ 外层 while + reset 值，实现「NMT 复位命令 → 只重初始化通信、不重启进程」；
+   firstRun 保证线程只建一次。
+⑤ 运行时分两条线程：主线程 100ms 跑 SDO/NMT/心跳；RT 线程 1ms 跑收帧/SYNC/PDO。
+⑥ 退出：置标志 → join RT 线程 → 应用收尾 → 关 epoll → 释放对象（可选重启）。
+</pre>
+
+<h3>8.2 合上文档，答这五问</h3>
+<pre>1. main() 大致分成哪四段？哪一段"只做一次"、哪一段"可以被重做"？
+2. 准备阶段为什么要在 app_programStart() 里写 PDO 配置？（和第 4 站对上）
+3. 通信复位循环里，初始化的先后顺序是什么？为什么 CO_CANsetNormalMode 必须最后？
+4. 收到 NMT「reset communication」时，程序怎么反应？为什么不用重启整个进程？
+5. 主线程和 RT 线程各多少毫秒一拍、各干什么？这个差异为什么重要？
+</pre>
+
+<h3>8.3 与前后站的衔接</h3>
+<table class="cols-3">
+<caption>表 8-1　第 5 站的位置（阶段 B 的入场券）</caption>
+<thead><tr><th>方向</th><th>连接</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>承接</td><td>第 1~4 站</td><td>本站把前面所有初始化放进「一条时间线」，看它们谁先谁后、谁依赖谁。</td></tr>
+<tr><td>通往</td><td>第 6 站 实时性改造</td><td>抓手已就位：<code>-p</code> → <code>pthread_setschedparam(SCHED_FIFO)</code>（:734）、RT 线程 1ms 节拍、<code>CO_epoll_wait</code> 的抖动。</td></tr>
+<tr><td>通往</td><td>第 7 站 里程计</td><td>落点已就位：<code>app_programRt</code>（:904，即 RT 线程里的应用钩子）就是「按 1ms 节拍处理位置」最合适的入口；最终替换掉现在只会 <code>printf</code> 的 <code>H6064_write</code>。</td></tr>
+</tbody>
+</table>
+
+<div class="footnote">
+第 5 站补充册 · 启动链路走读 · 对应主手册《AGV_CANOPEN_LEARNING_MAP_print.html》站点地图第 5 站。<br>
+主要取证文件：<code>CO_main_basic.c</code>、<code>CO_epoll_interface.c</code>、<code>CO_epoll_interface.h</code>、<code>CANopenNode/CANopen.c</code>、<code>CANopenNode/CANopen.h</code>、<code>CO_application.c</code>、<code>CANopenNode/301/CO_driver.h</code>。
+</div>
+
+</body>
+</html>
