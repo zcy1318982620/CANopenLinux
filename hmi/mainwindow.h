@@ -9,6 +9,8 @@ class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
+class QSlider;
+class QGroupBox;
 
 /* 轨迹画布：把里程计给出的世界坐标(米)画成小车行驶轨迹。 */
 class TrajectoryView : public QWidget
@@ -45,12 +47,15 @@ signals:
     void requestNode(int node);
     void requestPreOp();
     void requestStart();
+    void requestCmdVel(double v, double w);
 
 private slots:
     void onConnectClicked();
     void onDisconnectClicked();
     void onPose(double x, double y, double th);
     void onConnState(bool up);
+    void onCmdChanged();
+    void onStopClicked();
 
 private:
     void buildUi();
@@ -68,6 +73,10 @@ private:
     QPlainTextEdit *m_log;
     QPushButton    *m_btnConnect;
     QPushButton    *m_btnDisconnect;
+    QGroupBox      *m_boxCmd;
+    QSlider        *m_sldV;
+    QSlider        *m_sldW;
+    QLabel         *m_labCmd;
 };
 
 #endif // MAINWINDOW_H

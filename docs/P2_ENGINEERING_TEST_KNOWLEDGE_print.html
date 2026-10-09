@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P2 工程化测试三件套 · 知识讲解（单元测试 / 故障注入 / 内存与线程体检）</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1a1a1a; line-height: 1.65; font-size: 13px;
+    max-width: 190mm; margin: 0 auto; padding: 8mm 4mm;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; padding-bottom: 4px;
+       border-bottom: 2px solid #0FDC78; color: #004D26; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #004D26; }
+  h4 { font-size: 13px; margin: 12px 0 4px; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+    background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  }
+  a { color: #004D26; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; table-layout: fixed; }
+  th, td { border: 1px solid #d7dbdf; padding: 5px 8px; text-align: left;
+           vertical-align: top; font-size: 12.5px; word-wrap: break-word; }
+  th { background: #E5FFF2; color: #004D26; font-weight: 600; }
+  .cols-2 th:first-child, .cols-2 td:first-child { width: 30%; }
+  .cols-3 th:nth-child(1), .cols-3 td:nth-child(1) { width: 24%; }
+  .cols-3 th:nth-child(2), .cols-3 td:nth-child(2) { width: 26%; }
+  .cols-3 th:nth-child(3), .cols-3 td:nth-child(3) { width: 50%; }
+  .cols-4 th:nth-child(1), .cols-4 td:nth-child(1) { width: 20%; }
+  .cols-4 th:nth-child(2), .cols-4 td:nth-child(2) { width: 22%; }
+  .cols-4 th:nth-child(3), .cols-4 td:nth-child(3) { width: 33%; }
+  .cols-4 th:nth-child(4), .cols-4 td:nth-child(4) { width: 25%; }
+  pre.code {
+    background: #f8f9fa; border: 1px solid #e3e5e8; border-left: 3px solid #0FDC78;
+    padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    line-height: 1.55; margin: 8px 0; page-break-inside: avoid;
+  }
+  pre.flow { border-left-color: #2255a4; background: #f4f7fc; }
+  .note {
+    background: #FFF7E5; border-left: 3px solid #f0a020;
+    padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px;
+  }
+  .good { background: #E5FFF2; border-left: 3px solid #0FDC78;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .warn { background: #FDF5F5; border-left: 3px solid #b33;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .pgbreak { page-break-before: always; }
+  .footnote { margin-top: 24px; padding-top: 8px; border-top: 1px dashed #bbb;
+              color: #888; font-size: 11.5px; }
+  .toolbar { margin: 10px 0; }
+  .toolbar button {
+    background: #0FDC78; color: #004D26; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  @media print { .toolbar { display: none; } }
+</style>
+</head>
+<body>
+
+<h1>P2 工程化测试三件套 · 知识讲解</h1>
+<div class="meta">工程：panasonic_canopen_agv ｜ 主题：单元测试 · 故障注入 · 内存与线程体检 ｜ 对应 HANDOFF §15 的 P2 阶段</div>
+
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<div class="note"><b>一句话分工：</b><b>单元测试</b>回答"这段逻辑本身对不对"（回绕、满队、里程计换算）；<b>故障注入</b>回答"外部乱来时系统扛不扛得住"（坏帧、丢心跳、越界值）；<b>内存与线程体检</b>回答"程序自身有没有暗病"（越界、泄漏、数据竞争）。三者管的是不同层，互补而不重叠。</div>
+
+<h2>§0 先建立直觉：三件套各管什么</h2>
+<table class="cols-3">
+  <tr><th>步骤</th><th>输入是什么</th><th>你要它回答的问题</th></tr>
+  <tr><td><b>② 单元测试</b></td><td>你自己构造的数据（正常 + 边界）</td><td>"环形队列回绕/满队时行为对吗？里程计换算数对得上吗？"</td></tr>
+  <tr><td><b>③ 故障注入</b></td><td>人为造出的<b>坏</b> CAN 帧 / 丢帧</td><td>"电机掉线、报文越界时，系统会不会乱动？降级触发了吗？"</td></tr>
+  <tr><td><b>④ 内存与线程体检</b></td><td>真实运行的多线程程序</td><td>"有没有越界读写、内存泄漏、数据竞争、线程没收干净？"</td></tr>
+</table>
+<div class="good"><b>本工程的对号入座：</b>② 测 <code>agv_queue</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c">agv_queue.c</a>）与里程计（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L558-L613">CO_application.c#L558-L613</a>）；③ 用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/tools/sim_motors.py">tools/sim_motors.py</a> 在 vcan0 上造异常；④ 对 <code>main + rt_thread + 2 个日志 worker</code> 跑 ASan/Valgrind。</div>
+
+<h2>§1 步骤② · 单元测试（Unit Test）</h2>
+
+<h3>1.1 它是什么</h3>
+<p>单元测试 = 把程序拆成最小的可独立验证单元（通常是一个函数），用<b>可控的输入</b>喂进去，再<b>断言输出</b>符合预期。它的价值不在"证明程序对"，而在"改动后能立刻发现哪里坏了"——是后续所有重构的安全网。</p>
+<ul>
+  <li><b>可重复</b>：不依赖人工、不依赖硬件，一条命令跑全部；</li>
+  <li><b>快</b>：毫秒级，能每次提交都跑；</li>
+  <li><b>定位准</b>：失败直接指到函数，不用猜。</li>
+</ul>
+
+<h3>1.2 测试金字塔</h3>
+<p>数量从多到少、粒度从细到粗：<b>单元测试</b>（多、快、便宜）→ <b>集成测试</b>（中等，测模块间协作）→ <b>端到端</b>（少、慢、贵，如 vcan 上跑整条 RPDO→OD→里程计）。本工程的 P2 ② 只做最底层的单元测试；整链验证交给 ③（vcan 故障注入）。</p>
+
+<h3>1.3 关键前提：可测性设计（纯函数 vs 副作用）</h3>
+<p>能轻松单测的函数，都是<b>纯函数</b>：相同输入必得相同输出，不读写外部状态。反之，直接依赖全局静态变量、文件、总线的函数很难单测。</p>
+<p>本工程的里程计换算就是天然的纯函数：<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L58">CO_application.c:58</a> 的 <code>ODOM_K_PER_COUNT = 2πr / N</code>，给定"计数差"就能算"轮面位移"。而 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L75-L92">H6064_write</a> 有副作用（写 <code>odom_posR_raw</code> 等静态变量），不适合直接测。</p>
+<div class="note"><b>可测性重构的常见手法：</b>把"算"从"存"里抽出来。例如把 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L584-L596">L584-L596 的积分公式</a> 抽成纯函数
+<code>odom_step(prevR, prevL, curR, curL, *x, *y, *th)</code>，即可脱离 RT 线程、脱离 CAN，直接单测中间点法与 32 位回绕。这是本步唯一可能碰到的代码改动，需先和你确认。</div>
+
+<h3>1.4 测试替身（Test Double）</h3>
+<p>当被测代码依赖外部（CAN 对象、<code>CO-></code>、时间、日志），用一个"假货"顶替它，让测试可控。常见五种：</p>
+<table class="cols-2">
+  <tr><th>类型</th><th>作用 / C 语言做法</th></tr>
+  <tr><td><b>Dummy</b> 占位</td><td>只为凑参数，不被真正使用。</td></tr>
+  <tr><td><b>Stub</b> 打桩</td><td>返回固定值。C 里可用函数指针、<code>#ifdef TEST</code> 里的弱符号（<code>__attribute__((weak))</code>）替换掉真实实现。</td></tr>
+  <tr><td><b>Spy</b> 间谍</td><td>记录"被调用了几次、传了什么"，事后断言。</td></tr>
+  <tr><td><b>Mock</b> 模拟</td><td>预设调用期望，不符合就失败（CMocka 支持）。</td></tr>
+  <tr><td><b>Fake</b> 假实现</td><td>功能简化但能跑，如"内存版队列"替代真实队列。</td></tr>
+</table>
+<p>本工程 ② 阶段大多数是纯函数测试，<b>几乎不需要替身</b>——这正是先做单元测试的成本优势。</p>
+
+<h3>1.5 C 语言测试框架选型</h3>
+<table class="cols-3">
+  <tr><th>框架</th><th>特点</th><th>适用</th></tr>
+  <tr><td><b>零框架</b> <code>assert</code> + <code>main</code></td><td>不引第三方，几十行自造断言宏</td><td>本工程首选：符合"不引第三方依赖"的既有约束，<code>agv_queue</code> 用例足够简单</td></tr>
+  <tr><td><b>Unity</b></td><td>单文件、超轻，嵌入式圈最常用</td><td>想在裸机/交叉环境跑</td></tr>
+  <tr><td><b>CMocka</b></td><td>支持 mock、多线程断言、异常捕获</td><td>需要替身和并发场景</td></tr>
+  <tr><td><b>Check / Criterion</b></td><td>功能全，fork 隔离用例</td><td>桌面侧较重的测试套件</td></tr>
+</table>
+<div class="good"><b>本工程建议：</b>先用"零框架"（<code>assert</code> + 计数）搭 <code>tests/</code> 目录，一个 <code>.c</code> 一个可执行，随主构建一起编。等并发用例复杂了再考虑 CMocka，避免过早引依赖。</div>
+
+<h3>1.6 环形队列的测试要点（本步核心）</h3>
+<p><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h">agv_queue.h</a> 定义了 5 个接口：<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L54">init</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L57">destroy</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L63">try_push</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L68">pop</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.h#L71">close</a>。要覆盖的正是它"设计上最容易错"的地方：</p>
+<table class="cols-3">
+  <tr><th>用例</th><th>构造</th><th>断言（对应源码）</th></tr>
+  <tr><td><b>容量取幂</b></td><td><code>init(&amp;q, 3)</code></td><td><code>q.cap == 4</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L16-L20">c:16-20</a> 向上取整到 2 的幂）</td></tr>
+  <tr><td><b>回绕（wrap）</b></td><td>cap=4，push 5 条再逐条 pop</td><td>5 条按 FIFO 顺序取回，<code>tail</code> 绕回 0（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L77">c:77</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L115">c:115</a> 的 <code>&amp;(cap-1)</code>）</td></tr>
+  <tr><td><b>满队丢帧</b></td><td>push 满 cap 条后再 push 1 条</td><td><code>try_push</code> 返回 -1 且 <code>pushed</code> 不变、<code>dropped</code>+1（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L75-L85">c:75-85</a>）</td></tr>
+  <tr><td><b>关闭后行为</b></td><td><code>close()</code> 后 push / pop</td><td>push 返回 -1；pop 取空后返回 -1（消费者退出，<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L109-L112">c:109-112</a>）</td></tr>
+  <tr><td><b>非法参数</b></td><td><code>init(NULL,0)</code> / <code>try_push(NULL,...)</code></td><td>统一返回 -1，不崩溃（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L12-L14">c:12-14</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L64-L66">c:64-66</a>）</td></tr>
+  <tr><td><b>数据完整性</b></td><td>写入带特征的 <code>agv_logrec_t</code></td><td>pop 出的记录与写入的 <code>memcmp</code> 完全一致（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L76">c:76</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L114">c:114</a> 是整结构体拷贝）</td></tr>
+  <tr><td><b>并发不丢不重</b></td><td>1 生产者 <code>try_push</code> + N 消费者 <code>pop</code>，跑若干万轮</td><td>成功 pop 数 == <code>pushed</code>；<code>pushed + dropped == 生产总次数</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L79">c:79</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L83">c:83</a> 的原子计数守恒）</td></tr>
+</table>
+<div class="note"><b>并发用例为什么难写：</b>它本质是概率性的——单次跑通不代表没竞争。要"跑够久 + 跑够多轮"（循环 <code>for</code> 到百万次）才有一点统计意义；真正抓竞争还得靠 §3 的 TSan。单元测试在这里的作用是<b>锁住接口语义</b>（定死"满就丢、关就退"），而不是"证明并发无 bug"。</div>
+
+<h3>1.7 里程计的测试要点</h3>
+<p>把 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L578-L596">L578-L596 的积分逻辑</a> 抽成纯函数后，用例设计如下：</p>
+<table class="cols-3">
+  <tr><th>用例</th><th>输入（计数差 dCntR, dCntL）</th><th>断言</th></tr>
+  <tr><td><b>首拍</b></td><td>第一帧</td><td>只记起点，位姿保持 0（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L570-L576">c:570-576</a>）</td></tr>
+  <tr><td><b>直行</b></td><td>dR == dL &gt; 0</td><td>θ 不变，x 增加 d、y 不变（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L589-L590">c:589-590</a>）</td></tr>
+  <tr><td><b>原地转</b></td><td>dR == -dL</td><td>位移 d≈0，θ 按 <code>(dR-dL)/b</code> 变化（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L590">c:590</a>）</td></tr>
+  <tr><td><b>换算标定</b></td><td>dCnt = N（一整圈）</td><td>轮面位移 == <code>2πr</code>，误差 &lt; 1e-9（用浮点容差，忌 <code>==</code>）</td></tr>
+  <tr><td><b>32 位回绕</b></td><td>从 0x7FFFFFFF 跳到 -0x80000000</td><td>dCnt 或正或负但绝对值小（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L579-L580">c:579-580</a> 用 <code>uint32</code> 相减处理回绕）</td></tr>
+</table>
+
+<h2 class="pgbreak">§2 步骤③ · 故障注入（Fault Injection）</h2>
+
+<h3>2.1 它是什么</h3>
+<p>故障注入 = <b>故意</b>在系统里引入错误，观察它是否按预期"优雅降级"，而不是崩溃或乱动作。它验证的不是"正常路径"，而是<b>容错路径</b>——那些平时永远不会被执行、却决定了安全性的分支。</p>
+<div class="good"><b>为什么 AGV 必须做：</b>电机驱动器会掉线、报文会损坏、编码器会回绕。本工程已经写了心跳容错（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L529-L544">CO_application.c#L529-L544</a>：任一从站心跳超时 → 强制零速），但"写了"不等于"生效"。故障注入就是去<b>证明它真的生效</b>。</div>
+
+<h3>2.2 注入点的分层</h3>
+<p>错误可以注入在链路的任何一层，层次越低越真实、成本越高：</p>
+<table class="cols-4">
+  <tr><th>层</th><th>例子</th><th>手段</th><th>本工程可行性</th></tr>
+  <tr><td><b>硬件</b></td><td>断线、电压跌落、CAN 终端电阻缺失</td><td>拔线、可变电源、故障注入夹具</td><td>需真机，留到联调</td></tr>
+  <tr><td><b>驱动/内核</b></td><td>收包丢失、错误帧</td><td>netem、SocketCAN 统计、<code>ip link set ... down</code></td><td>部分可用（vcan 可 down）</td></tr>
+  <tr><td><b>协议</b></td><td>坏 COB-ID、错 DLC、越界值、丢心跳</td><td><code>cansend</code>/<code>cangen</code> 造帧；改 <code>sim_motors.py</code></td><td><b>成本最低，本步主战场</b></td></tr>
+  <tr><td><b>应用</b></td><td>mock 掉 <code>CO_</code> 接口返回错误</td><td>测试替身</td><td>与单元测试重叠</td></tr>
+</table>
+
+<h3>2.3 CANopen 协议层：具体注什么</h3>
+<table class="cols-3">
+  <tr><th>注入类型</th><th>怎么造</th><th>预期系统行为</th></tr>
+  <tr><td><b>丢心跳</b></td><td>停发 <code>0x70A</code>(node10) / <code>0x70B</code>(node11)</td><td>HBconsumer 超时 → <code>hb_lost</code> → 强制零速 + 日志 <code>[HB] heartbeat LOST</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L531-L538">c:531-538</a>）+ 库内自动发 EMCY</td></tr>
+  <tr><td><b>DLC 错误</b></td><td>发 <code>0x38A</code> 但只带 3 字节</td><td>映射/解析拒绝或按规范处理，<b>不得</b>越界读；位姿不更新</td></tr>
+  <tr><td><b>越界值</b></td><td>位置域塞 <code>INT32_MAX</code> / <code>INT32_MIN</code></td><td>换算后仍在 <code>double</code> 范围内，位姿跳变可观测但不崩；回绕处理正确（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L579-L580">c:579-580</a>）</td></tr>
+  <tr><td><b>停发 RPDO</b></td><td>停发 <code>0x38A/0x38B</code></td><td><code>odom_new</code> 不置位 → 不积分（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L567-L568">c:567-568</a>），位姿"冻结"而非乱跳</td></tr>
+  <tr><td><b>灌帧压测</b></td><td><code>cangen</code> 高频广播</td><td>RT 线程 <code>try_push</code> 只丢不阻塞，<code>dropped</code> 上升、<b>1ms 节拍不崩</b>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L68-L72">c:68-72</a>）</td></tr>
+</table>
+
+<h3>2.4 造帧工具：can-utils</h3>
+<pre class="code"># 观察总线上正在发生什么（先确认链路基线）
+candump vcan0
+
+# 手工发一帧 0x38A：DLC 由 # 后的字节数决定（这里 3 字节 → DLC=3）
+cansend vcan0 38A#370200
+
+# 越界值：DLC=6，状态字 0x0237 + 位置 0x7FFFFFFF（小端）
+cansend vcan0 38A#3702FFFFFF7F
+
+# 压力灌帧：1ms 一帧持续造 0x38A
+cangen vcan0 -g 1 -I 38A -L 6</pre>
+<p>本工程已有的 <a href="file:///home/zcy/Project/panasonic_canopen_agv/tools/sim_motors.py">sim_motors.py</a> 已带两个"丢心跳"开关（<a href="file:///home/zcy/Project/panasonic_canopen_agv/tools/sim_motors.py#L35-L36">L35-36</a> 的 <code>--drop-hb-r/_l</code>，在 <a href="file:///home/zcy/Project/panasonic_canopen_agv/tools/sim_motors.py#L97-L100">L97-100</a> 生效）。③ 阶段建议在其基础上再加 <code>--bad-dlc</code> / <code>--out-of-range</code> / <code>--flood</code> 等开关，把上面几种注入做成可复现命令。</p>
+
+<h3>2.5 可观测性：怎么知道"降级生效了"</h3>
+<ul>
+  <li><b>日志</b>：心跳状态跃迁只打一次行（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L533-L538">c:533-538</a>），既不刷屏又能看见 <code>LOST/OK</code>；</li>
+  <li><b>EMCY</b>：心跳错误码 <code>0x8130</code>（errorBit <code>0x1B</code>）由 HBconsumer 库内自动上报，用 <code>candump</code> 能看到；</li>
+  <li><b>计数器</b>：<code>agv_queue_dropped()</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L136-L142">c:136-142</a>）在 RT 抖动窗口打印，灌帧时它应上升；</li>
+  <li><b>位姿</b>：<code>[ODOM]</code> 每秒打印（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L607-L613">c:607-613</a>），冻结/跳变一目了然；</li>
+  <li><b>RT 抖动</b>：灌帧时若节拍仍稳定，说明 <code>try_push</code> 的非阻塞设计成立。</li>
+</ul>
+<div class="warn"><b>反向用例同样重要：</b>注入后要能<b>恢复</b>——重新发心跳，<code>[HB] heartbeat OK</code> 应出现、运动恢复。只测"掉线"不测"恢复"，会漏掉状态机卡死的 bug。</div>
+
+<h2 class="pgbreak">§3 步骤④ · 内存与线程体检</h2>
+
+<h3>3.1 要抓的三类病</h3>
+<table class="cols-3">
+  <tr><th>类别</th><th>典型症状</th><th>后果</th></tr>
+  <tr><td><b>内存错误</b></td><td>缓冲越界读写、use-after-free、double-free、用未初始化内存</td><td>偶发崩溃、数据被静默改写（最难查）</td></tr>
+  <tr><td><b>内存泄漏</b></td><td><code>malloc/calloc</code> 无对应 <code>free</code>，fd/线程未回收</td><td>长跑内存只涨不降，最终 OOM</td></tr>
+  <tr><td><b>并发错误</b></td><td>数据竞争、死锁、锁序不一致</td><td>随机崩溃/卡死，复现率极低</td></tr>
+</table>
+
+<h3>3.2 工具全景与对比</h3>
+<table class="cols-4">
+  <tr><th>工具</th><th>类型</th><th>能检测</th><th>需重编译 / 代价</th></tr>
+  <tr><td><b>ASan</b><br>AddressSanitizer</td><td>编译期插桩</td><td>堆/栈/全局越界、UAF、double-free、泄漏（LSan）</td><td>是（<code>-fsanitize=address</code>）／约 2× 慢，首选</td></tr>
+  <tr><td><b>UBSan</b></td><td>编译期插桩</td><td>未定义行为：整数溢出、非法移位、除零、错位对齐</td><td>是（<code>-fsanitize=undefined</code>）／开销小，可与 ASan 同开</td></tr>
+  <tr><td><b>TSan</b><br>ThreadSanitizer</td><td>编译期插桩</td><td>数据竞争、锁序问题</td><td>是（<code>-fsanitize=thread</code>）／慢 5–15×，<b>与 ASan 互斥</b></td></tr>
+  <tr><td><b>Valgrind</b><br>memcheck / helgrind</td><td>动态二进制翻译</td><td>越界、未初始化读、泄漏（memcheck）；竞争/锁序（helgrind/drd）</td><td>否，直接跑现成二进制／慢 10–30×</td></tr>
+</table>
+<div class="note"><b>怎么选：</b>想快速查内存正确性 → <b>ASan+UBSan</b>（快、信息全）；想抓<b>数据竞争</b> → <code>-fsanitize=thread</code> 重编一版，或 Valgrind <code>--tool=helgrind</code>；不想改构建、只想拿现成二进制体检 → <b>Valgrind memcheck</b>。</div>
+
+<h3>3.3 编译开关与运行选项</h3>
+<pre class="code"># —— ASan + UBSan（开发构建，最常用）——
+CFLAGS  += -fsanitize=address,undefined -fno-omit-frame-pointer -g -O1
+LDFLAGS += -fsanitize=address,undefined
+ASAN_OPTIONS=abort_on_error=1:detect_leaks=1:log_path=/tmp/asan \
+  ./canopend can0 -i 1
+
+# —— TSan（单独一版，抓数据竞争，不可与 ASan 同开）——
+CFLAGS  += -fsanitize=thread -fno-omit-frame-pointer -g -O1
+LDFLAGS += -fsanitize=thread
+
+# —— Valgrind（不改构建，直接跑）——
+valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes \
+  ./canopend can0 -i 1
+valgrind --tool=helgrind ./canopend can0 -i 1      # 竞争/锁序</pre>
+<p>本工程的编译信息由 Makefile 提供（<code>-g -ggdb</code>），加 sanitizer 时不要动业务代码，只加编译/链接开关即可。</p>
+
+<h3>3.4 本工程注意点（很重要）</h3>
+<div class="warn"><b>Sanitizer / Valgrind 会严重改变时序，不能拿它判实时性。</b>本工程 <code>rt_thread</code> 是 SCHED_FIFO 的 1ms 节拍线程：
+<ul>
+  <li>ASan 约 2× 慢，通常还能跑，但<b>会放大抖动</b>——只用它查内存正确性，别用它的抖动数字下结论；</li>
+  <li>Valgrind 慢 10–30× 且串行化，1ms 节拍必然崩 → <b>只能在非实时场景跑</b>（例如临时降低 RT 优先级，或只体检协议栈/日志路径，不苛求节拍）；</li>
+  <li>TSan 也影响时序，但它能抓 <code>agv_queue</code> 与 <code>CO_LOCK_OD</code> 的竞争，<b>价值最高</b>，值得专门跑一版。</li>
+</ul></div>
+<p>本工程要重点看的对象：<b>3 类线程</b>（<code>main</code> / <code>rt_thread</code> / 2 个日志 worker，由 <code>agv_log_init(256,2)</code> 创建）：</p>
+<ul>
+  <li><b>线程回收</b>：退出时是否 <code>agv_queue_close</code> → <code>broadcast</code> → worker 的 <code>pop</code> 收到 -1 退出 → <code>join</code>；少一步就是线程/内存泄漏；</li>
+  <li><b>配对释放</b>：<code>agv_queue_init</code> 里 <code>calloc</code> 的 <code>buf</code> 必须由 <code>destroy</code> 的 <code>free</code> 配对（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L23">c:23</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L58">c:58</a>），互斥量/条件变量也要 <code>destroy</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c#L56-L57">c:56-57</a>）；</li>
+  <li><b>退出路径</b>：正常退出与 Ctrl+C 退出<b>两条路径都要测</b>，看是否都干净收尾；</li>
+  <li><b>跨线程共享</b>：位姿写侧在 RT、读侧在 main，靠 <code>CO_LOCK_OD</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L601-L605">c:601-605</a>）——TSan/helgrind 若有报，先查这里。</li>
+</ul>
+
+<h2>§4 三步怎么配合（执行顺序）</h2>
+<ol>
+  <li><b>先 ② 单元测试</b>：零依赖、本地可跑、最快见效。先把 <code>agv_queue</code> 的接口语义"锁死"，为后面改动建立安全网。</li>
+  <li><b>再 ③ 故障注入</b>：扩 <code>sim_motors.py</code> + vcan，验证容错分支真的生效、且能恢复。这步最贴近真机风险。</li>
+  <li><b>最后 ④ 内存与线程体检</b>：跑 ASan+UBSan，再单独跑一版 TSan/Valgrind，把前两步暴露的路径在真实运行中复核一遍。</li>
+</ol>
+<div class="good"><b>共同目标：</b>每一步都要<b>可自动化、可回归</b>——能一条命令重跑，出问题时能二分定位。做完这三步，本工程就从"能跑通"升级到"经得起折腾"，为真机联调打好底。</div>
+
+<h2>§5 术语速查</h2>
+<table class="cols-2">
+  <tr><th>术语</th><th>一句话解释</th></tr>
+  <tr><td><b>SPSC / MPSC</b></td><td>单/多生产者单/多消费者队列。本工程 <code>agv_queue</code> 是多生产者（多线程）单/多消费者的有界环。</td></tr>
+  <tr><td><b>回绕 wrap</b></td><td>环形缓冲下标到末尾后回到头部；用 <code>&amp;(cap-1)</code> 取模，要求容量是 2 的幂。</td></tr>
+  <tr><td><b>Test Double</b></td><td>替身：dummy/stub/spy/mock/fake，用来隔离被测代码的外部依赖。</td></tr>
+  <tr><td><b>Fault Injection</b></td><td>故障注入：人为制造错误，验证容错与降级路径。</td></tr>
+  <tr><td><b>UAF</b></td><td>Use-After-Free：内存已 <code>free</code> 仍被读写，最隐蔽的内存 bug 之一。</td></tr>
+  <tr><td><b>Data Race</b></td><td>数据竞争：多线程无同步地访问同一内存且至少一方写，结果不确定。</td></tr>
+  <tr><td><b>EMCY</b></td><td>CANopen 紧急报文（COB-ID <code>0x080</code>+node），从站/库上报错误用。</td></tr>
+</table>
+
+<div class="footnote">
+配套文档：<a href="file:///home/zcy/Project/panasonic_canopen_agv/docs/CONCURRENCY_QUEUE_PRODUCER_CONSUMER_print.html">CONCURRENCY_QUEUE_PRODUCER_CONSUMER_print.html</a>（环形队列）、
+<a href="file:///home/zcy/Project/panasonic_canopen_agv/docs/CONCURRENCY_THREADPOOL_print.html">CONCURRENCY_THREADPOOL_print.html</a>（线程池）、
+<a href="file:///home/zcy/Project/panasonic_canopen_agv/docs/TOOLCHAIN_DEBUG_TRIO_print.html">TOOLCHAIN_DEBUG_TRIO_print.html</a>（GDB/Valgrind/strace）、
+<a href="file:///home/zcy/Project/panasonic_canopen_agv/docs/EMBEDDED_LINUX_APP_SELFCHECK_print.html">EMBEDDED_LINUX_APP_SELFCHECK_print.html</a>（系统编程自测）。
+<br>源码点：[agv_queue.c](file:///home/zcy/Project/panasonic_canopen_agv/agv_queue.c) ｜ [CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c) ｜ [tools/sim_motors.py](file:///home/zcy/Project/panasonic_canopen_agv/tools/sim_motors.py) ｜ [HANDOFF.md §15](file:///home/zcy/Project/panasonic_canopen_agv/HANDOFF.md)。
+</div>
+
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>构建系统：Makefile 精讲 + CMake 入门 · 知识讲解</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1a1a1a; line-height: 1.65; font-size: 13px;
+    max-width: 190mm; margin: 0 auto; padding: 8mm 4mm;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; padding-bottom: 4px;
+       border-bottom: 2px solid #0FDC78; color: #004D26; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #004D26; }
+  h4 { font-size: 13px; margin: 12px 0 4px; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+    background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  }
+  a { color: #004D26; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; table-layout: fixed; }
+  th, td { border: 1px solid #d7dbdf; padding: 5px 8px; text-align: left;
+           vertical-align: top; font-size: 12.5px; word-wrap: break-word; }
+  th { background: #E5FFF2; color: #004D26; font-weight: 600; }
+  .cols-2 { }
+  .cols-2 th:first-child, .cols-2 td:first-child { width: 40%; }
+  .cols-3 th:nth-child(1), .cols-3 td:nth-child(1) { width: 24%; }
+  .cols-3 th:nth-child(2), .cols-3 td:nth-child(2) { width: 30%; }
+  .cols-3 th:nth-child(3), .cols-3 td:nth-child(3) { width: 46%; }
+  pre.code {
+    background: #f8f9fa; border: 1px solid #e3e5e8; border-left: 3px solid #0FDC78;
+    padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    line-height: 1.55; margin: 8px 0; page-break-inside: avoid;
+  }
+  pre.flow { border-left-color: #2255a4; background: #f4f7fc; }
+  .note {
+    background: #FFF7E5; border-left: 3px solid #f0a020;
+    padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px;
+  }
+  .good { background: #E5FFF2; border-left: 3px solid #0FDC78;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .warn { background: #FDF5F5; border-left: 3px solid #b33;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .cpp { background: #f4f7fc; border-left: 3px solid #2255a4;
+         padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .pgbreak { page-break-before: always; }
+  .footnote { margin-top: 24px; padding-top: 8px; border-top: 1px dashed #bbb;
+              color: #888; font-size: 11.5px; }
+  .toolbar { margin: 10px 0; }
+  .toolbar button {
+    background: #0FDC78; color: #004D26; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  @media print { .toolbar { display: none; } }
+</style>
+</head>
+<body>
+
+<h1>构建系统：Makefile 精讲 + CMake 入门 · 知识讲解</h1>
+<div class="meta">工程：panasonic_canopen_agv ｜ 主题：构建系统（Makefile 逐行精讲 · CMake 入门与迁移 · 两者对比）</div>
+
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<div class="note"><b>这份文档解决什么问题？</b>本工程（教程路线）用的是 <b>Makefile</b>；而嵌入式 Linux 应用岗的 JD 里几乎都写着 <b>CMake</b>。所以：先把你手里这份 [Makefile](file:///home/zcy/Project/panasonic_canopen_agv/Makefile) 逐行吃透（它是"最小可运行构建系统"的最佳教具），再学 CMake（岗位刚需），最后用一张对照表把两者打通。</div>
+
+<h2>§1 先搞清：构建系统到底在干什么</h2>
+<p>一堆 <code>.c</code> 变成一个可执行文件，中间只有两件事：</p>
+<table class="cols-3">
+  <tr><th>阶段</th><th>命令</th><th>产物 / 含义</th></tr>
+  <tr><td>编译 <code>-c</code></td><td><code>gcc -Wall -I. -c CO_driver.c -o CO_driver.o</code></td><td>把 <b>每一个</b> .c 单独编译成目标文件 .o（还只是机器码，地址未定）</td></tr>
+  <tr><td>链接</td><td><code>gcc *.o -pthread -lm -o canopend</code></td><td>把所有 .o 拼成一个可执行文件，解决符号（谁调用谁）、接上库</td></tr>
+</table>
+<p><b>构建系统</b>就是把这些命令"存起来、能重复执行、只在必要时重跑"的一层管理。判断好坏的三个标准：</p>
+<ul>
+  <li><b>正确</b>：源文件、头文件、宏、库都带全，改一个文件能自动带上它。</li>
+  <li><b>增量</b>：只重编改过的文件（大工程全量编译要很久）。</li>
+  <li><b>可复现</b>：换个人、换台机器，一条命令得到同样结果。</li>
+</ul>
+
+<h2>§2 本工程 Makefile 逐段精讲</h2>
+<p>文件：[Makefile](file:///home/zcy/Project/panasonic_canopen_agv/Makefile)（共 90 行）。下面按段落拆开，每段都标了可点击的行号。</p>
+
+<h3>2.1 目录与目标名（L4-L15）</h3>
+<table class="cols-3">
+  <tr><th>行</th><th>代码</th><th>作用</th></tr>
+  <tr><td>L4-L6</td><td><code>DRV_SRC = .</code> <code>CANOPEN_SRC = CANopenNode</code> <code>APPL_SRC = application</code></td><td>把三个源码目录存成变量。好处：以后目录改名，只改这一处。<b>本工程所有 .c 都散在这三个目录</b>（根目录放驱动/主程序，CANopenNode 放协议栈，application 放对象字典）。</td></tr>
+  <tr><td>L9</td><td><code>LINK_TARGET = canopend</code></td><td>最终可执行文件名字。后面所有规则都引用它，改名只改这一行。</td></tr>
+  <tr><td>L12-L15</td><td><code>INCLUDE_DIRS = -I$(DRV_SRC) -I$(CANOPEN_SRC) -I$(APPL_SRC)</code></td><td>编译器找 <code>#include "xxx.h"</code> 的搜索路径。等价于三条 <code>-I</code>。因为头文件分散在三个目录，没有它 <code>#include "CO_driver.h"</code> 就找不到。</td></tr>
+</table>
+<div class="good"><b>Makefile 变量取值用 <code>$(名字)</code></b>，不是 shell 的 <code>$名字</code>。写错成 <code>$DRV_SRC</code> 会被当成"变量 D 加上字符串 RV_SRC"，非常隐蔽——新手第一大坑。</div>
+
+<h3>2.2 源文件清单 SOURCES（L18-L49）</h3>
+<p>这是整个 Makefile 的"花名册"：<b>31 个 .c</b>，每一个都必须列进来，否则链接时会报 <code>undefined reference to 'xxx'</code>（符号找不到——因为那个 .o 根本没参与链接）。</p>
+<table class="cols-3">
+  <tr><th>段</th><th>行</th><th>内容</th></tr>
+  <tr><td>驱动/平台层</td><td>L19-L22</td><td><code>CO_driver.c</code> / <code>CO_error.c</code> / <code>CO_epoll_interface.c</code> / <code>CO_storageLinux.c</code></td></tr>
+  <tr><td>CiA 301 核心</td><td>L23-L33</td><td>OD 接口、NMT、心跳消费者、EMCY、SDO 服务端/客户端、TIME、SYNC、PDO、CRC16、FIFO</td></tr>
+  <tr><td>301 之外</td><td>L34-L41</td><td>303 LED、304 GFC/SRDO、305 LSS 从/主、309 网关 ASCII、storage、trace</td></tr>
+  <tr><td>组装 + 应用</td><td>L42-L49</td><td><code>CANopen.c</code>（协议栈总装配）、<code>OD.c</code>/<code>OD_2nd.c</code>（两套对象字典）、<code>CO_main_basic.c</code>、<code>CO_application.c</code>、本工程自建的 <code>agv_queue.c</code> / <code>agv_pool.c</code> / <code>agv_log.c</code></td></tr>
+</table>
+<div class="note"><b>注意 L42 与 L43-L44 的区别：</b><code>CANopenNode/CANopen.c</code> 是协议栈的"总入口"，负责把上面所有模块按顺序 <code>init</code> 起来；<code>application/OD.c</code> 则是"数据表"（对象字典的 C 数组）。两者都在 CANopenNode 家族，但一个管流程、一个管数据。</div>
+
+<h3>2.3 派生变量 OBJS（L52）——一招替你写 31 行</h3>
+<pre class="code">OBJS = $(SOURCES:%.c=%.o)</pre>
+<p>这是 make 的<b>后缀替换</b>语法：把 <code>SOURCES</code> 里所有 <code>.c</code> 结尾的名字换成 <code>.o</code>。于是<br>
+<code>$(DRV_SRC)/CO_driver.c</code> → <code>./CO_driver.o</code>，<code>$(CANOPEN_SRC)/301/CO_PDO.c</code> → <code>CANopenNode/301/CO_PDO.o</code>。<br>
+好处：<b>源清单只维护一份</b>，加文件只需加到 <code>SOURCES</code>，OBJS 自动跟上——这是好 Makefile 的标志（单一数据源）。</p>
+
+<h3>2.4 编译选项 OPT / CFLAGS（L53-L66）</h3>
+<table class="cols-3">
+  <tr><th>行</th><th>代码</th><th>作用</th></tr>
+  <tr><td>L53</td><td><code>CC ?= gcc</code></td><td><code>?=</code> = "没设过才赋值"。允许外部覆盖：<code>make CC=arm-linux-gnueabihf-gcc</code> 就直接交叉编译，Makefile 一行不用改。<b>这是交叉编译的关键设计。</b></td></tr>
+  <tr><td>L54-L56</td><td><code>OPT =</code> 然后 <code>OPT += -g -ggdb</code></td><td>用 <code>=</code> 清空再 <code>+=</code> 逐条追加，读起来像"选项清单"。<code>-g</code> 生成调试信息（给 GDB 用），<code>-ggdb</code> 额外生成 GDB 专用调试信息（更好用）。</td></tr>
+  <tr><td>L57-L60</td><td>被注释掉的 <code>#OPT += -O2</code> 等</td><td>注释即"备选开关"：需要优化 / 单线程 / 深度调试 / 静态分析时才解开。注意 <code>-O2</code> 和 <code>-g</code> 可以共存（调试时常用 <code>-Og</code>）。</td></tr>
+  <tr><td>L61-L64</td><td><code>-DCO_MULTIPLE_OD</code>、<code>-DCO_USE_APPLICATION=1</code>、<code>-DCO_CONFIG_HB_CONS=0</code>、<code>-DCO_CONFIG_STORAGE=0</code></td><td>宏定义，等价于在源码开头写 <code>#define</code>。<b>CANopenNode 靠这些宏做编译期功能裁剪</b>：开双对象字典、启用本工程 application、关掉心跳消费者、关掉存储。</td></tr>
+  <tr><td>L65</td><td><code>-Wno-format</code></td><td>关闭"格式串检查"告警（协议栈里有自定义格式串宏，会误报）。这是"知道自己在关什么"的定向关闭，不是无脑压告警。</td></tr>
+  <tr><td>L66</td><td><code>CFLAGS = -Wall $(OPT) $(INCLUDE_DIRS)</code></td><td>把三段拼成最终编译选项。<code>-Wall</code> 开常见告警（<b>务必留着</b>）。</td></tr>
+</table>
+<div class="good"><b>为什么 <code>OPT</code> 和 <code>CFLAGS</code> 要分两个变量？</b><code>OPT</code> 是"可堆叠的选项片段"，<code>CFLAGS</code> 是"给编译器的最终命令行"。分开后，L72 还留了条后门：<code>make OPT="-g" LDFLAGS="-pthread"</code> 可从命令行整体覆盖，方便临时试验。</div>
+
+<h3>2.5 链接选项 LDFLAGS（L67-L70）</h3>
+<table class="cols-2">
+  <tr><th>代码</th><th>作用</th></tr>
+  <tr><td><code>-g -ggdb</code></td><td>链接产物也保留调试信息。</td></tr>
+  <tr><td><code>-pthread</code></td><td>链接 POSIX 线程库。<b>本工程必需</b>：主线程 + RT 线程 + 2 个工作线程（日志线程池）都用 pthread，<code>agv_queue.c</code>/<code>agv_pool.c</code> 里全是 <code>pthread_*</code>。</td></tr>
+  <tr><td><code>-lm</code></td><td>链接数学库。用了 <code>sin/cos/sqrt</code> 等就要它（里程计/位姿计算会用到）。</td></tr>
+</table>
+<div class="warn"><b>坑：<code>CFLAGS</code> 里的 <code>-pthread</code> 管编译，<code>LDFLAGS</code> 里的管链接，两边都要有。</b>只写一边，可能出现"编译过、链接缺符号"或反之。简单做法：两边都写 <code>-pthread</code>。</div>
+
+<h3>2.6 目标与规则（L75-L89）</h3>
+<pre class="code">75  .PHONY: all clean
+77  all: clean $(LINK_TARGET)
+79  clean:
+80      rm -f $(OBJS) $(LINK_TARGET)
+82  install:
+83      cp $(LINK_TARGET) /usr/bin/$(LINK_TARGET)
+85  %.o: %.c
+86      $(CC) $(CFLAGS) -c $&lt; -o $@
+88  $(LINK_TARGET): $(OBJS)
+89      $(CC) $^ $(LDFLAGS) -o $@</pre>
+<table class="cols-3">
+  <tr><th>行</th><th>规则</th><th>讲解</th></tr>
+  <tr><td>L75</td><td><code>.PHONY: all clean</code></td><td>声明 <code>all</code>/<code>clean</code> 是"伪目标"——它们的名字不是真实文件。避免目录里恰好有个叫 <code>clean</code> 的文件时 make 误判"已是最新、无需执行"。</td></tr>
+  <tr><td>L77</td><td><code>all: clean $(LINK_TARGET)</code></td><td>默认目标（第一个出现的）。依赖顺序：<b>先 clean 再链接</b> ⇒ <b>每次 make 都是全量重编</b>。</td></tr>
+  <tr><td>L79-L80</td><td><code>clean</code></td><td>删掉所有 .o 和可执行文件。<code>rm -f</code> 的 <code>-f</code> 保证文件不存在也不报错。</td></tr>
+  <tr><td>L82-L83</td><td><code>install</code></td><td>把可执行文件拷到 <code>/usr/bin</code>（需要写权限，通常 <code>sudo make install</code>）。</td></tr>
+  <tr><td>L85-L86</td><td><code>%.o: %.c</code> + <code>$&lt; $@</code></td><td><b>模式规则</b>：任意 <code>X.o</code> 由同名 <code>X.c</code> 编译而来。<code>$&lt;</code>=第一个依赖（X.c），<code>$@</code>=目标（X.o）。这一条规则就覆盖了全部 31 个源文件，不用逐个写。</td></tr>
+  <tr><td>L88-L89</td><td><code>$(LINK_TARGET): $(OBJS)</code> + <code>$^</code></td><td>链接规则：<code>$^</code>=所有依赖（全部 .o）。<b>先决条件写成 <code>$(OBJS)</code> 是精髓</b>——make 会先保证每个 .o 都编好，才执行链接。</td></tr>
+</table>
+<div class="note"><b>三个自动变量（必背）：</b><code>$@</code>=目标名，<code>$&lt;</code>=第一个依赖，<code>$^</code>=全部依赖。它们是 Makefile 能"写一条规则管一堆文件"的核心。</div>
+
+<div class="warn"><b>本项目的一个"特性"：<code>all: clean $(LINK_TARGET)</code> 让它每次都全量重编。</b>对 31 个文件的小工程无所谓；但这是**反模式**——正确做法是 <code>all: $(LINK_TARGET)</code>，靠 make 的时间戳比对做增量。面试若被问"为什么你的 make 每次都重编"，能答出这点就是加分项（说明你懂增量编译的价值）。</div>
+
+<h3>2.7 一次 <code>make</code> 的完整执行流程</h3>
+<pre class="code flow">  $ make
+   │
+   │  默认目标 all（L77）
+   ▼
+ ┌───────────────────────┐
+ │ all: clean canopend   │  先满足依赖：clean → 再 canopend
+ └───────────┬───────────┘
+             │
+   ①    clean (L79-80)   →  rm -f *.o canopend
+             │
+   ②  canopend 依赖 OBJS(L52)，对每个 X.o 套用 %.o:%.c (L85)
+             │
+             ▼  (31 次，逐个)
+   gcc -Wall -g -ggdb -DCO_MULTIPLE_OD ... -I. -ICANopenNode -Iapplication \
+       -c CO_driver.c -o CO_driver.o
+   gcc ... -c CANopenNode/301/CO_PDO.c -o CANopenNode/301/CO_PDO.o
+   ...
+             │
+   ③  全部 .o 就绪 → 链接规则 (L88-89)
+             │
+             ▼
+   gcc *.o -g -ggdb -pthread -lm -o canopend
+             │
+             ▼
+        ./canopend   （可执行文件）</pre>
+
+<h2>§3 Makefile 语法速查（够用版）</h2>
+<table class="cols-3">
+  <tr><th>语法</th><th>写法</th><th>含义</th></tr>
+  <tr><td>变量赋值</td><td><code>X = 值</code></td><td>延迟展开（用到时才展开）</td></tr>
+  <tr><td>立即赋值</td><td><code>X := 值</code></td><td>立即展开（更可预测，推荐）</td></tr>
+  <tr><td>追加</td><td><code>X += 值</code></td><td>在原有值后追加</td></tr>
+  <tr><td>条件赋值</td><td><code>CC ?= gcc</code></td><td>未定义才赋值（留给命令行/环境覆盖）</td></tr>
+  <tr><td>引用</td><td><code>$(X)</code> / <code>${X}</code></td><td>取值（别漏括号）</td></tr>
+  <tr><td>规则</td><td><code>目标: 依赖</code><br>Tab + <code>命令</code></td><td>命令前必须是 <b>Tab</b>，不是空格（经典报错 <code>missing separator</code>）</td></tr>
+  <tr><td>模式规则</td><td><code>%.o: %.c</code></td><td>通配整类文件</td></tr>
+  <tr><td>自动变量</td><td><code>$@ $&lt; $^</code></td><td>目标 / 首个依赖 / 全部依赖</td></tr>
+  <tr><td>后缀替换</td><td><code>$(SRC:%.c=%.o)</code></td><td>批量改后缀</td></tr>
+  <tr><td>伪目标</td><td><code>.PHONY: clean</code></td><td>声明非文件目标</td></tr>
+  <tr><td>命令行覆盖</td><td><code>make CC=... OPT=...</code></td><td>临时改变量，不改文件</td></tr>
+</table>
+
+<h2 class="pgbreak">§4 CMake：岗位为什么要它</h2>
+<p><b>Makefile 的问题</b>（工程一大就暴露）：</p>
+<ul>
+  <li><b>不可移植</b>：手写的 <code>gcc</code> 选项是 Linux/GNU 专用；换 Windows/交叉工具链要重写一遍。</li>
+  <li><b>依赖靠人手维护</b>：加了新的 <code>#include</code>，得手动把依赖写进 Makefile，否则改头文件不会触发重编（除非用 <code>-MMD</code> 生成 .d 依赖）。</li>
+  <li><b>难组合</b>：想引第三方库（如 <code>libssl</code>），得自己查它装在哪、叫什么库名、链接顺序。CMake 一句 <code>find_package</code> 解决。</li>
+  <li><b>平台分支难写</b>：判断"是不是 Windows / 有没有某库"要用一堆 shell 判断。</li>
+</ul>
+<p><b>CMake 的定位：不是构建工具，是"构建系统的生成器"</b>。你写 <code>CMakeLists.txt</code>（平台无关），CMake 自动生成对应的 Makefile / Ninja 文件 / Visual Studio 工程。因此同一份配置能在 Linux 上出 GNU Make、在 Windows 上出 VS 工程。</p>
+<div class="cpp"><strong>简历话术：</strong>"熟悉 Makefile 与 CMake 两套构建体系，能独立编写 CMakeLists.txt（target_* 现代写法、find_package 找依赖、Debug/Release 配置切换）并完成从 Makefile 工程到 CMake 的迁移。"</div>
+
+<h2>§5 为本工程写一份 CMakeLists.txt</h2>
+<p>把 §2 的 Makefile 逐段翻译过来。这是"现代 CMake（target_* 风格）"，也是面试推荐写法：</p>
+<pre class="code">cmake_minimum_required(VERSION 3.16)   # 本机实测 CMake 3.16.3
+project(canopend C)                    # 工程名 + 语言（C）
+
+set(CMAKE_C_STANDARD 99)               # C99
+
+# 没指定构建类型时默认 Debug（等价 Makefile 的 -g -ggdb）
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+# 找线程库：给出可移植的 Threads::Threads 目标（对应 -pthread）
+find_package(Threads REQUIRED)
+
+add_executable(canopend                # = Makefile 的 $(LINK_TARGET) + $(SOURCES)
+    CO_driver.c
+    CO_error.c
+    CO_epoll_interface.c
+    CO_storageLinux.c
+    CANopenNode/301/CO_ODinterface.c
+    # ...（31 个源文件，照抄 Makefile §2.2 清单）
+    CANopenNode/CANopen.c
+    application/OD.c
+    application/OD_2nd.c
+    CO_main_basic.c
+    CO_application.c
+    agv_queue.c
+    agv_pool.c
+    agv_log.c
+)
+
+# = Makefile 的 $(INCLUDE_DIRS) : -I. -ICANopenNode -Iapplication
+target_include_directories(canopend PRIVATE
+    .
+    CANopenNode
+    application
+)
+
+# = Makefile 的 OPT 里的 -D...
+target_compile_definitions(canopend PRIVATE
+    CO_MULTIPLE_OD
+    CO_USE_APPLICATION=1
+    CO_CONFIG_HB_CONS=0
+    CO_CONFIG_STORAGE=0
+)
+
+# = Makefile 的 -Wall -Wno-format
+target_compile_options(canopend PRIVATE -Wall -Wno-format)
+
+# = Makefile 的 LDFLAGS: -pthread -lm
+target_link_libraries(canopend PRIVATE Threads::Threads m)</pre>
+<div class="good"><b>为什么用 <code>target_*</code> 而不是全局的 <code>include_directories()</code>/<code>link_libraries()</code>？</b>因为 <code>target_*</code> 把"编译参数"绑定到<b>具体某个目标</b>上，作用域清晰；全局写法会污染所有目标，工程一大就互相打架。这也是 CMake 官方当前推荐的"Modern CMake"。</div>
+<div class="note"><b>想要 <code>-ggdb</code> 而非默认的 <code>-g</code>：</b>加一行 <code>target_compile_options(canopend PRIVATE $&lt;$&lt;CONFIG:Debug&gt;:-ggdb&gt;)</code>。<code>$&lt;...&gt;</code> 是生成器表达式（generator expression），意思是"仅当 Debug 配置时才加 -ggdb"。</div>
+
+<h3>5.1 CMake 的三条黄金概念</h3>
+<table class="cols-3">
+  <tr><th>概念</th><th>一句话</th><th>本工程对应</th></tr>
+  <tr><td><b>Target（目标）</b></td><td>要被构建的东西（可执行文件/库），是配置的中心</td><td><code>canopend</code></td></tr>
+  <tr><td><b>Property（属性）</b></td><td>挂在 target 上的设置（头文件路径、宏、编译选项…）</td><td>target_include_directories 等</td></tr>
+  <tr><td><b>Generator（生成器）</b></td><td>CMake 最终生成哪种构建文件（Unix Makefiles / Ninja / VS）</td><td>默认 Unix Makefiles</td></tr>
+</table>
+
+<h2>§6 怎么用（out-of-source build，强烈推荐）</h2>
+<p>CMake 的招牌习惯：<b>源码目录和构建目录分开</b>，所有中间产物、缓存都进 <code>build/</code>，源码目录保持干净，删掉 <code>build/</code> 就等于彻底 clean。</p>
+<pre class="code"># ① 配置阶段：生成构建文件（在 build/ 里）
+mkdir -p build && cd build
+cmake ..                          # 默认 Debug
+# cmake -DCMAKE_BUILD_TYPE=Release ..     # 想要 Release 版
+
+# ② 构建阶段：编译链接
+cmake --build .                   # 或直接 make / ninja
+# cmake --build . -j4             # 4 路并行编译
+
+# ③ 产物位置
+./canopend
+
+# ④ 清理
+cmake --build . --target clean    # 清目标文件
+rm -rf build                      # 彻底重置（推荐）</pre>
+<div class="warn"><b>别在源码目录直接 <code>cmake .</code></b>（in-source build），会生成一堆 <code>CMakeCache.txt</code>/<code>CMakeFiles/</code> 污染仓库。养成"永远进 build/ 目录"的习惯，顺便在 <code>.gitignore</code> 里加一行 <code>build/</code>。</div>
+
+<h2>§7 Debug vs Release：两种构建类型</h2>
+<table class="cols-3">
+  <tr><th></th><th>Debug（默认）</th><th>Release</th></tr>
+  <tr><td>典型选项</td><td><code>-g</code>（+ 可选 <code>-Og</code>）</td><td><code>-O3 -DNDEBUG</code></td></tr>
+  <tr><td>调试信息</td><td>有 → 能 GDB 断点/看变量</td><td>无（或另存 .debug）</td></tr>
+  <tr><td>优化</td><td>几乎不优化，代码与源码逐行对应</td><td>高度优化，可能内联/重排，单步会"跳"</td></tr>
+  <tr><td>适用</td><td>开发、跑 Valgrind、抓 bug</td><td>发布、性能测试</td></tr>
+</table>
+<p>切换：<code>cmake -DCMAKE_BUILD_TYPE=Release ..</code>。<b>注意</b>：<code>CMAKE_BUILD_TYPE</code> 只在单配置生成器（Makefiles/Ninja）下生效；VS 这类多配置生成器改用 <code>cmake --build . --config Release</code>。</p>
+<div class="note"><b>和本工程结合：</b>Makefile 里 L55 的 <code>-g -ggdb</code> 就是"Debug 配置"、L56 注释掉的 <code>-O2</code> 就是"Release 配置"。CMake 只是把这两个预设变成了一个开关 <code>CMAKE_BUILD_TYPE</code>。</div>
+
+<h2 class="pgbreak">§8 Makefile vs CMake 全面对比</h2>
+<table class="cols-3">
+  <tr><th>维度</th><th>Makefile</th><th>CMake</th></tr>
+  <tr><td>本质</td><td>构建脚本本身（直接调 gcc）</td><td>构建脚本<b>生成器</b>（生成 Makefile/Ninja/VS）</td></tr>
+  <tr><td>平台</td><td>GNU Make 为主，跨平台差</td><td>跨平台（Linux/Win/macOS/嵌入式）</td></tr>
+  <tr><td>依赖管理</td><td>手动（或 <code>-MMD</code> 生成 .d）</td><td>自动扫描 <code>#include</code>，改头文件自动重编</td></tr>
+  <tr><td>找第三方库</td><td>手写 <code>-lssl -I/usr/include/ssl</code></td><td><code>find_package(OpenSSL)</code> 一把梭</td></tr>
+  <tr><td>可读性</td><td>小工程直观，大工程易失控</td><td>结构清晰，适合中大型/多目标</td></tr>
+  <tr><td>学习曲线</td><td>低（半小时能写）</td><td>中（DSL 概念多）</td></tr>
+  <tr><td>典型场景</td><td>内核模块、单文件小工具、老项目</td><td>应用/库/跨平台工程、公司项目主流</td></tr>
+  <tr><td>增量编译</td><td>靠时间戳（但本工程 all 挂了 clean，退化为全量）</td><td>靠时间戳 + 自动依赖，天然增量</td></tr>
+</table>
+<div class="good"><b>结论（面试可直接用）：</b>"两者不是替代关系——CMake 可以生成 Makefile。小工程/内核模块用 Makefile 够用；需要跨平台、多目标、引第三方库时用 CMake。我们是嵌入式应用，两者都要会，实际项目以 CMake 为主。"</div>
+
+<h2>§9 迁移对照表：Makefile 片段 → CMake 写法</h2>
+<table class="cols-2">
+  <tr><th>Makefile（本工程）</th><th>CMake</th></tr>
+  <tr><td><code>CC ?= gcc</code></td><td><code>project(canopend C)</code>（编译器由 <code>CMAKE_C_COMPILER</code> 决定，可用 <code>-DCMAKE_C_COMPILER=...gcc</code> 覆盖）</td></tr>
+  <tr><td><code>INCLUDE_DIRS = -I. -ICANopenNode -Iapplication</code></td><td><code>target_include_directories(canopend PRIVATE . CANopenNode application)</code></td></tr>
+  <tr><td><code>OPT += -DCO_MULTIPLE_OD ...</code></td><td><code>target_compile_definitions(canopend PRIVATE CO_MULTIPLE_OD ...)</code></td></tr>
+  <tr><td><code>CFLAGS = -Wall ...</code></td><td><code>target_compile_options(canopend PRIVATE -Wall ...)</code></td></tr>
+  <tr><td><code>SOURCES = ...</code></td><td><code>add_executable(canopend ...)</code> 或 <code>target_sources()</code></td></tr>
+  <tr><td><code>OBJS = $(SOURCES:%.c=%.o)</code></td><td>不需要，CMake 自动管理</td></tr>
+  <tr><td><code>%.o: %.c</code> / <code>$(LINK_TARGET): $(OBJS)</code></td><td>不需要，<code>add_executable</code> 自动覆盖编译+链接</td></tr>
+  <tr><td><code>LDFLAGS += -pthread</code></td><td><code>find_package(Threads REQUIRED)</code> + <code>target_link_libraries(... Threads::Threads)</code></td></tr>
+  <tr><td><code>LDFLAGS += -lm</code></td><td><code>target_link_libraries(canopend PRIVATE m)</code></td></tr>
+  <tr><td><code>make</code></td><td><code>cmake --build build</code></td></tr>
+  <tr><td><code>make clean</code></td><td><code>cmake --build build --target clean</code>（或 <code>rm -rf build</code>）</td></tr>
+  <tr><td><code>make install</code> 拷到 /usr/bin</td><td><code>install(TARGETS canopend RUNTIME DESTINATION bin)</code>（配合 <code>cmake --install build</code>）</td></tr>
+</table>
+<div class="note"><b>交叉编译怎么切？</b>Makefile 是 <code>make CC=arm-linux-gnueabihf-gcc</code>；CMake 更规范——写一个 <code>toolchain-arm.cmake</code>（设 <code>CMAKE_SYSTEM_NAME</code>/<code>CMAKE_C_COMPILER</code>），然后 <code>cmake -DCMAKE_TOOLCHAIN_FILE=toolchain-arm.cmake ..</code>。这就是第 9 站（交叉编译 &amp; 部署）要展开的内容。</div>
+
+<h2>§10 自测题</h2>
+<ol>
+  <li>本工程 <code>SOURCES</code> 里加了第 32 个 .c，需要在 Makefile 改几处？（答：1 处，只加到 SOURCES；OBJS/编译/链接全自动）</li>
+  <li><code>$@</code>、<code>$&lt;</code>、<code>$^</code> 分别是什么？在 [L85-L89](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L85-L89) 里各自展开成什么？</li>
+  <li>为什么本工程 <code>make</code> 每次都重编全部文件？怎么改成增量？（提示：[L77](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L77)）</li>
+  <li><code>-pthread</code> 为什么在 <code>CFLAGS</code> 和 <code>LDFLAGS</code> 里都要出现？</li>
+  <li>把 [L12-L15](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L12-L15) 的 include 路径翻译成 CMake 命令。</li>
+  <li>CMake 的 out-of-source build 为什么推荐？<code>cmake --build .</code> 和 <code>cmake .</code> 区别是什么？</li>
+  <li><code>find_package(Threads)</code> 之后为什么要链 <code>Threads::Threads</code> 而不是直接写 <code>-lpthread</code>？</li>
+</ol>
+
+<div class="footnote">
+本册为「工具链补课」第 1 册（构建系统）。配套第 2 册：<b>调试三件套（GDB / Valgrind / strace）</b>。
+所有源码引用均为本工程可点击链接；Makefile 行号对应 [Makefile](file:///home/zcy/Project/panasonic_canopen_agv/Makefile) 当前版本（共 90 行）。
+环境实测：Ubuntu 20.04.6 LTS / gcc 9.4.0 / CMake 3.16.3 / GNU Make 4.2.1。
+</div>
+
+</body>
+</html>

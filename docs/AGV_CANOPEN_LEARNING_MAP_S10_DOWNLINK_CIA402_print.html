@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 10 站 · 下行控制（上）：CiA402 状态机与使能时序（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:22%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:78%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:12%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:24%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:26%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 10 站 · 下行控制（上）：CiA402 状态机与使能时序</h1>
+
+<div class="meta">
+<p><strong>本站定位</strong>：前九站把「上行」做到了极致——收帧、里程计、Qt 上位机画轨迹，全通了。但整台车目前只会<strong>听</strong>（读电机的状态与位置），不会<strong>说</strong>（把指令发回电机）。本站开始补「下行」：给对象字典里<strong>本来就有</strong>的 <code>0x6040</code>/<code>0x6060</code>/<code>0x607A</code> 接上一条下发路，并按 CiA402 的时序把电机从「未使能」推到「能转」。</p>
+<p><strong>一句话概括</strong>：工程当前是<strong>监听器</strong>（只收 RPDO、只会打印），本站把它变成<strong>主站</strong>（能发指令、能编排使能时序）。</p>
+<p><strong>为什么值得单独一站</strong>：① 这是 AGV <strong>主控</strong>的本职——面试必问「你怎么让电机动起来、怎么做使能时序」；② 差速逆解（下一站）最终也要落到本站的 <code>0x607A</code>/<code>0x60FF</code> 上；③ 它把「读过 CANopen」升级为「<strong>做过 CANopen 控制</strong>」。</p>
+<p><strong>阅读顺序</strong>：§0 地图 → §1 CiA402 状态机（不看代码）→ §2 词典已就绪 → §3 下行通道怎么建 → §4 使能时序代码 → §5 NMT 主站 → §6 零硬件验证 → §7 小结。</p>
+</div>
+
+<h2>§0 一页地图：本站把「只读」变成「能控」</h2>
+
+<p>先看全景。上面是现在跑的链路（只收），下面是本站要加的那条反向链路（发）。</p>
+
+<pre>
+【现在：只会“听”（上行）】
+
+  电机驱动器 ──TPDO 0x38A/0x38B──► CO_process_RPDO()
+  (节点 10/11)   携带 0x6041+0x6064        │
+        ▲                                  ▼
+        │                           H6064_write()  ★ 只存位置
+        │                                  │
+     从不回话                              ▼
+                                   app_programRt() → 里程计 x,y,θ → 0x6FFF → Qt
+
+【本站：学会“说”（下行）】
+
+  电机驱动器 ◄──下行 PDO / SDO 0x6040/0x6060/0x607A── CO_TPDO_process()
+  (节点 10/11)   控制字 + 模式 + 目标位置              ▲
+        │                                              │
+        │  回 0x6041 状态字                            │
+        └───────────────────────────────────►   写对象字典：OD_RAM.x6040_controlword = …
+                                                       ▲
+                                                       │
+                                              使能状态机 + 主站 NMT
+                                              (CO_NMT_sendCommand)
+</pre>
+
+<p class="note"><strong>关键点先摆在这里</strong>：本站<strong>不新增对象</strong>——CiA402 的 <code>0x6040</code>/<code>0x6041</code>/<code>0x6060</code>/<code>0x607A</code>/<code>0x60FF</code> 在工程的对象字典里<strong>早就存在</strong>（见 §2），因为这套字典本身就是「照驱动器造的」。缺的只有两样：<strong>一条把它们发出去的通道</strong>（§3）和<strong>一段按状态字推进的时序</strong>（§4）。</p>
+
+<h2>§1 CiA402 状态机：驱动器怎么才算「能转」</h2>
+
+<h3>1.1 为什么不能「一上来就发目标位置」</h3>
+
+<p>伺服/步进驱动器（本工程用的是森创 CANopen 一体机）遵循 <strong>CiA402</strong> 规范。它把「电机能不能动」抽象成一个<strong>状态机</strong>：你必须按顺序把控制字 <code>0x6040</code> 的若干位写成特定值，驱动器才一步步从「上电」走到 <code>Operation enabled</code>（可运行）。在此之前，你发多少目标位置它都不理。</p>
+
+<p>这就是为什么很多新手「报文格式全对、电机就是不转」——<strong>不是报文错，是没使能</strong>。</p>
+
+<h3>1.2 状态图（俯视）</h3>
+
+<pre>
+  上电 / 复位
+      │
+      ▼
+┌───────────────────┐  Shutdown (0x0006)   ┌───────────────────┐
+│ Switch on         │─────────────────────►│ Ready to switch   │
+│ disabled          │◄─────────────────────│ on                │
+└───────────────────┘  Disable voltage     └───────────────────┘
+      ▲                    (0x0000)                 │
+      │                                           │ Switch on (0x0007)
+      │  Fault reset (0x0080)                     ▼
+┌───────────────────┐                       ┌───────────────────┐
+│ Fault             │◄────── 故障 ──────────│ Switched on       │
+└───────────────────┘                       └───────────────────┘
+                                                  │
+                                                  │ Enable operation (0x000F)
+                                                  ▼
+                                            ┌───────────────────┐
+                                            │ Operation         │ ★ 能转
+                                            │ enabled           │
+                                            └───────────────────┘
+</pre>
+
+<p>一句话背下来：<strong>0x0006 → 0x0007 → 0x000F</strong>（Shutdown → Switch on → Enable operation），电机就进入可运行。<code>0x0000</code> 是断电，<code>0x0080</code> 是故障复位。</p>
+
+<h3>1.3 两个「字」：控制字与状态字</h3>
+
+<table class="cols-3">
+<caption>表 10-1 控制字 0x6040 的常用位（写下去）</caption>
+<thead><tr><th>位（值）</th><th>名字</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td>bit0 = 1</td><td>Switch on</td><td>请求「接通」</td></tr>
+<tr><td>bit1 = 1</td><td>Enable voltage</td><td>使能功率级供电</td></tr>
+<tr><td>bit2 = 1</td><td>Quick stop</td><td>0=快速停止；正常运行时必须为 1</td></tr>
+<tr><td>bit3 = 1</td><td>Enable operation</td><td>请求「运行使能」</td></tr>
+<tr><td>bit7 = 1</td><td>Fault reset</td><td>上升沿清故障</td></tr>
+</tbody>
+</table>
+
+<p>把这些位组合起来，就是上面那几个「命令码」：<code>0x0006</code>=Shutdown、<code>0x0007</code>=Switch on、<code>0x000F</code>=Enable operation。</p>
+
+<table class="cols-3">
+<caption>表 10-2 状态字 0x6041 的常用位（读回来）</caption>
+<thead><tr><th>位</th><th>名字</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>bit0</td><td>Ready to switch on</td><td>已就绪</td></tr>
+<tr><td>bit1</td><td>Switched on</td><td>已接通</td></tr>
+<tr><td>bit2</td><td>Operation enabled</td><td>★ 已使能、能转</td></tr>
+<tr><td>bit3</td><td>Fault</td><td>1=有故障，需 fault reset</td></tr>
+<tr><td>bit5</td><td>Quick stop</td><td>0=正在快停</td></tr>
+<tr><td>bit6</td><td>Switch on disabled</td><td>1=未接通（初始态）</td></tr>
+</tbody>
+</table>
+
+<p class="note"><strong>好用的判断法</strong>：把状态字低 7 位当掩码，对照固定值可判当前状态——<code>0x40</code>=Switch on disabled、<code>0x21</code>=Ready to switch on、<code>0x23</code>=Switched on、<code>0x27</code>=Operation enabled、<code>0x08</code>=Fault。代码里通常不必精确匹配，只要<strong>看到 bit2（0x04）起来就说明使能成功</strong>。</p>
+<h2>§2 对象字典已就绪：下行要用的对象，一个不缺</h2>
+
+<h3>2.1 一张表看清现状</h3>
+
+<p>这是本站<strong>最省事、也最容易被忽略</strong>的事实：本工程的 <code>OD.c</code>/<code>OD.h</code> 是<strong>照着伺服驱动器造的</strong>——所以 CiA402 下行控制要用的对象，索引、名字、RAM 存储、属性全都已经开好了。你要做的只是「写它、发它、读回来」。</p>
+
+<table class="cols-4">
+<caption>表 10-3 下行控制涉及的 OD 对象（全部已存在，无需新增）</caption>
+<thead><tr><th>索引</th><th>名称 / 方向</th><th>存储与属性</th><th>位置 / 默认值</th></tr></thead>
+<tbody>
+<tr><td><code>0x6040</code></td><td>Controlword<br>（写 → 下发）</td><td><code>OD_RAM.x6040_controlword</code><br><code>ODA_SDO_RW | ODA_TPDO</code>, len 2</td><td><code>OD.h:288</code>；属性 <code>OD.c:1666-1670</code>；默认 <code>0x0004</code>（<code>OD.c:240</code>）</td></tr>
+<tr><td><code>0x6041</code></td><td>Statusword<br>（读 ← 回收）</td><td><code>dataOrig = NULL</code>（<strong>无存储</strong>）<br><code>ODA_SDO_R | ODA_TRPDO</code>, len 2</td><td><code>OD.c:1671-1675</code> ⚠ 见 <strong>2.3</strong></td></tr>
+<tr><td><code>0x6060</code></td><td>Modes of operation</td><td><code>OD_RAM.x6060_modesOfOperation</code>, int8</td><td><code>OD.h:294</code>；默认 <code>3</code>（<code>OD.c:246</code>）= <strong>速度模式</strong></td></tr>
+<tr><td><code>0x607A</code></td><td>Target position</td><td><code>OD_RAM.x607A_targetPosition</code>, int32</td><td><code>OD.h:300</code>；默认 <code>0</code>（<code>OD.c:252</code>）</td></tr>
+<tr><td><code>0x60FF</code></td><td>Target velocity</td><td><code>OD_RAM.x60FF_targetVelocity</code>, int32</td><td><code>OD.h:325</code></td></tr>
+<tr><td><code>0x6064</code></td><td>Position actual value<br>（上行，已跑通）</td><td>经 <code>H6064_write</code> 钩子落地</td><td><code>OD.h:630</code>；第 7 站已用</td></tr>
+</tbody>
+</table>
+
+<p class="note"><strong>对照一下就很清楚</strong>：上行只用到 <code>0x6064</code> 一个（位置）。下行要用的 <code>0x6040</code>（控制字）、<code>0x6060</code>（模式）、<code>0x607A</code>（目标位置）<strong>全都是现成的</strong>，就躺在对象字典里没人动。</p>
+
+<h3>2.2 默认值其实已经「预设了意图」</h3>
+
+<p>看三个默认值，你会发现这套字典的作者<strong>本来就打算让它跑下行</strong>：</p>
+
+<ul>
+<li><code>0x6040 = 0x0004</code>：只有 bit2（Quick stop）置 1，表示「没在快停」，但<strong>尚未使能</strong>——标准的初始控制字。</li>
+<li><code>0x6060 = 3</code>：<strong>模式 3 = Profile Velocity（速度模式）</strong>。这正是 AGV 差速底盘最常用的模式（给轮速、不用管位置）。</li>
+<li><code>0x1800</code> 的 TPDO 映射 <code>0x1A00</code> 里，<strong>默认就映射了 <code>0x6040</code> + <code>0x60FF</code></strong>（控制字 + 目标速度，<code>OD.c:148-158</code>）——一条现成的「下行」报文模板。</li>
+</ul>
+
+<p class="note"><strong>结论</strong>：不缺对象、不缺映射、连模式都替你选好了。<strong>缺的只有两件事</strong>：一条把 <code>0x6040</code> 真正<strong>发出去</strong>的通道（§3），和一段按状态字<strong>一步步使能</strong>的时序（§4）。</p>
+
+<h3>2.3 ⚠ 一个必须先填的坑：状态字根本没落地</h3>
+
+<p>使能时序<strong>每一步都要读状态字</strong>（<code>0x6041</code>）来判断下一步发什么。但看 <code>OD.c</code> 里 <code>0x6041</code> 的定义：</p>
+
+<pre>
+.o_6041_statusword = {
+    .dataOrig = NULL,                        /* ★ 没有存储！ */
+    .attribute = ODA_SDO_R | ODA_TRPDO | ODA_MB,
+    .dataLength = 2
+},
+</pre>
+
+<p class="warn"><strong>这意味着什么？</strong><code>dataOrig = NULL</code> 表示<strong>这个对象背后没有任何 RAM 变量</strong>。RPDO（<code>0x38A</code>）里其实<strong>带着状态字</strong>（映射项 <code>0x60410010</code>，见 <code>CO_application.c:143</code>），但因为没地方存、又没注册钩子，收帧时<br>被协议栈<strong>直接丢掉</strong>。<br><strong>修法与第 7 站给 <code>0x6064</code> 加钩子完全一样</strong>：注册一个 <code>write</code> 钩子，把收到的状态字存进一个全局变量（本站记为 <code>g_sw_r</code>/<code>g_sw_l</code>）。细节见 §4.3。</p>
+
+<h2>§3 把「说」的通道建起来</h2>
+
+<h3>3.1 三条路：TPDO / SDO / NMT</h3>
+
+<p>把指令从主站送到驱动器，CANopen 里有三种手段，用途完全不同：</p>
+
+<table class="cols-4">
+<caption>表 10-4 三种下行通道对比</caption>
+<thead><tr><th>通道</th><th>机制</th><th>适合什么</th><th>代价 / 注意</th></tr></thead>
+<tbody>
+<tr><td><strong>TPDO</strong></td><td>预先配好映射，运行时只写 OD，栈按节拍/事件自动发送</td><td>周期性下达：控制字 + 目标速度/位置</td><td>要配映射与 COB-ID；受 NMT 状态约束</td></tr>
+<tr><td><strong>SDO</strong></td><td>一问一答，走 0x600/0x580+nodeID</td><td>偶发配置：改模式、改加速度、写参数</td><td>握手开销大，<strong>不适合每拍</strong>；需开 SDO client</td></tr>
+<tr><td><strong>NMT</strong></td><td>只发「命令」（启动/停止/复位），不带数据</td><td>整机状态切换、故障复位</td><td>不改数据；是「总开关」不是「油门」（见 §5）</td></tr>
+</tbody>
+</table>
+
+<p><strong>本站走 TPDO</strong>——因为控制字和目标速度需要<strong>周期性</strong>刷新，而 SDO 每拍一问一答太重，NMT 又带不了数据。</p>
+
+<h3>3.2 现状：只配了「收」，没配「发」</h3>
+
+<p>看 <code>app_programStart()</code>（<code>CO_application.c:107-199</code>），它只做了「接收侧」的配置：给右轮配 RPDO <code>0x1400→0x38A</code>（<code>:133-152</code>），给左轮配 RPDO <code>0x1401→0x38B</code>（<code>:168-187</code>）。<strong>没有任何一行碰 TPDO（<code>0x1800</code>/<code>0x1A00</code>）</strong>。</p>
+
+<p>换句话说：工程今天<strong>只会收</strong>。要下行，得在这里补上「发送侧」的配置。</p>
+
+<h3>3.3 好消息：右轮的 TPDO 默认就已映射好</h3>
+
+<p>翻 <code>OD.c</code> 会发现，右轮那本字典（<code>OD</code>）的 TPDO <strong>默认就是可用的</strong>：</p>
+
+<table class="cols-2">
+<caption>表 10-5 两条 TPDO 的默认状态（右轮 OD vs 左轮 OD_2nd）</caption>
+<thead><tr><th>对象</th><th>默认值 / 含义</th></tr></thead>
+<tbody>
+<tr><td><code>OD</code> · <code>0x1800</code> 通信参数</td><td><code>COB_IDUsedByTPDO = 0xC000050A</code>（有效位 + <code>0x50A</code>）；<code>transmissionType = 0xFE</code>（变化即发）、<code>inhibitTime = 0x10</code>（1.6ms）、<code>eventTimer = 0x0100</code>（256ms 心跳式兜底）。见 <code>OD.c:116-123</code>。</td></tr>
+<tr><td><code>OD</code> · <code>0x1A00</code> 映射参数</td><td><strong>已映射 2 项</strong>：<code>0x60400010</code>（控制字 2 字节）+ <code>0x60FF0020</code>（目标速度 4 字节）。见 <code>OD.c:148-158</code>。</td></tr>
+<tr><td><code>OD_2nd</code> · <code>0x1800</code> 通信参数</td><td><code>COB_IDUsedByTPDO = 0xC0000180</code>（有效位 + <code>0x180</code>）。见 <code>OD_2nd.c:92-98</code>。</td></tr>
+<tr><td><code>OD_2nd</code> · <code>0x1A00</code> 映射参数</td><td><strong>空</strong>：<code>numberOfMappedApplicationObjectsInPDO = 0x00</code>。左轮要下行，得自己补映射。见 <code>OD_2nd.c:124-131</code>。</td></tr>
+</tbody>
+</table>
+
+<p class="warn"><strong>左右不对称，注意两点</strong>：① 右轮 TPDO 映射是现成的，左轮（<code>OD_2nd</code>）映射是空的，需要在 <code>app_programStart</code> 里补一段（照抄右轮 RPDO 那段的写法即可）；② 两本字典里 <code>0x6040</code> 的属性还不一样——<code>OD</code> 是 <code>ODA_TPDO</code>（可映射进 TPDO，<em>正是下行要的</em>），<code>OD_2nd</code> 是 <code>ODA_RPDO</code>（<code>OD.c:1668</code> vs <code>OD_2nd.c:1454</code>）。左轮若要走 TPDO，它的属性需一并核对。</p>
+
+<h3>3.4 真机必须对齐的一件事：COB-ID</h3>
+
+<p>默认 COB-ID <code>0x50A</code>、<code>0x180</code> 是「字典默认值」，<strong>不一定等于真实驱动器愿意接收的地址</strong>。TPDO 发出去的对端是驱动器的 <strong>RPDO</strong>，它的 COB-ID 通常按机型/节点号分配（常见 <code>0x200+nodeID</code>、<code>0x300+nodeID</code>…）。</p>
+
+<p class="warn"><strong>零硬件阶段先记住结论</strong>：<code>COB-ID</code> 与映射必须「<strong>主站发什么、驱动器收什么</strong>」严格一致。<br>没有真机时，用 <code>candump</code> 抓一段（见 §6 的仿真从站）就能验证；有真机时，用它自带的 EDS/手册或抓包确定真正的 RPDO 地址，再回来改 <code>0x1800</code> 的 <code>COB-IDUsedByTPDO</code>。<strong>这一步不对，后面时序全对也没用</strong>——报文发给了空地址。</p>
+
+<h2>§4 使能时序：把状态机写进 RT 拍</h2>
+
+<h3>4.1 用一个枚举表示状态</h3>
+
+<p>§1 的状态机落地成代码，就是一个<strong>「读状态字 → 决定控制字 → 写回去」</strong>的循环。因为它要跟着实时节拍走，所以放在 <code>app_programRt</code>（<code>CO_application.c</code>，第 7 站里程计所在的同一钩子）里，紧跟在 <code>if (!timerEvent) return;</code> 之后。</p>
+
+<h3>4.2 骨架代码</h3>
+
+<p>下面是一个电机的一步推进。<strong>左右轮各调一次</strong>，分别用各自的字典。</p>
+
+<pre>
+/* ===== 第 10 站新增：CiA402 使能时序（放 app_programRt，真节拍内） ===== */
+
+/* 一个电机的状态推进。st: 0=未使能 1=就绪 2=已接通 3=已使能 */
+static void cia402_step(uint16_t sw, uint16_t *cw, int *st)
+{
+    if (sw &amp; 0x0008) {              /* bit3：故障 */
+        *cw = 0x0080;               /* Fault reset（bit7 上升沿清故障） */
+        *st = 0;                    /* 回到起点，重新走一遍 */
+        return;
+    }
+    switch (*st) {
+    case 0:                         /* 未使能 */
+        *cw = 0x0006;               /* Shutdown */
+        if ((sw &amp; 0x7F) == 0x0021)  /* Ready to switch on ？ */
+            *st = 1;
+        break;
+    case 1:                         /* 已就绪 */
+        *cw = 0x0007;               /* Switch on */
+        if ((sw &amp; 0x7F) == 0x0023)  /* Switched on ？ */
+            *st = 2;
+        break;
+    case 2:                         /* 已接通 */
+        *cw = 0x000F;               /* Enable operation */
+        if (sw &amp; 0x0004)            /* Operation enabled ★ 能转了 */
+            *st = 3;
+        break;
+    case 3:                         /* 已使能：可以开始下目标了 */
+        *cw = 0x000F;               /* 保持使能 */
+        break;
+    }
+}
+
+/* —— 在真节拍里调用（左右各一次）—— */
+static int stR = 0, stL = 0;
+uint16_t   cwR, cwL;
+cia402_step(g_sw_r, &amp;cwR, &amp;stR);        /* 右轮：状态字来自 §4.3 的钩子 */
+cia402_step(g_sw_l, &amp;cwL, &amp;stL);        /* 左轮 */
+
+OD_RAM.x6040_controlword     = cwR;     /* 写右轮控制字 → 触发 TPDO 下行 */
+OD_2nd_RAM.x6040_controlword = cwL;     /* 写左轮控制字 */
+</pre>
+
+<p class="note"><strong>为什么「只写 OD 就行」？</strong>因为 §3.3 已经把 <code>0x6040</code> 映射进了 TPDO（<code>transmissionType = 0xFE</code> = 变化即发）。你改 <code>OD_RAM.x6040_controlword</code>，协议栈在下一拍 <code>CO_TPDO_process()</code> 里发现值变了，就自动把这帧发出去。<strong>你只管写字典，发送交给栈</strong>——这就是 TPDO 相对 SDO 的省心之处。</p>
+
+<h3>4.3 前置条件：先能读到状态字</h3>
+
+<p>上面代码里的 <code>g_sw_r</code>/<code>g_sw_l</code> 不是凭空来的——它们正是 2.3 里那个坑的补法。状态字<strong>本来就在 RPDO 里送上来</strong>了（映射 <code>0x60410010</code>），只是被丢了。补一个钩子把它接住：</p>
+
+<pre>
+/* 与第 7 站 H6064_write 完全同构：只存值，不计算 */
+static uint16_t g_sw_r, g_sw_l;
+
+ODR_t H6041_write(OD_stream_t *stream, const void *buf,
+                  OD_size_t count, OD_size_t *countWritten)
+{
+    if (stream == NULL || stream->object == NULL || buf == NULL)
+        return ODR_DEV_INCOMPAT;
+    uint16_t *can_id = (uint16_t*)stream->object;   /* 0x038A 右 / 0x038B 左 */
+    uint16_t  sw     = *(uint16_t*)buf;
+
+    if      (*can_id == 0x038A) g_sw_r = sw;
+    else if (*can_id == 0x038B) g_sw_l = sw;
+    else return ODR_DEV_INCOMPAT;
+
+    *countWritten = count;
+    return ODR_OK;
+}
+</pre>
+
+<p class="warn"><strong>顺序很重要</strong>：<strong>先接住状态字，再写时序</strong>。否则 <code>g_sw_r</code> 恒为 0，状态机永远停在 <code>case 0</code>，你会看到控制字一直在 <code>0x0006</code> 打转、电机毫无反应——而报文看起来「全对」。这正是本站想让你避开的最典型坑。</p>
+
+<h3>4.4 左右两台：OD 与 OD_2nd</h3>
+
+<p>本工程用的是「<strong>每轮一本字典</strong>」的结构：右轮走 <code>OD</code>（<code>OD_RAM</code>），左轮走 <code>OD_2nd</code>（<code>OD_2nd_RAM</code>），与 <code>app_programStart</code> 里 RPDO 左右分开的写法（<code>0x38A</code>/<code>0x38B</code>）一一对应。所以：</p>
+
+<ul>
+<li>右轮：<code>OD_RAM.x6040_controlword</code> / <code>OD_RAM.x60FF_targetVelocity</code>；</li>
+<li>左轮：<code>OD_2nd_RAM.x6040_controlword</code> / <code>OD_2nd_RAM.x60FF_targetVelocity</code>。</li>
+</ul>
+
+<p>两轮的使能状态（<code>stR</code>/<code>stL</code>）各自独立推进——万一左轮报故障，右轮不该被拖下水。</p>
+<h2>§5 NMT 主站：把驱动器「叫醒」的总开关</h2>
+
+<h3>5.1 为什么除了时序，还要 NMT</h3>
+
+<p>要让一个 CANopen 从站<strong>会发 TPDO</strong>，它必须先处于 <code>Operational</code> 状态——这是 NMT（网络管理）说了算的，和 CiA402 是<strong>两层</strong>：</p>
+
+<ul>
+<li><strong>NMT</strong>：管「整台设备开不开机」。切状态<strong>不带数据</strong>，是全网络的广播式总开关。</li>
+<li><strong>CiA402</strong>：管「电机使不使能」。在你已进 <code>Operational</code> 的前提下，用控制字一步步把电机推到能转（§1/§4）。</li>
+</ul>
+
+<p class="note"><strong>本项目的现状</strong>：AGV 一直在收 <code>0x38A</code>/<code>0x38B</code>，说明两个驱动器<strong>本来就已在 Operational</strong>（多半上电自启动）。所以「NMT 启动」在本项目<strong>不是每拍必需</strong>；但作为主站，你必须掌握它——驱动器掉线重连、故障复位、或改用不自启动的机型时，都要靠它。</p>
+
+<h3>5.2 只需一个 API：<code>CO_NMT_sendCommand()</code></h3>
+
+<p>好消息是，工程编译时<strong>已经把 NMT 主站能力打开了</strong>：</p>
+
+<pre>
+/* CO_driver_target.h:67-72 —— CO_CONFIG_NMT 里含 CO_CONFIG_NMT_MASTER */
+#define CO_CONFIG_NMT (CO_CONFIG_NMT_CALLBACK_CHANGE | \
+                       CO_CONFIG_NMT_MASTER | ... )
+</pre>
+
+<p>因此 <code>CO_NMT_sendCommand()</code> 直接可用（声明见 <code>CO_NMT_Heartbeat.h:338-356</code>，实现见 <code>CO_NMT_Heartbeat.c:332</code>）。命令取值就是 §1 之外的另一组枚举（<code>CO_NMT_Heartbeat.h:94-107</code>）：</p>
+
+<table class="cols-3">
+<caption>表 10-6 常用 NMT 命令（CO_NMT_command_t）</caption>
+<thead><tr><th>命令</th><th>值</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>CO_NMT_ENTER_OPERATIONAL</code></td><td>1</td><td>启动 → Operational（<strong>会发 TPDO 的前提</strong>）</td></tr>
+<tr><td><code>CO_NMT_ENTER_PRE_OPERATIONAL</code></td><td>128</td><td>退回预运行（停 TPDO，配置用）</td></tr>
+<tr><td><code>CO_NMT_ENTER_STOPPED</code></td><td>2</td><td>停止（只留 NMT/心跳）</td></tr>
+<tr><td><code>CO_NMT_RESET_NODE</code></td><td>129</td><td>复位整机（含应用）</td></tr>
+<tr><td><code>CO_NMT_RESET_COMMUNICATION</code></td><td>130</td><td>只复位通信</td></tr>
+</tbody>
+</table>
+
+<pre>
+/* 让两个驱动器进入 Operational。节点号由 COB-ID 反推：0x380 + node = 0x38A/0x38B → 10 / 11 */
+CO_NMT_sendCommand(CO-&gt;NMT, CO_NMT_ENTER_OPERATIONAL, 10);   /* 右轮 */
+CO_NMT_sendCommand(CO-&gt;NMT, CO_NMT_ENTER_OPERATIONAL, 11);   /* 左轮 */
+/* nodeID 传 0 = 广播给全网 */
+</pre>
+
+<p class="note"><strong>本工程只有一个 NMT 对象</strong>：左轮那套 <code>CO_2nd</code> 在初始化时<strong>复用了</strong> <code>CO-&gt;NMT</code>（<code>CO_main_basic.c:719-720</code> 把 <code>CO-&gt;NMT</code> 当「alternate NMT」传入）。所以上面用 <code>CO-&gt;NMT</code> 一个句柄即可寻址左右两个节点。</p>
+
+<p class="warn"><strong>一个尚未补的能力</strong>：工程虽开了心跳消费者（<code>CO_CONFIG_HB_CONS</code>，<code>CO_driver_target.h:74-79</code>），但<strong>目前并没有真正拿它监控这两个节点</strong>（见 HANDOFF 遗留 #9）。也就是说「驱动器掉线了，主站怎么知道」还没有答案——这是本站之后的 P1 增量。</p>
+
+<h3>5.3 联调顺序（照这个顺序走，不会乱）</h3>
+
+<table class="cols-2">
+<caption>表 10-7 主站一次完整下行联调</caption>
+<thead><tr><th>步骤</th><th>动作 / 观察点</th></tr></thead>
+<tbody>
+<tr><td>① 总线就绪</td><td>vcan 起好、<code>candump</code> 开着，确认能看到 <code>0x38A</code>/<code>0x38B</code> 在滚。</td></tr>
+<tr><td>② NMT 启动</td><td>发 <code>CO_NMT_ENTER_OPERATIONAL</code>（若驱动器已自启动，跳过也见得到 TPDO）。</td></tr>
+<tr><td>③ 接住状态字</td><td>确认 <code>g_sw_r</code>/<code>g_sw_l</code> 有值（§4.3 的钩子生效）。这是<strong>后面所有的前提</strong>。</td></tr>
+<tr><td>④ 跑使能时序</td><td>看 <code>0x6040</code> 阶梯上升：<code>0x0006 → 0x0007 → 0x000F</code>；状态字同步 <code>0x0021 → 0x0023 → 0x0027</code>。</td></tr>
+<tr><td>⑤ 下目标</td><td>写 <code>0x60FF</code>（速度模式）或 <code>0x607A</code>（位置模式），看 <code>0x6064</code> 开始变化。</td></tr>
+</tbody>
+</table>
+
+<h2>§6 零硬件验证：把「哑」从站改成「会回话」的从站</h2>
+
+<h3>6.1 现状：仿真从站只会「自言自语」</h3>
+
+<p>第 7 站用的 <code>tools/sim_motors.py</code> 是一个<strong>单向</strong>从站：它以 10 Hz 广播固定的状态字 <code>0x0237</code>（声称「已使能」）和一条位置曲线（<code>sim_motors.py:54, 79-81</code>）。它<strong>不看主站发了什么</strong>。</p>
+
+<p>对上行（收位置）够用；但验证下行不行——因为它不会<strong>响应控制字</strong>，你没法确认「我发的 <code>0x6040</code> 到底到没到、驱动器状态有没有跟着变」。</p>
+
+<h3>6.2 改造思路：让从站「听得见、答得上」</h3>
+
+<p>做一个<strong>反向增强版</strong>从站，补三件事：① 收主站下行帧（<code>0x50A</code>/<code>0x180</code>），② 用<strong>迷你 CiA402 状态机</strong>根据收到的控制字算出状态字，③ 把状态字连同位置<strong>回发</strong> <code>0x38A</code>/<code>0x38B</code>。这样整条闭环在 vcan 上就活了。</p>
+
+<pre>
+"""tools/sim_motors_downlink.py —— 会回话的仿真从站（骨架）"""
+import socket, struct, sys, time
+
+iface = sys.argv[1] if len(sys.argv) &gt; 1 else "vcan0"
+s = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+s.bind((iface,)); s.settimeout(0.01)
+
+def step(st, c):
+    """迷你 CiA402：输入(当前状态字,控制字)，返回下一状态字。够验证即可。"""
+    if c &amp; 0x0080:              return 0x0040   # Fault reset → Switch on disabled
+    if (c &amp; 0x0006) != 0x0006:  return 0x0040   # 电压未使能
+    if not (c &amp; 0x0008):
+        return 0x0023 if (c &amp; 0x0001) else 0x0021   # Switched on / Ready
+    return 0x0027                                # Operation enabled ★
+
+sw  = {"R": 0x0040, "L": 0x0040}   # 初始：Switch on disabled
+cw  = {"R": 0x0000, "L": 0x0000}
+vel = {"R": 0, "L": 0}; pos = {"R": 0, "L": 0}
+DOWN = {0x50A: "R", 0x180: "L"}    # 主站下行 COB-ID（用你实际配的 0x1800 COB-ID）
+
+while True:
+    try:                                    # ① 收下行：0x6040 + 0x60FF
+        f = s.recv(16); cid, dlc = struct.unpack("=IB3x", f[:8]); d = f[8:8+dlc]
+        who = DOWN.get(cid)
+        if who and dlc &gt;= 6:
+            cw[who]  = struct.unpack("&lt;H", d[0:2])[0]
+            vel[who] = struct.unpack("&lt;i", d[2:6])[0]
+    except socket.timeout:
+        pass
+    for who in ("R", "L"):                  # ② 跑状态机 + 按轮速积分位置
+        sw[who] = step(sw[who], cw[who])
+        if sw[who] &amp; 0x0004:
+            pos[who] += int(vel[who] * 0.01)    # 10 ms 一拍
+    s.send(struct.pack("=IB3x8s", 0x38A, 6, struct.pack("&lt;Hi", sw["R"], pos["R"])))  # ③ 回发
+    s.send(struct.pack("=IB3x8s", 0x38B, 6, struct.pack("&lt;Hi", sw["L"], pos["L"])))
+    time.sleep(0.01)
+</pre>
+
+<p class="note">站在主站角度，这就等价于「<strong>接了一台会听控制字的电机</strong>」：你写 <code>0x6040</code>，它的状态字就跟着爬；到了 <code>0x0027</code> 你再给 <code>0x60FF</code>，位置才开始动。<strong>零硬件复现了 §5.3 的完整时序</strong>。</p>
+
+<h3>6.3 验证命令清单</h3>
+
+<pre>
+# ① 建虚拟总线（已存在则跳过 add）
+sudo modprobe vcan
+sudo ip link add dev can0 type vcan
+sudo ip link set up can0
+
+# ② 另开一个终端抓包（这是唯一的"眼睛"）
+candump -td can0
+
+# ③ 启动 AGV 主站进程（用法：<CAN 设备名> [选项]）
+./canopen_agv can0
+
+# ④ 启动"会回话"的仿真从站
+python3 tools/sim_motors_downlink.py can0
+</pre>
+
+<p><strong>判据</strong>：<code>candump</code> 里应同时看到——① <code>0x50A</code>（或你配的 COB-ID）周期出现，数据段随控制字<strong>阶梯式</strong>变化（<code>0x0006→0x0007→0x000F</code>）；② <code>0x38A</code>/<code>0x38B</code> 的状态字相应地从 <code>0x0040</code> 爬到 <code>0x0027</code>；③ 之后再写入的 <code>0x60FF</code> 会带动 <code>0x6064</code> 变化。三条都对齐，下行链路就算通了。</p>
+
+<h2>§7 小结与衔接</h2>
+
+<h3>7.1 一句话链路</h3>
+
+<p><strong>字典已备</strong>（§2）→ <strong>TPDO 建发送路</strong>（§3）→ <strong>钩子接住状态字</strong>（§4.3）→ <strong>状态机推进控制字</strong>（§4.2）→ <strong>写 <code>0x6040</code> 自动发出</strong>；NMT 负责「总开关」（§5），会回话的仿真从站负责「零硬件验证」（§6）。</p>
+
+<h3>7.2 读完应能回答</h3>
+
+<ol>
+<li>CiA402 从「上电」到「能转」，依次要发哪三个命令码？（<code>0x0006 → 0x0007 → 0x000F</code>）</li>
+<li>为什么下行控制<strong>必须先能读到状态字 <code>0x6041</code></strong>？本工程它现在有什么问题？（<code>dataOrig = NULL</code>，收到即丢）</li>
+<li>TPDO 和 SDO 各适合哪种下行？（周期数据 vs 偶发配置）</li>
+<li>怎么一眼判断电机「已使能」？（状态字 bit2 = <code>0x04</code>）</li>
+<li>为什么双电机用 <code>OD</code> + <code>OD_2nd</code> 两本字典？（每轮一本，互不干扰）</li>
+<li><code>CO_NMT_sendCommand</code> 的 <code>nodeID</code> 传 0 是什么含义？（广播全网）</li>
+</ol>
+
+<h3>7.3 与下一站的衔接</h3>
+
+<p>本站让电机「<strong>能动</strong>」，但还没解决「<strong>动多少</strong>」。下一站 <strong>P0.5 差速逆运动学</strong>补的就是这一环：把车体指令 (<code>v, ω</code>) 反解成左右轮的目标——接速度模式就是写两轮的 <code>0x60FF</code>，接位置模式就是写 <code>0x607A</code>——<strong>直接落到本站建好的下行通道上</strong>。再往后（P1）才轮到 NMT 与心跳的容错。</p>
+
+<div class="footnote">
+<p><strong>取证位置汇总（便于对照源码）</strong></p>
+<ul>
+<li><strong>CiA402 对象</strong>：<code>application/OD.h:288</code>（<code>x6040_controlword</code>）、<code>:294</code>（<code>x6060</code>）、<code>:300</code>（<code>x607A</code>）、<code>:325</code>（<code>x60FF</code>）、<code>:630</code>（<code>OD_ENTRY_H6064_positionActualValue</code>）。</li>
+<li><strong>属性与默认值</strong>：<code>0x6040</code>/<code>0x6041</code> 定义 <code>OD.c:1666-1675</code>；默认值 <code>OD.c:240</code>（<code>0x6040=0x0004</code>）、<code>:246</code>（<code>0x6060=3</code>）、<code>:252</code>（<code>0x607A=0</code>）。左轮对应 <code>OD_2nd.c:1452-1461</code>。</li>
+<li><strong>TPDO 默认状态</strong>：<code>OD.c:116-158</code>（<code>0x1800</code> COB-ID 与 <code>0x1A00</code> 映射 <code>0x6040+0x60FF</code>）；<code>OD_2nd.c:92-98</code>（COB-ID）、<code>:124-131</code>（空映射）。</li>
+<li><strong>现状只配 RPDO</strong>：<code>CO_application.c:107-199</code>（右 <code>:133-152</code>，左 <code>:168-187</code>，含映射项 <code>0x60410010</code>/<code>0x60640020</code>）。</li>
+<li><strong>钩子范式（照抄对象）</strong>：<code>CO_application.c:75-104</code>（<code>H6064_write</code> 与两个 <code>OD_extension_t</code>），注册于 <code>:162</code>/<code>:196</code>。</li>
+<li><strong>NMT</strong>：能力开关 <code>CO_driver_target.h:67-72</code>；命令枚举 <code>CO_NMT_Heartbeat.h:94-107</code>；API <code>:338-356</code>；实现 <code>CO_NMT_Heartbeat.c:332</code>；<code>CO_2nd</code> 复用 <code>CO-&gt;NMT</code>（<code>CO_main_basic.c:719-720</code>）。</li>
+<li><strong>仿真从站</strong>：<code>tools/sim_motors.py:31-82</code>；运行与抓包见 <code>HANDOFF.md</code> §6.2 / §6.7。</li>
+<li><strong>延伸阅读</strong>：第 4 站分册 <code>AGV_CANOPEN_LEARNING_MAP_S4_WALKTHROUGH_print.html</code>（PDO &amp; CiA402 原理）、第 7 站分册 <code>..._S7_ODOMETRY_print.html</code>（收帧钩子范式）。</li>
+</ul>
+<p><strong>建议阅读顺序</strong>：§0 地图 → §1 状态机 → §2 词典 → §3 通道 → §4 时序 → §5 NMT → §6 验证 → §7 小结。先只读 §0/§1/§2 也能对下行控制建立完整直觉。</p>
+</div>
+
+</body>
+</html>

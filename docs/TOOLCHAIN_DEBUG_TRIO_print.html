@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>调试三件套：GDB / Valgrind / strace · 知识讲解</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1a1a1a; line-height: 1.65; font-size: 13px;
+    max-width: 190mm; margin: 0 auto; padding: 8mm 4mm;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; padding-bottom: 4px;
+       border-bottom: 2px solid #0FDC78; color: #004D26; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #004D26; }
+  h4 { font-size: 13px; margin: 12px 0 4px; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+    background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  }
+  a { color: #004D26; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; table-layout: fixed; }
+  th, td { border: 1px solid #d7dbdf; padding: 5px 8px; text-align: left;
+           vertical-align: top; font-size: 12.5px; word-wrap: break-word; }
+  th { background: #E5FFF2; color: #004D26; font-weight: 600; }
+  .cols-2 th:first-child, .cols-2 td:first-child { width: 34%; }
+  .cols-3 th:nth-child(1), .cols-3 td:nth-child(1) { width: 26%; }
+  .cols-3 th:nth-child(2), .cols-3 td:nth-child(2) { width: 24%; }
+  .cols-3 th:nth-child(3), .cols-3 td:nth-child(3) { width: 50%; }
+  pre.code {
+    background: #f8f9fa; border: 1px solid #e3e5e8; border-left: 3px solid #0FDC78;
+    padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    line-height: 1.55; margin: 8px 0; page-break-inside: avoid;
+  }
+  pre.flow { border-left-color: #2255a4; background: #f4f7fc; }
+  .note {
+    background: #FFF7E5; border-left: 3px solid #f0a020;
+    padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px;
+  }
+  .good { background: #E5FFF2; border-left: 3px solid #0FDC78;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .warn { background: #FDF5F5; border-left: 3px solid #b33;
+          padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .cpp { background: #f4f7fc; border-left: 3px solid #2255a4;
+         padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px; }
+  .pgbreak { page-break-before: always; }
+  .footnote { margin-top: 24px; padding-top: 8px; border-top: 1px dashed #bbb;
+              color: #888; font-size: 11.5px; }
+  .toolbar { margin: 10px 0; }
+  .toolbar button {
+    background: #0FDC78; color: #004D26; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  @media print { .toolbar { display: none; } }
+</style>
+</head>
+<body>
+
+<h1>调试三件套：GDB / Valgrind / strace · 知识讲解</h1>
+<div class="meta">工程：panasonic_canopen_agv ｜ 主题：动调（GDB）· 内存体检（Valgrind）· 系统调用跟踪（strace）</div>
+
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<div class="note"><b>一句话分工：</b><b>GDB</b> 管"程序里发生了什么"（断点、变量、调用栈、崩溃现场）；<b>Valgrind</b> 管"内存用得对不对"（泄漏、越界、未初始化）；<b>strace</b> 管"程序跟内核说了什么"（系统调用、真正失败的原因）。三者视角互补，配合使用能定位 90% 的 Linux 应用问题。</div>
+
+<h2>§1 先建立直觉：三件套各自回答什么问题</h2>
+<table class="cols-3">
+  <tr><th>工具</th><th>观察层</th><th>典型提问</th></tr>
+  <tr><td><b>GDB</b></td><td>源码 / 变量 / 函数调用</td><td>"崩在哪一行？这个变量当时是多少？为什么进了这个分支？"</td></tr>
+  <tr><td><b>Valgrind</b></td><td>堆内存读写</td><td>"哪里泄漏了内存？哪里越界读写？用了未初始化的值？"</td></tr>
+  <tr><td><b>strace</b></td><td>内核系统调用边界</td><td>"为什么打不开设备？卡在哪个系统调用？errno 到底是什么？"</td></tr>
+</table>
+<div class="good"><b>用本工程的场景对号入座：</b>① 程序段错误 → GDB；② 长跑后内存只涨不降 → Valgrind；③ <code>./canopend can0</code> 报"打不开 CAN 设备"、但你不知道是权限还是设备不存在 → strace（一眼看清 <code>open/ioctl</code> 返回了什么 errno）。</div>
+
+<h2>§2 GDB —— 动态调试器</h2>
+
+<h3>2.1 前提：编译时带调试信息</h3>
+<p>GDB 要能"对上源码行号、读出变量名"，全靠编译时的 <code>-g</code>。本工程 [Makefile L55](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L55) 已经写了 <code>-g -ggdb</code>，<b>开箱可调试</b>。若哪天换成 <code>-O2</code> 优化，变量可能被优化掉、单步会乱跳——调试期建议 <code>-Og -g</code>。</p>
+<div class="warn"><b>发布版要剥符号：</b>上线时用 <code>strip canopend</code> 减小体积；但<b>保留一份带符号的二进制</b>（或单独的 .debug 文件），否则线上 core dump 无法定位。</div>
+
+<h3>2.2 三种启动方式</h3>
+<pre class="code">gdb ./canopend                        # 只加载，先不跑
+gdb --args ./canopend can0 -i 1       # 带启动参数（推荐：参数直接跟在 --args 后面）
+gdb -p 12345                          # 附加到已在跑的进程（PID=12345）</pre>
+<p>本工程是 CANopen 从站，跑起来要带设备名和节点号，所以第二种最常用：<code>gdb --args ./canopend can0 -i 1</code>，进去后 <code>run</code>（简写 <code>r</code>）。</p>
+
+<h3>2.3 常用命令（背背这张表就够用 80%）</h3>
+<table class="cols-3">
+  <tr><th>命令</th><th>简写</th><th>作用</th></tr>
+  <tr><td><code>break 位置</code></td><td><code>b</code></td><td>下断点。位置可为 <code>函数名</code>、<code>文件:行号</code>、<code>文件:函数</code>。例：<code>b app_programStart</code>、<code>b CO_main_basic.c:360</code></td></tr>
+  <tr><td><code>run</code> / <code>continue</code></td><td><code>r</code> / <code>c</code></td><td>启动 / 继续到下一个断点</td></tr>
+  <tr><td><code>next</code> / <code>step</code></td><td><code>n</code> / <code>s</code></td><td>单步（不进入函数） / 单步（进入函数）</td></tr>
+  <tr><td><code>finish</code></td><td><code>fin</code></td><td>执行到当前函数返回</td></tr>
+  <tr><td><code>print 表达式</code></td><td><code>p</code></td><td>看变量/表达式值。例：<code>p nodeId</code>、<code>p *CO</code>、<code>p errno</code></td></tr>
+  <tr><td><code>backtrace</code></td><td><code>bt</code></td><td>打印调用栈（崩在哪、谁调用的）——<b>最有用</b></td></tr>
+  <tr><td><code>frame N</code></td><td><code>f N</code></td><td>切到栈的第 N 层，看那层的局部变量</td></tr>
+  <tr><td><code>info locals</code> / <code>info args</code></td><td><code>i lo</code> / <code>i ar</code></td><td>看当前函数所有局部变量 / 参数</td></tr>
+  <tr><td><code>watch 变量</code></td><td><code>wa</code></td><td>变量被写时停下（找"谁偷偷改了它"）</td></tr>
+  <tr><td><code>list</code></td><td><code>l</code></td><td>显示源码上下文</td></tr>
+  <tr><td><code>info threads</code> / <code>thread N</code></td><td>—</td><td>列线程 / 切到第 N 个线程（<b>多线程必用</b>）</td></tr>
+  <tr><td><code>thread apply all bt</code></td><td>—</td><td>所有线程的调用栈——排查死锁神器</td></tr>
+  <tr><td><code>set var 变量=值</code></td><td>—</td><td>运行中改变量值，验证假设</td></tr>
+  <tr><td><code>quit</code></td><td><code>q</code></td><td>退出</td></tr>
+</table>
+
+<h3>2.4 本工程实战：三步走</h3>
+<p><b>场景：</b>怀疑启动时参数解析或日志初始化有问题，让程序在应用启动处停下来看看。</p>
+<pre class="code">$ gdb --args ./canopend can0 -i 1
+(gdb) b app_programStart          # 在应用启动函数下断点
+(gdb) run
+Breakpoint 1, app_programStart () at CO_application.c:xx
+(gdb) bt                          # 看是谁调用的（应为 main → app_programStart）
+(gdb) info args                   # 看传进来的参数
+(gdb) n                           # 单步往下
+(gdb) p nodeId                    # 打印节点号
+(gdb) c                           # 继续运行</pre>
+<p><b>场景：多线程程序"卡死"，想看谁在等谁。</b>Ctrl+C 让 GDB 接管后：</p>
+<pre class="code">(gdb) info threads                # 列出主线程 + RT 线程 + 2 个工作线程
+(gdb) thread apply all bt         # 每个线程的栈：谁卡在 pthread_mutex_lock / cond_wait 一目了然</pre>
+<div class="note"><b>结合本工程的双线程 + 日志线程池：</b>主线程跑 <code>epMain</code>、RT 线程（SCHED_FIFO，1ms）跑 <code>epRT</code>、再加 2 个日志工作线程等待条件变量。若日志线程不消费，队列满后 RT 线程入队会丢掉记录——此时用 <code>thread apply all bt</code> 能看到 RT 线程是否卡在锁上，定位"日志把 RT 拖慢"的死锁/争用。</div>
+
+<h3>2.5 Core Dump：事后验尸</h3>
+<p>程序已经崩了、没来得及接 GDB，就靠内核生成的 core 文件复现现场。</p>
+<pre class="code"># ① 允许生成 core（默认常为 0，即关闭）
+ulimit -c unlimited
+
+# ② （可选）看/改 core 保存路径与命名
+cat /proc/sys/kernel/core_pattern
+
+# ③ 跑程序，崩溃后得到 core 文件（如 core、core.12345）
+
+# ④ 用 GDB 加载"二进制 + core"
+gdb ./canopend core.12345
+(gdb) bt                # 直接看到崩溃时的完整调用栈
+(gdb) frame 1           # 切到出错的那层
+(gdb) info locals       # 看现场变量
+(gdb) p 变量</pre>
+<div class="warn"><b>匹配前提：</b>core 必须和"产生它的那个二进制"（同一 build、未改、符号一致）配对，否则栈是乱的。所以每次重新编译后旧的 core 就没用了。</div>
+
+<h3>2.6 gdbserver：嵌入式远程调试</h3>
+<p>目标板资源有限，不能在板上跑完整 GDB。做法：<b>板上跑 gdbserver，主机跑 GDB 连接</b>（第 9 站交叉部署会用到）。</p>
+<pre class="code"># 目标板（ARM）：
+gdbserver :2345 ./canopend can0 -i 1
+
+# 主机（x86，用交叉工具链自带的 arm-linux-gnueabihf-gdb）：
+arm-linux-gnueabihf-gdb ./canopend
+(gdb) target remote 192.168.1.100:2345     # 连到目标板
+(gdb) b app_programStart
+(gdb) c</pre>
+<div class="note"><b>要点：</b>主机和板上用的必须是<b>同一份可执行文件</b>（连调试信息一起）。GDB 在主机侧读符号，程序在板上跑——网络协议把断点、变量传过来。</div>
+
+<h2 class="pgbreak">§3 Valgrind —— 内存体检</h2>
+<p>原理：把程序加载进 Valgrind 的<b>虚拟 CPU</b> 执行（动态二进制插桩），于是每一次内存读写都被它记下来。因此<b>不需要重新编译</b>（但带 <code>-g</code> 才有文件名行号），代价是程序变慢 10~50 倍。</p>
+
+<h3>3.1 最基本的一条命令</h3>
+<pre class="code">valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes \
+         ./canopend can0 -i 1</pre>
+<table class="cols-2">
+  <tr><th>选项</th><th>作用</th></tr>
+  <tr><td><code>--leak-check=full</code></td><td>详细报告每个泄漏块，给出分配处的调用栈</td></tr>
+  <tr><td><code>--show-leak-kinds=all</code></td><td>连 <code>still reachable</code> 也列出（默认只列 definitely/possibly）</td></tr>
+  <tr><td><code>--track-origins=yes</code></td><td>追"未初始化值"从哪来——查 <code>Conditional jump depends on uninitialised value</code> 必开</td></tr>
+  <tr><td><code>--log-file=vg.log</code></td><td>报告写文件，方便长输出</td></tr>
+</table>
+
+<h3>3.2 报告怎么读</h3>
+<table class="cols-3">
+  <tr><th>分类</th><th>含义</th><th>要不要修</th></tr>
+  <tr><td><code>definitely lost</code></td><td>真丢了，指针没了、再也 free 不到</td><td><b>必修</b>（真泄漏）</td></tr>
+  <tr><td><code>indirectly lost</code></td><td>因为持有它的对象丢了而跟着丢</td><td>修好 definitely 后通常会一起消失</td></tr>
+  <tr><td><code>possibly lost</code></td><td>指针指向块内部（非开头）</td><td>多半要修，视情况</td></tr>
+  <tr><td><code>still reachable</code></td><td>程序结束时还持有指针（如全局缓存）</td><td>通常<b>可接受</b>，不算真泄漏</td></tr>
+</table>
+<pre class="code">==12345== HEAP SUMMARY:
+==12345==     in use at exit: 1,024 bytes in 2 blocks
+==12345==   total heap usage: 40 allocs, 38 frees, 12,288 bytes allocated
+==12345==
+==12345== 1,024 (512 direct, 512 indirect) bytes in 1 blocks are definitely lost
+==12345==    at 0x483B7F3: malloc (in vgpreload_memcheck...)
+==12345==    by 0x401234: app_programStart (CO_application.c:88)   ← 分配处
+==12345==    by 0x400ABC: main (CO_main_basic.c:120)               ← 调用链
+==12345==
+==12345== LEAK SUMMARY:
+==12345==    definitely lost: 512 bytes in 1 blocks
+==12345==    indirectly lost: 512 bytes in 1 blocks
+==12345==    still reachable: 0 bytes in 0 blocks</pre>
+<p>看 <b>分配处的调用栈</b>（<code>by ... 文件:行号</code>）就能直接定位到哪行 malloc 没配对 free。</p>
+
+<h3>3.3 本工程使用注意</h3>
+<div class="warn">
+<ul style="margin:0">
+  <li><b>让程序正常退出</b>：Valgrind 在 <code>exit</code> 时汇总。本工程有 <code>atexit</code> 冲洗日志、线程池要 join——如果直接被 Ctrl+C 杀掉或段错误，报表会不完整/误报"still reachable"。</li>
+  <li><b>慢</b>：RT 线程 1ms 周期在 Valgrind 下会严重超时（SYNC/心跳超时会刷屏）。测内存问题时建议用 <b>单线程模式</b> <code>-DCO_SINGLE_THREAD=1</code> 重编，或忽略实时性告警只看内存报告。</li>
+  <li><b>不是万能</b>：不检测栈上的静态数组越界、不检测部分竞态（那是 <code>--tool=helgrind</code> 的活）。</li>
+</ul>
+</div>
+<div class="good"><b>顺手一提：</b>同一套 Valgrind 还能换工具——<code>valgrind --tool=helgrind ./canopend ...</code> 查<b>数据竞争/锁误用</b>，<code>valgrind --tool=callgrind ./canopend ...</code> 做<b>性能剖析</b>（配合 <code>kcachegrind</code> 看图）。面试能顺带说出这两个，加分。</div>
+
+<h2>§4 strace —— 系统调用跟踪</h2>
+<p>原理：用 <code>ptrace</code> 挂住进程，每一进/出内核的<b>系统调用</b>都打印出来（名字、参数、返回值）。它是"程序与操作系统之间的抓包工具"。</p>
+
+<h3>4.1 常用参数</h3>
+<table class="cols-3">
+  <tr><th>参数</th><th>含义</th><th>场景</th></tr>
+  <tr><td><code>-f</code></td><td>跟踪所有子线程/进程</td><td><b>本工程必加</b>（多线程，不加只看主线程）</td></tr>
+  <tr><td><code>-tt</code> / <code>-t</code></td><td>每行加时间戳（微秒/秒）</td><td>看时序、算耗时</td></tr>
+  <tr><td><code>-T</code></td><td>每行末尾加该系统调用耗时</td><td>找"慢在哪一步"</td></tr>
+  <tr><td><code>-e trace=网络</code></td><td>只跟某类调用，如 <code>network</code>、<code>file</code>、<code>openat</code></td><td>降噪，聚焦</td></tr>
+  <tr><td><code>-o file</code></td><td>输出到文件</td><td>输出太多时</td></tr>
+  <tr><td><code>-s 256</code></td><td>字符串最多打印 256 字符（默认 32）</td><td>看完整路径/内容</td></tr>
+  <tr><td><code>-p PID</code></td><td>附加到运行中的进程</td><td>问题进程已在跑</td></tr>
+  <tr><td><code>-c</code></td><td>结束时汇总各调用次数/耗时统计</td><td>概览</td></tr>
+</table>
+
+<h3>4.2 本工程实战：为什么打不开 CAN 设备 / 卡在哪</h3>
+<p>本工程用 socketCAN：<code>socket(PF_CAN, SOCK_RAW, CAN_RAW)</code> → <code>ioctl(SIOCGIFINDEX)</code> 拿接口索引 → <code>bind</code> 到 can0 → <code>epoll</code> 等收发。用 strace 一眼看清每一步的结果：</p>
+<pre class="code">$ strace -f -tt -e trace=network,ioctl,openat ./canopend can0 -i 1
+...
+socket(PF_CAN, SOCK_RAW, CAN_RAW)          = 3
+ioctl(3, SIOCGIFINDEX, {ifr_name="can0", ifr_index=0}) = 0   ← 若返回 -1 ENODEV，说明 can0 不存在
+bind(3, {sa_family=AF_CAN, ...}, 16)       = 0               ← 若返回 -1，看 errno（权限/接口状态）
+epoll_wait(4, ...)                          = ...            ← 卡在这 = 没收到 CAN 帧</pre>
+<div class="note"><b>关键读法：</b>每行末尾的<b>返回值</b>才是结论。<code>= -1 ENODEV</code>（设备不存在）、<code>= -1 EACCES</code>（权限不足）、<code>= -1 EBUSY</code>（被占用）—— 这些 errno 是 GDB 里看不到的、最直接的失败原因。本工程若报"Can't find CAN device"，strace 会把 <code>ioctl(SIOCGIFINDEX)</code> 的失败和 errno 直接摊开。</div>
+
+<h3>4.3 一个更常见的用法：看它到底卡在哪</h3>
+<pre class="code">$ strace -f -tt -T -p $(pgrep canopend)     # 附加到正在跑的进程
+# 输出停在最后一行不动的那个系统调用，就是它正在等的东西：
+#   卡在 epoll_wait      → 正常，在等事件
+#   卡在 read/recv       → 在等数据
+#   卡在 futex           → 在等锁/条件变量（结合 GDB 的 thread apply all bt 看谁持有锁）</pre>
+
+<h3>4.4 也常用于查"文件/配置读没读到"</h3>
+<pre class="code">$ strace -e trace=openat,read -f ./canopend can0 -i 1
+openat(AT_FDCWD, "/etc/...配置", O_RDONLY) = 3      # 成功打开
+openat(AT_FDCWD, "/要用的文件", O_RDONLY) = -1 ENOENT   # 路径/文件不存在 → 一眼看出</pre>
+
+<h2 class="pgbreak">§5 三件套怎么配合：按现象选工具</h2>
+<pre class="code flow">        现象
+         │
+ ┌───────┴───────────────────────────────────────────┐
+ │                                                    │
+ ▼ 崩溃 / 逻辑不对                          ▼ 内存涨 / 行为诡异
+ GDB                                       Valgrind
+ - core dump 验尸：bt → frame → info locals  - --leak-check=full 看分配栈
+ - 断点 + watch 变量                        - --track-origins=yes 查未初始化
+ - 多线程：thread apply all bt              - helgrind 查锁竞争
+ │                                                    │
+ └───────────────────────┬────────────────────────────┘
+                         ▼ 还查不出来 / 程序没输出 / 卡住
+                       strace
+                       - -f -tt -T 看系统调用与耗时
+                       - 返回值里的 errno 是终极线索
+                       - 卡在哪个调用＝它在等什么
+                         │
+                         ▼
+              交叉验证：strace 定位到"卡在 futex" →
+              回 GDB `thread apply all bt` 看谁持有锁 → 定位死锁</pre>
+<div class="good"><b>串起来的一个真实套路：</b>程序启动后没日志、像是卡住 → ① <code>strace -f -p PID</code> 发现卡在 <code>futex</code>（等锁）；② <code>gdb -p PID</code> 里 <code>thread apply all bt</code>，看到工作线程在 <code>pthread_cond_wait</code>、RT 线程在 <code>pthread_mutex_lock</code>；③ 检查锁的持有者——定位到"某条路径忘了 unlock"。<b>这就是"系统调用层 + 源码层"两级观察的价值。</b></div>
+
+<h2>§6 速查卡（打印贴墙）</h2>
+<table class="cols-2">
+  <tr><th>我想干嘛</th><th>命令</th></tr>
+  <tr><td>带参数调试</td><td><code>gdb --args ./canopend can0 -i 1</code></td></tr>
+  <tr><td>看崩溃调用栈</td><td>GDB 里 <code>bt</code></td></tr>
+  <tr><td>看所有线程栈（死锁）</td><td>GDB 里 <code>thread apply all bt</code></td></tr>
+  <tr><td>追踪某个变量被谁改</td><td>GDB 里 <code>watch 变量</code></td></tr>
+  <tr><td>事后验尸</td><td><code>ulimit -c unlimited</code> → <code>gdb ./canopend core</code></td></tr>
+  <tr><td>远程调试目标板</td><td><code>gdbserver :2345 ./canopend</code> + 主机 <code>target remote IP:2345</code></td></tr>
+  <tr><td>查内存泄漏</td><td><code>valgrind --leak-check=full --show-leak-kinds=all ./canopend ...</code></td></tr>
+  <tr><td>查未初始化值来源</td><td>加 <code>--track-origins=yes</code></td></tr>
+  <tr><td>查数据竞争</td><td><code>valgrind --tool=helgrind ./canopend ...</code></td></tr>
+  <tr><td>看系统调用（全线程+时间）</td><td><code>strace -f -tt -T ./canopend can0 -i 1</code></td></tr>
+  <tr><td>程序卡在哪</td><td><code>strace -f -p PID</code>，看最后停住的调用</td></tr>
+  <tr><td>只看网络相关</td><td><code>strace -f -e trace=network ...</code></td></tr>
+  <tr><td>统计各调用耗时</td><td><code>strace -c ...</code></td></tr>
+</table>
+
+<h2>§7 自测题</h2>
+<ol>
+  <li>程序崩了、现场没接 GDB，怎么还原崩溃调用栈？（core dump + gdb）</li>
+  <li>多线程程序怀疑死锁，GDB 里用什么命令一次看清谁在等谁？</li>
+  <li><code>bt</code> 和 <code>frame 1</code> 配合能干什么？</li>
+  <li>Valgrind 报告 <code>still reachable</code> 一定是 bug 吗？和 <code>definitely lost</code> 有什么区别？</li>
+  <li>为什么用 Valgrind 跑本工程要加 <code>-f</code>？为什么建议单线程模式？</li>
+  <li>strace 与 GDB 都能"看程序"，区别在哪？（系统调用边界 vs 源码/变量）</li>
+  <li>本工程报"打不开 CAN 设备"，strace 里最该看哪几行的返回值？</li>
+</ol>
+
+<div class="footnote">
+本册为「工具链补课」第 2 册（调试三件套）。配套第 1 册：<b>构建系统（Makefile 精讲 + CMake 入门）</b>。
+调试前提来自本工程 [Makefile L55](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L55) 的 <code>-g -ggdb</code>，链接在 [L67-L70](file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L67-L70) 的 <code>-pthread -lm</code>。
+示例输出中的 PID/地址/字节数为<b>示意</b>，字段真实、数值以运行环境为准。
+环境实测：Ubuntu 20.04.6 LTS / gcc 9.4.0 / 内核 5.15.0。
+</div>
+
+</body>
+</html>

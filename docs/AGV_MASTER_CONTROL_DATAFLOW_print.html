@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>AGV 主控数据流大图 · cmd_vel → 逆解 → 使能/下发 → 里程计回读（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:18%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:20%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:24%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #a9c0e0; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#1b3d75; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.figure { border:0.6pt solid #bbb; background:#fff; padding:2mm; margin:2mm 0 3mm; page-break-inside:avoid; }
+.figure svg { width:100%; height:auto; display:block; }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>AGV 主控数据流大图：cmd_vel → 逆解 → 使能/下发 → 里程计回读</h1>
+
+<div class="meta">
+<p><strong>这份文档解决什么</strong>：代码已经全在仓库里（S7 里程计 / S10 下行 CiA402 / S11 逆运动学），缺的不是功能，而是<strong>「能画一张图、能脱稿讲」</strong>。本册把整条<strong>主控数据流</strong>压成一张大图 + 一份函数级走读表，用于面试白板/口述。</p>
+<p><strong>一句话讲完这个项目</strong>：本工程是一个 CANopen <strong>主控</strong>——上位机给一条 <code>cmd_vel(v,ω)</code>，我用差速逆解把它变成左右轮目标转速下发到驱动器（并保证「没使能不动、失联停车、掉线停车」），再从驱动器回读的实际位置用里程计正解积出车体位姿，回传给上位机画轨迹。</p>
+<p><strong>素材来源</strong>：本册是 <code>docs/AGV_CANOPEN_LEARNING_MAP_S7_ODOMETRY_print.html</code> / <code>..._S10_DOWNLINK_CIA402_print.html</code> / <code>..._S11_INVERSE_KINEMATICS_print.html</code> 的<strong>汇总视图</strong>；细节回到那三册。</p>
+<p><strong>行号基线</strong>：2026-10-09 工作区（<code>CO_application.c</code> 609 行；逆解/正解已抽到 <code>agv_kinematics.c/h</code>）。若之后改动代码，请以源码为准。</p>
+</div>
+
+<h2>§1 一页大图（先看图，再看字）</h2>
+
+<p>图的读法：<strong>横向 = 数据在谁手里；箭头 = 谁把数据交给谁</strong>。上面两行是「下行（说）」，第三行是「上行（听）」，第四行是「使能环」。节点编号 ①~⑱ 在下文走读表里一一对应。红色框 = 容错点。</p>
+
+<div class="figure">
+<svg viewBox="0 0 1120 640" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+
+  <!-- 前置说明 -->
+  <text x="76" y="20" font-size="13" fill="#a11">前置：app_programAsync(:413) 先 NMT Start node10/11，把两个从站切到 OPERATIONAL —— 之后 PDO 才会被收发</text>
+
+  <!-- ===== 行标签 ===== -->
+  <text x="10" y="78" font-size="14" font-weight="700" fill="#333" transform="rotate(-90 24 78)">下行说</text>
+  <text x="10" y="188" font-size="14" font-weight="700" fill="#333" transform="rotate(-90 24 188)">下行说</text>
+  <text x="10" y="288" font-size="14" font-weight="700" fill="#333" transform="rotate(-90 24 288)">上行听</text>
+  <text x="10" y="408" font-size="14" font-weight="700" fill="#333" transform="rotate(-90 24 408)">使能环</text>
+
+  <!-- ===== 第 1 行：下行输入侧 ===== -->
+  <g>
+    <rect x="76"  y="34" width="180" height="72" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="166" y="64" font-size="14" font-weight="700" text-anchor="middle">① Qt 上位机</text>
+    <text x="166" y="84" font-size="11" text-anchor="middle" fill="#333">发 cmd_vel (v, ω)</text>
+
+    <rect x="278" y="34" width="180" height="72" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="368" y="64" font-size="14" font-weight="700" text-anchor="middle">② CiA-309 网关</text>
+    <text x="368" y="84" font-size="11" text-anchor="middle" fill="#333">tcp-60000 · SDO 写</text>
+
+    <rect x="480" y="34" width="180" height="72" rx="6" fill="#fdf7e3" stroke="#b8860b"/>
+    <text x="570" y="64" font-size="14" font-weight="700" text-anchor="middle">③ OD 0x7000</text>
+    <text x="570" y="84" font-size="11" text-anchor="middle" fill="#333">cmd_vel · OD.c:286</text>
+
+    <rect x="682" y="34" width="180" height="72" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="772" y="64" font-size="14" font-weight="700" text-anchor="middle">④ H7000_write</text>
+    <text x="772" y="84" font-size="11" text-anchor="middle" fill="#333">打 deadman 时间戳 :211</text>
+
+    <rect x="884" y="34" width="180" height="72" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="974" y="64" font-size="14" font-weight="700" text-anchor="middle">⑤ RT 拍取快照</text>
+    <text x="974" y="84" font-size="11" text-anchor="middle" fill="#333">读 v, ω, age · :501</text>
+  </g>
+  <line x1="256" y1="70" x2="274" y2="70" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="458" y1="70" x2="476" y2="70" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="660" y1="70" x2="678" y2="70" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="862" y1="70" x2="880" y2="70" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <polyline points="974,106 974,124 166,124 166,138" fill="none" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- ===== 第 2 行：下行输出侧 ===== -->
+  <g>
+    <rect x="76"  y="144" width="180" height="72" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="166" y="174" font-size="14" font-weight="700" text-anchor="middle">⑥ 逆运动学</text>
+    <text x="166" y="194" font-size="11" text-anchor="middle" fill="#333">agv_kinematics.c:37</text>
+
+    <rect x="278" y="144" width="180" height="72" rx="6" fill="#fdf5f5" stroke="#b33"/>
+    <text x="368" y="174" font-size="14" font-weight="700" text-anchor="middle">⑦ 安全门限 ★</text>
+    <text x="368" y="194" font-size="11" text-anchor="middle" fill="#666">三条件 → 清零 · :530</text>
+
+    <rect x="480" y="144" width="180" height="72" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="570" y="174" font-size="14" font-weight="700" text-anchor="middle">⑧ 写 0x60FF</text>
+    <text x="570" y="194" font-size="11" text-anchor="middle" fill="#333">counts/s · :537</text>
+
+    <rect x="682" y="144" width="180" height="72" rx="6" fill="#fdf7e3" stroke="#b8860b"/>
+    <text x="772" y="174" font-size="14" font-weight="700" text-anchor="middle">⑨ TPDO 0x50A/0x50B</text>
+    <text x="772" y="194" font-size="11" text-anchor="middle" fill="#333">:338 / :363</text>
+
+    <rect x="884" y="144" width="180" height="72" rx="6" fill="#f0f0f0" stroke="#333"/>
+    <text x="974" y="174" font-size="14" font-weight="700" text-anchor="middle">⑩ 驱动器 node10/11</text>
+    <text x="974" y="194" font-size="11" text-anchor="middle" fill="#333">→ 电机（右 / 左）</text>
+  </g>
+  <line x1="256" y1="180" x2="274" y2="180" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="458" y1="180" x2="476" y2="180" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="660" y1="180" x2="678" y2="180" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="862" y1="180" x2="880" y2="180" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="974" y1="216" x2="974" y2="242" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- ===== 第 3 行：上行 ===== -->
+  <g>
+    <rect x="76"  y="246" width="150" height="68" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="151" y="276" font-size="14" font-weight="700" text-anchor="middle">⑪ Qt 画轨迹</text>
+    <text x="151" y="296" font-size="11" text-anchor="middle" fill="#333">TrajectoryView</text>
+
+    <rect x="240" y="246" width="150" height="68" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="315" y="276" font-size="14" font-weight="700" text-anchor="middle">⑫ 网关读</text>
+    <text x="315" y="296" font-size="11" text-anchor="middle" fill="#333">SDO 读 0x6FFF</text>
+
+    <rect x="404" y="246" width="150" height="68" rx="6" fill="#fdf7e3" stroke="#b8860b"/>
+    <text x="479" y="276" font-size="14" font-weight="700" text-anchor="middle">⑬ OD 0x6FFF</text>
+    <text x="479" y="296" font-size="11" text-anchor="middle" fill="#333">x,y,θ · OD.c:284</text>
+
+    <rect x="568" y="246" width="150" height="68" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="643" y="276" font-size="14" font-weight="700" text-anchor="middle">⑭ agv_odom_step</text>
+    <text x="643" y="296" font-size="11" text-anchor="middle" fill="#333">agv_kinematics.c:10</text>
+
+    <rect x="732" y="246" width="150" height="68" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="807" y="276" font-size="14" font-weight="700" text-anchor="middle">⑮ H6064_write</text>
+    <text x="807" y="296" font-size="11" text-anchor="middle" fill="#333">存计数 · :69</text>
+
+    <rect x="896" y="246" width="150" height="68" rx="6" fill="#f0f0f0" stroke="#333"/>
+    <text x="971" y="276" font-size="14" font-weight="700" text-anchor="middle">⑯ RPDO 0x38A/B</text>
+    <text x="971" y="296" font-size="11" text-anchor="middle" fill="#333">0x6041+0x6064</text>
+  </g>
+  <line x1="896" y1="280" x2="884" y2="280" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="732" y1="280" x2="720" y2="280" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="568" y1="280" x2="556" y2="280" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="404" y1="280" x2="392" y2="280" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="240" y1="280" x2="228" y2="280" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- ===== 第 4 行：使能环 ===== -->
+  <g>
+    <rect x="150" y="366" width="380" height="68" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="340" y="396" font-size="13.5" font-weight="700" text-anchor="middle">⑰ 收 0x6041 状态字 → dl_swR/L</text>
+    <text x="340" y="416" font-size="11" text-anchor="middle" fill="#333">H6041_write · :129</text>
+
+    <rect x="610" y="366" width="380" height="68" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="800" y="396" font-size="13.5" font-weight="700" text-anchor="middle">⑱ cia402_step → 0x6040 → TPDO</text>
+    <text x="800" y="416" font-size="11" text-anchor="middle" fill="#333">:181 / :482-494</text>
+  </g>
+  <line x1="530" y1="400" x2="604" y2="400" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+  <polyline points="971,314 971,340 340,340 340,362" fill="none" stroke="#2563eb" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#ad)"/>
+  <text x="700" y="336" font-size="11" fill="#2563eb">RPDO 与上行同一条</text>
+  <polyline points="990,400 1090,400 1090,180 866,180" fill="none" stroke="#333" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- ===== 容错点说明带 ===== -->
+  <text x="76" y="464" font-size="12.5" font-weight="700" fill="#a11">两个容错点：都在 RT 拍里，且都只做「清零降级」</text>
+  <text x="76" y="480" font-size="12.5" fill="#a11">不阻塞、不自己报错码 —— EMCY 由库自动上报</text>
+  <rect x="76" y="490" width="430" height="132" rx="6" fill="#fdf5f5" stroke="#b33"/>
+  <text x="90" y="512" font-size="13" font-weight="700" fill="#a11">容错点① 安全门限（图 ⑦）</text>
+  <text x="90" y="531" font-size="10.5">3 个条件任一成立 → 两轮目标转速强制 0：</text>
+  <text x="90" y="550" font-size="10.5">· 未使能：(0x6041 &amp; 0x6F) ≠ 0x27</text>
+  <text x="90" y="569" font-size="10.5">· 失联停车：&gt; 500 拍(≈500 ms) 无新 cmd_vel</text>
+  <text x="90" y="588" font-size="10.5">· 心跳丢：getState() == TIMEOUT</text>
+
+  <rect x="536" y="490" width="430" height="132" rx="6" fill="#fdf5f5" stroke="#b33"/>
+  <text x="550" y="512" font-size="13" font-weight="700" fill="#a11">容错点② 心跳容错（图 ⑦ 第 3 个条件）</text>
+  <text x="550" y="531" font-size="10.5">· 0x1016 配 2 槽：node10(右) / node11(左)</text>
+  <text x="550" y="550" font-size="10.5">· 超时 1000 ms（OD.c:31-35）</text>
+  <text x="550" y="569" font-size="10.5">· 超时 → 库自动 EMCY 0x8130；恢复 → 自动回 ACTIVE</text>
+  <text x="550" y="588" font-size="10.5">· 应用侧只做降级 + 跃迁日志（:519-528）</text>
+</svg>
+</div>
+
+<p class="note"><strong>一眼看懂的三句话</strong>：① 下行是「一条数值走到底」——<code>(v,ω)</code> 只在 ⑥ 被换算一次，之后一路是 <code>counts/s</code>；② 上行是「一条计数走到底」——<code>0x6064</code> 原始计数只在 ⑭ 被积分一次，之后一路是 <code>x,y,θ</code>；③ ⑦ 和 ⑰⑱ 是「控制」，它们让「说」和「听」闭环。</p>
+
+<h2 class="pgbreak">§2 下行链路：一条数值走到底（①→⑩）</h2>
+
+<pre>
+【下行：说】
+上位机 ──SDO 写 0x7000──► H7000_write(打时间戳) ──► RT 拍取快照(:501)
+                                                          │
+                       ┌──────────────────────────────────┘
+                       ▼
+        agv_inverse_kinematics(v,ω) ──► 安全门限(⑦) ──► 写 0x60FF ──► TPDO 0x50A/B ──► 驱动器
+             vR = v + ω·b/2                              counts/s        0x6040+0x60FF
+             vL = v − ω·b/2
+</pre>
+
+<table class="cols-4">
+<caption>表 2-1 下行链路逐节点对照（★=核心必会）</caption>
+<thead><tr><th>节点·对象</th><th>代码位置</th><th>被谁调用 / 触发</th><th>做了什么 · 关键变量</th></tr></thead>
+<tbody>
+<tr>
+  <td>③ <code>0x7000</code> cmd_vel</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L286-L287">OD.c:286-287</a><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L1971-L1979">OD.c:1971-1979</a></td>
+  <td>上位机经 CiA-309 网关发 SDO 写（<code>0x600+node</code>）到达本节点 SDO 服务端</td>
+  <td>数组对象 <code>float32×2</code>：子 1=<code>v</code>(m/s)、子 2=<code>ω</code>(rad/s)，属性 <code>ODA_SDO_RW</code>（可写）。追加在 <code>ODList</code> 末尾 <a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L2146-L2148">OD.c:2146-2148</a>，保持二分查找所需升序。</td>
+</tr>
+<tr>
+  <td>④ <code>H7000_write</code></td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L211-L217">CO_application.c:211-217</a></td>
+  <td>SDO 服务端写完数据后回调（扩展写钩子，<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L384-L384">:384</a> 挂载）</td>
+  <td>先 <code>OD_writeOriginal</code> 落值，再把 <code>cmd_rx_tick = rt_tick_now</code>。<strong>关键</strong>：deadman 靠「写动作」打时间戳，不能靠「值是否变化」——主机持续发同一恒速时数值不变。</td>
+</tr>
+<tr>
+  <td>⑤ RT 拍取快照</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L499-L506">CO_application.c:499-506</a></td>
+  <td><code>app_programRt()</code>，由 <code>rt_thread</code> 每 1 ms 真节拍调用 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L959-L985">CO_main_basic.c:979</a></td>
+  <td><code>CO_LOCK_OD</code> 下一次性读出 <code>cmd_v/cmd_w</code> 与 <code>cmd_age = rt_tick_now - cmd_rx_tick</code>，避免锁内多次访问。写侧在 RT 线程、读侧在 main 线程，跨线程必须锁。</td>
+</tr>
+<tr>
+  <td>⑥ <code>agv_inverse_kinematics</code> ★</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_kinematics.c#L37-L51">agv_kinematics.c:37-51</a><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_kinematics.h#L50-L51">agv_kinematics.h:50-51</a></td>
+  <td><code>app_programRt</code> <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L508-L510">:510</a></td>
+  <td><strong>纯函数</strong>：<code>vR_ms=v+ω·b/2</code>、<code>vL_ms=v−ω·b/2</code>，再 <code>×ODOM_DIR_* / ODOM_K_PER_COUNT</code> → <code>counts/s</code>。标定常数 <code>b=0.300 m</code>、<code>k=2πr/N</code> 见 <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_kinematics.h#L19-L26">agv_kinematics.h:19-26</a>。</td>
+</tr>
+<tr>
+  <td>⑦ 安全门限 ★</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L512-L534">CO_application.c:512-534</a></td>
+  <td><code>app_programRt</code> 内部</td>
+  <td>三个条件 <code>||</code> 合并：两轮 <code>(0x6041 &amp; 0x6F)!=0x27</code>（未使能）<code>|| cmd_timeout || hb_lost</code> → <code>vR_cnt=vL_cnt=0</code>。目标速度先算后过滤，<strong>门限是最后一道</strong>。</td>
+</tr>
+<tr>
+  <td>⑧ 写 <code>0x60FF</code> + 触发 TPDO</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L536-L546">CO_application.c:536-546</a></td>
+  <td><code>app_programRt</code> 内部</td>
+  <td>仅当值变化时 <code>OD_RAM.x60FF_targetVelocity = vR_cnt</code> 并 <code>OD_requestTPDO(OD_getFlagsPDO(...), 0)</code>。<code>0x60FF</code> 挂扩展的目的是<strong>启用 <code>flagsPDO</code></strong>（否则 <code>OD_requestTPDO</code> 无效）<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L225-L237">:225-237</a>。</td>
+</tr>
+<tr>
+  <td>⑨ TPDO <code>0x50A</code>/<code>0x50B</code></td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L336-L342">:336-342</a>（右）<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L344-L367">:344-367</a>（左）</td>
+  <td><code>CO_TPDO_init</code>（在 <code>app_programStart</code> 之后）</td>
+  <td>右轮映射 <code>0x1A00 = 0x60400010 + 0x60FF0020</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L151-L155">OD.c:151-155</a>，已就绪）；左轮 <code>OD_2nd</code> 默认空映射，<strong>运行时补齐</strong> <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L348-L362">:348-362</a>。COB-ID <code>0xC000050A</code> 清 bit31 → <code>0x50A</code>。</td>
+</tr>
+<tr>
+  <td>⑩ 驱动器 node10/11</td>
+  <td>—（外部设备）</td>
+  <td>TPDO 帧到达从站</td>
+  <td>本节点作 <strong>NMT 主站</strong>，节点号 <code>DL_NODE_R=10</code>/<code>DL_NODE_L=11</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L112-L116">:112-116</a>）。真机为森创一体机（出厂 250K/站址 1，需按 §S9/§十三 改）。</td>
+</tr>
+</tbody>
+</table>
+
+<div class="warn"><strong>下行两个易错点</strong>：① 左轮 <code>OD_2nd</code> 的 <code>0x1A00</code> <strong>默认为空映射</strong>，不在运行时补齐就永远发不出左轮 TPDO；② <code>0x6040</code>/<code>0x60FF</code> <strong>必须挂扩展</strong>才能启用 <code>flagsPDO</code>，否则改了值也不触发发送（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L159-L172">:159-172</a>）。</div>
+
+<h2 class="pgbreak">§3 上行链路：一条计数走到底（⑯→⑪）</h2>
+
+<pre>
+【上行：听】
+驱动器 ──RPDO 0x38A/B──► 解析(0x6041+0x6064) ──► H6064_write 只存计数、置 odom_new
+                                                          │
+                                            （同一 RPDO 里 0x6041 → H6041_write 供使能环用）
+                                                          ▼
+                  agv_odom_step(纯函数·中点法) ──► 0x6FFF(x,y,θ) ──► 网关 SDO 读 ──► Qt 画轨迹
+                   d = (dR+dL)/2 ；dθ = (dR−dL)/b
+                   x += d·cos θmid ; y += d·sin θmid ; θ += dθ
+</pre>
+
+<table class="cols-4">
+<caption>表 3-1 上行链路逐节点对照</caption>
+<thead><tr><th>节点·对象</th><th>代码位置</th><th>被谁调用 / 触发</th><th>做了什么 · 关键变量</th></tr></thead>
+<tbody>
+<tr>
+  <td>⑯ RPDO <code>0x38A</code>/<code>0x38B</code> 到达</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L266-L295">:266-295</a>（右）<br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L301-L329">:301-329</a>（左）</td>
+  <td><code>CO_RPDO_init</code></td>
+  <td>两路 RPDO 各映射 <code>0x60410010</code>（状态字，16bit）+ <code>0x60640020</code>（实际位置，32bit）。<code>stream-&gt;object</code> 里存的是发送方 COB-ID（<code>0x038A</code>/<code>0x038B</code>），钩子靠它分辨左右。</td>
+</tr>
+<tr>
+  <td>⑮ <code>H6064_write</code></td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L69-L86">CO_application.c:69-86</a></td>
+  <td>OD 扩展写钩子（<code>0x6064</code> 到达即回调）</td>
+  <td>只做两件事：按 COB-ID 落到 <code>odom_posR_raw</code>/<code>odom_posL_raw</code>，并 <code>odom_new=true</code>。<strong>只存值、不积分</strong>——积分留给真节拍，避免 1 ms 内多帧重复积分。</td>
+</tr>
+<tr>
+  <td>⑭ <code>agv_odom_step</code> ★</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_kinematics.c#L10-L35">agv_kinematics.c:10-35</a></td>
+  <td><code>app_programRt</code> <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L568-L570">:569</a></td>
+  <td><strong>纯函数</strong>：计数差用 <code>uint32</code> 相减处理 32 位回绕；<code>d=(dR+dL)/2</code>、<code>dθ=(dR−dL)/b</code>；中点法 <code>θmid=θ+dθ/2</code> 后 <code>x+=d·cosθmid</code>、<code>y+=d·sinθmid</code>、<code>θ+=dθ</code>。首拍只记起点不积分（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L560-L566">:560-566</a>）。</td>
+</tr>
+<tr>
+  <td>⑬ <code>0x6FFF</code> 位姿</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L284-L285">OD.c:284-285</a><br><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L577-L581">:577-581</a></td>
+  <td><code>app_programRt</code> 写；网关（main 线程）读</td>
+  <td>自定义数组 <code>float32×3</code>（x/y/θ），属性 <code>ODA_SDO_R | ODA_MB</code>。跨线程写必须 <code>CO_LOCK_OD</code>。<strong>写侧在 RT 线程、读侧在 main 线程</strong> 是这里唯一的并发点。</td>
+</tr>
+<tr>
+  <td>⑫ 网关读 → ⑪ Qt 画轨迹</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.h">hmi/commworker.h</a></td>
+  <td>Qt <code>CommWorker</code>（<code>QThread</code>）周期性轮询</td>
+  <td>经 CiA-309 网关（<code>tcp-60000</code>）SDO 读 <code>0x6FFF</code> 子 1/2/3，在 <code>TrajectoryView</code> 上画轨迹；<strong>下行亦已接</strong>：以 150ms 周期 SDO 写 <code>0x7000</code> cmd_vel（滑条 + 停车发零，见 <code>AGV_QT_CMDVEl_DOWNLINK_print.html</code>）。</td>
+</tr>
+</tbody>
+</table>
+
+<div class="note"><strong>为什么「存」与「算」分两处</strong>：收帧钩子跑在 CAN 接收路径上（可能一次处理多帧、也可能被门铃提前唤醒），而积分必须<strong>每 1 ms 恰好一次</strong>。所以钩子只置旗（<code>odom_new</code>），RT 真节拍见到旗才积分一次（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L548-L558">:548-558</a>）。两者同处 RT 线程、同圈先后执行，故共享变量无需加锁。</div>
+
+<h2 class="pgbreak">§4 使能环：让电机「愿意动」（⑯→⑰→⑱→⑨）</h2>
+
+<p>⑦ 的第一个条件「未使能不动」要能成立，前提是<strong>真的有使能推进</strong>。这条支链与上行共用同一个 RPDO（状态字 <code>0x6041</code> 和位置 <code>0x6064</code> 在同一帧里）。</p>
+
+<pre>
+【使能环】
+RPDO 帧里的 0x6041 ──► H6041_write 存 dl_swR/L ──► cia402_step 推控制字
+                                                          │
+                     写 0x6040 + OD_requestTPDO ◄─────────┘
+                              │
+                              ▼
+                    汇入同一 TPDO 0x50A/0x50B（与 0x60FF 同帧下发）
+</pre>
+
+<table class="cols-4">
+<caption>表 4-1 使能环逐节点对照</caption>
+<thead><tr><th>节点·对象</th><th>代码位置</th><th>被谁调用 / 触发</th><th>做了什么 · 关键变量</th></tr></thead>
+<tbody>
+<tr>
+  <td>⑰ 收 <code>0x6041</code> 状态字</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L129-L145">CO_application.c:129-145</a></td>
+  <td>OD 扩展写钩子</td>
+  <td>把状态字按 COB-ID 存进 <code>dl_swR</code>/<code>dl_swL</code>。<strong>必须靠钩子</strong>：<code>0x6041</code> 在两本 OD 里 <code>dataOrig=NULL</code>（值被丢弃），不接就永远拿不到反馈（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L147-L157">:147-157</a>）。</td>
+</tr>
+<tr>
+  <td>⑱ <code>cia402_step</code> ★</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L174-L189">CO_application.c:181-189</a></td>
+  <td><code>app_programRt</code> <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L482-L494">:482-494</a></td>
+  <td><strong>纯函数</strong>（状态字 → 下一步控制字）：<code>0x40→0x06</code>、<code>0x21→0x07</code>、<code>0x23→0x0F</code>、<code>0x27→0x0F</code> 保持、<code>0x08→0x80</code> 故障复位、其它 <code>→0x06</code> 安全态。仅当控制字变化才写 OD 并触发 TPDO。</td>
+</tr>
+<tr>
+  <td>前置：NMT 主站 Start</td>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L412-L426">CO_application.c:413-426</a></td>
+  <td>主循环 <code>app_programAsync</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L881-L881">CO_main_basic.c:881</a>）</td>
+  <td>静态标志保证只发一次：<code>CO_NMT_sendCommand(co-&gt;NMT, CO_NMT_ENTER_OPERATIONAL, 10/11)</code>。从站只有进 OPERATIONAL 才会处理/回送 PDO。</td>
+</tr>
+</tbody>
+</table>
+
+<h2>§5 两个容错点（面试最想问的两句）</h2>
+
+<h3>5.1 容错点①：安全门限（三合一清零）</h3>
+<p>代码 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L530-L534">CO_application.c:530-534</a>。三个条件<strong>任一</strong>成立就把两轮目标转速清零：</p>
+<table class="cols-3">
+<caption>表 5-1 三个门限条件</caption>
+<thead><tr><th>条件</th><th>判据</th><th>为什么需要</th></tr></thead>
+<tbody>
+<tr><td>未使能不动</td><td><code>(dl_swR &amp; 0x6F)!=0x27 || (dl_swL &amp; 0x6F)!=0x27</code></td><td>驱动器没在 <code>Operation enabled</code> 就发速度，指令无意义甚至危险；<strong>两轮都要判</strong>，一轮没使能就整体不动。</td></tr>
+<tr><td>失联停车<br>(deadman)</td><td><code>cmd_age &gt; CMD_TIMEOUT_TICKS(500)</code>，≈500 ms</td><td>上位机崩了/网断了，不能带着上次的速度一直跑。<strong>由写动作打时间戳</strong>，不能由「值变化」判断。</td></tr>
+<tr><td>掉线停车</td><td><code>CO_HBconsumer_getState(idx0/idx1) == TIMEOUT</code></td><td>从站掉线后位置/状态都不再更新，里程计会漂、轮速也没人执行。</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 容错点②：心跳容错（HBconsumer 落地）</h3>
+<ul>
+<li><strong>配置</strong>：<code>0x1016</code> 8 槽中用 2 槽——<code>sub0=0x08</code>、<code>sub1=0x000A03E8</code>(node10 右，超时 1000 ms)、<code>sub2=0x000B03E8</code>(node11 左)，其余 <code>0</code> 禁用。见 <a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L31-L35">OD.c:31-35</a>。</li>
+<li><strong>读状态</strong>：RT 拍 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L515-L528">:519-528</a> 用 <code>CO_HBconsumer_getState()</code>，<strong>idx 是 0 基数组下标</strong>（槽 1→idx0、槽 2→idx1）。</li>
+<li><strong>谁报 EMCY</strong>：<strong>库自动上报</strong> <code>0x8130</code>(<code>CO_EMC_HEARTBEAT</code>)，应用层<strong>不用手写</strong>；恢复时库自动 <code>CO_errorReset</code>。应用层只做「运动降级 + 跃迁打一行日志」。</li>
+<li><strong>一个必知边界</strong>：<code>CO_HBconsumer_process()</code> 只在 <code>ACTIVE</code> 时判超时，而 <code>ACTIVE</code> 只在<strong>收到过至少一次心跳</strong>后才置位 → <strong>从未上线的从站（UNKNOWN）不会报超时</strong>。本工程用 <code>dl_sw</code> 门限互补覆盖「上电即没响应」。</li>
+</ul>
+
+<div class="warn"><strong>编译陷阱</strong>：不要在任何地方再加 <code>-DCO_CONFIG_HB_CONS=0</code>。它会<strong>整体覆盖</strong> <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_driver_target.h#L74-L81">CO_driver_target.h:74-81</a> 的 <code>#ifndef</code>，从而静默禁用 HBconsumer，心跳监控整条失效（<code>QUERY_FUNCT</code> 也一样被吞掉）。</div>
+
+<h2 class="pgbreak">§6 关键设计问答（面试官会追问的 4 个「为什么」）</h2>
+
+<table class="cols-2">
+<caption>表 6-1 设计决策与理由</caption>
+<thead><tr><th>问题</th><th>回答（一句话 + 证据）</th></tr></thead>
+<tbody>
+<tr><td>为什么下行用 <strong>TPDO</strong> 而不是 RPDO？</td><td>视角问题：<strong>PDO 的方向是按本节点定义的</strong>。本节点是「主控」，把 <code>0x6040/0x60FF</code> <strong>发出去</strong>，对自身而言就是 TPDO（<code>0x1800</code> 的 COB-ID 配成 <code>0x50A/0x50B</code>）。收上来的 <code>0x6041/0x6064</code> 才是 RPDO（<code>0x1400</code>→<code>0x38A</code>）。见 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L331-L367">:331-367</a>。</td></tr>
+<tr><td>为什么写钩子<strong>不自己加锁</strong>？</td><td>SDO 服务端<strong>已在外层持有</strong> <code>CO_LOCK_OD</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CANopenNode/301/CO_SDOserver.c#L555-L558">CO_SDOserver.c:555-558</a>），钩子再加锁会<strong>死锁</strong>。这是 <code>H7000_write</code>/<code>H6064_write</code>/<code>H6041_write</code> 只做「存值」的根本原因。</td></tr>
+<tr><td>为什么 RT 拍要 <code>CO_LOCK_OD</code>？</td><td>因为<strong>有跨线程访问</strong>：OD_RAM 的写侧在 <code>rt_thread</code>，而 CiA-309 网关的读侧在 main 线程。<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L537-L546">:537-546</a>、<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L577-L581">:577-581</a> 的锁是为「别人也在读同一个 OD」而加，不是为了防自己。</td></tr>
+<tr><td>为什么循环里用「即使非节拍也 return」？</td><td><code>epoll_wait</code> 的唤醒有三类：定时器到点（<strong>真节拍</strong>）、跨线程门铃、CAN 到达。只有第一类才代表 1 ms 栅格，<strong>积分/抖动统计都必须在真节拍段</strong>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L453-L456">:453-456</a>），否则 1 ms 内会被重复触发。</td></tr>
+</tbody>
+</table>
+
+<h3>6.1 函数调用关系总表（谁调谁）</h3>
+<table class="cols-4">
+<caption>表 6-2 主控链路函数清单</caption>
+<thead><tr><th>函数</th><th>位置</th><th>被谁调用</th><th>又调用了谁</th></tr></thead>
+<tbody>
+<tr><td><code>rt_thread</code></td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L959-L985">CO_main_basic.c:959-985</a></td><td>main 创建（<code>SCHED_FIFO</code>，<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L793-L806">:793-806</a>）</td><td><code>CO_epoll_wait</code> → <code>CO_epoll_processRT(CO)</code> + <code>CO_epoll_processRT(CO_2nd)</code> → <code>app_programRt</code></td></tr>
+<tr><td><code>app_programRt</code></td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L430-L608">CO_application.c:430-608</a></td><td><code>rt_thread</code> <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L979-L979">:979</a>（每 1 ms 真节拍）</td><td><code>cia402_step</code> / <code>agv_inverse_kinematics</code> / <code>CO_HBconsumer_getState</code> / <code>agv_odom_step</code> / <code>OD_requestTPDO</code></td></tr>
+<tr><td><code>app_programAsync</code></td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L413-L426">CO_application.c:413-426</a></td><td>主循环 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L881-L881">CO_main_basic.c:881</a></td><td><code>CO_NMT_sendCommand</code>（node10/11 → OPERATIONAL）</td></tr>
+<tr><td><code>app_programStart</code></td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L240-L389">CO_application.c:240-389</a></td><td><code>CO_CANopenInit</code> 之前（main）</td><td><code>OD_set_u32/u8</code>（配 SYNC/RPDO/TPDO 映射）、<code>OD_extension_init</code>（挂钩子 + 启用 flagsPDO）</td></tr>
+</tbody>
+</table>
+
+<div class="cpp"><strong>简历/面试话术（背这段）</strong>：我在松下开源的 CANopenLinux sample1（双轮差速 AGV 从站骨架）上做增量，把它从「只会收位置打印的监听器」升级成「<strong>能下发、能闭环、有容错的主控</strong>」：上位机给 cmd_vel，我在 1 ms 实时线程里做差速逆解（<code>v±ωb/2</code>）换算成 counts/s，经三重安全门限（未使能/失联/掉线）后经 TPDO 下发到两个 CiA402 驱动器；同时用收上来的实际位置做中点法里程计积分，回传给 Qt 上位机画轨迹；并落地了心跳容错（<code>0x1016</code> 监控两个从站，超时自动 EMCY + 降速）。整条链路我都在 vcan 虚拟总线上做过闭环验证。</div>
+
+<h2>§7 脱稿复述脚本</h2>
+
+<h4>7.1 60 秒版（自我介绍里用）</h4>
+<pre>
+「底座」松下开源 CANopenLinux sample1 —— 双轮差速 AGV 的 CANopen 设备工程，纯 C + SocketCAN，
+        原来只做一件事：收左右电机位置并 printf。
+「我做的」把它补成完整主控：
+        ① 下行：cmd_vel(v,ω) → 逆解 v±ωb/2 → counts/s → 安全门限 → TPDO 下发 0x60FF；
+           并用 CiA402 使能时序把两个驱动器推进 Operation enabled。
+        ② 上行：回读 0x6064 → 中点法里程计正解 → 0x6FFF 位姿 → Qt 画轨迹。
+        ③ 容错：未使能不动 / 失联 500ms 停车 / 心跳超时(0x1016)降速 + 库自动 EMCY。
+「验证」vcan 虚拟总线上闭环实跑 PASS（0x7000 写 (0.2,0) → 抓到 0x50A 的 0x60FF=6366）。
+</pre>
+
+<h4>7.2 3 分钟版（技术面用）：按 §2→§3→§4→§5 顺序讲，每讲一段指着大图对应节点</h4>
+<ol>
+<li><strong>先讲定位</strong>：这是<strong>主控</strong>，不是从站驱动开发；总线用 SocketCAN + CANopenNode，1 ms 实时线程跑应用回调。</li>
+<li><strong>下行</strong>：「一条数值走到底」——<code>(v,ω)</code> 只在逆解处换算一次，之后全是 counts/s；下发通道是 <code>0x1A00</code> 映射 <code>0x6040+0x60FF</code> 的 TPDO。</li>
+<li><strong>上行</strong>：「一条计数走到底」——原始计数只在积分处变一次，之后全是 x,y,θ；<code>0x6FFF</code> 是给上位机留的自定义对象。</li>
+<li><strong>使能环</strong>：<code>0x6041</code> 状态字 → <code>cia402_step</code> → <code>0x6040</code> 控制字，按 CiA402 状态机推进；启动前先 NMT Start。</li>
+<li><strong>容错</strong>：三个门限合一个清零判断；心跳用现成的 HBconsumer，EMCY 由库自动报。</li>
+<li><strong>收尾给证据</strong>：vcan 实测帧 + <code>agv_kinematics</code> 已抽成纯函数可单测（P2）。</li>
+</ol>
+
+<h4>7.3 自测题（答不上就回去翻对应节点）</h4>
+<ol>
+<li><code>0x7000</code> 写 (v=0, ω=1) 时，两轮 <code>0x60FF</code> 应是什么关系？（答：<code>vR=+ωb/2</code>、<code>vL=−ωb/2</code>，等值反号 → 原地转）</li>
+<li>为什么 deadman 时间戳必须打在<strong>写钩子</strong>里，而不是比较 cmd_vel 数值变化？</li>
+<li><code>0x6041</code> 为什么必须挂写钩子才能拿到？不挂会怎样？</li>
+<li>三个安全门限分别是哪三个？为什么要「两轮都判」未使能？</li>
+<li>心跳超时的 EMCY（<code>0x8130</code>）是谁发的？应用层要不要手写？</li>
+<li><code>0x60FF</code> 挂扩展（<code>read/write = OD_readOriginal/OD_writeOriginal</code>）到底改变了什么行为？</li>
+</ol>
+
+<div class="footnote">
+文件行号基线：2026-10-09 工作区。<code>CO_application.c</code>（609 行）承载全部应用钩子与 RT 逻辑；运动学纯函数在 <code>agv_kinematics.c/h</code>（P2 可测性重构）；
+OD 定义在 <code>application/OD.c</code> 与 <code>application/OD_2nd.c</code>；线程与主循环在 <code>CO_main_basic.c</code>。
+细节回到 S7 / S10 / S11 三册；本册为汇总视图。Qt 侧下行（SDO 周期写 <code>0x7000</code>）已于 2026-10-09 接入并 vcan 验证 PASS（见 <code>AGV_QT_CMDVEl_DOWNLINK_print.html</code>）；正式化仍需用 CANopenEditor 把 <code>0x7000</code>/<code>0x1016</code> 写进 EDS 再重生成 OD。
+</div>
+
+</body>
+</html>

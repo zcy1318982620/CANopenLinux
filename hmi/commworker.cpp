@@ -6,8 +6,12 @@ CommWorker::CommWorker(QObject *parent)
     : QObject(parent)
     , m_sock(new QTcpSocket(this))
     , m_poll(new QTimer(this))
+    , m_cmd(new QTimer(this))
 {
     m_poll->setInterval(100);   /* 100ms 轮询一个子索引，300ms 刷新一次完整位姿 */
+    /* cmd_vel 重发周期：主控 deadman 门限 500ms，取 150ms(约 3 倍余量)，
+     * 保证即使在滑条不动时也不断刷新时间戳，车不会因"失联"被强制停车。 */
+    m_cmd->setInterval(150);
 
     connect(m_sock, &QTcpSocket::connected,    this, &CommWorker::onConnected);
     connect(m_sock, &QTcpSocket::disconnected, this, &CommWorker::onDisconnected);
@@ -15,6 +19,7 @@ CommWorker::CommWorker(QObject *parent)
     connect(m_sock, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::error),
             this, &CommWorker::onSocketError);
     connect(m_poll, &QTimer::timeout, this, &CommWorker::pollTimeout);
+    connect(m_cmd,  &QTimer::timeout, this, &CommWorker::cmdTimeout);
 }
 
 CommWorker::~CommWorker() = default;
@@ -26,6 +31,8 @@ void CommWorker::connectBoard(const QString &host, quint16 port)
     m_rx.clear();
     m_seq2sub.clear();
     m_val.clear();
+    m_v = 0.0;                  /* 每次连上先归零，安全 */
+    m_w = 0.0;
     emit logLine(QString("connecting %1:%2 ...").arg(host).arg(port));
     m_sock->connectToHost(host, port);
 }
@@ -33,6 +40,7 @@ void CommWorker::connectBoard(const QString &host, quint16 port)
 void CommWorker::disconnectBoard()
 {
     m_poll->stop();
+    m_cmd->stop();
     if (m_sock->state() != QAbstractSocket::UnconnectedState)
         m_sock->disconnectFromHost();
 }
@@ -48,12 +56,16 @@ void CommWorker::onConnected()
     emit logLine("connected");
     m_rdSub = 1;
     m_poll->start();
+    m_cmd->start();
     emit connected();
 }
 
 void CommWorker::onDisconnected()
 {
     m_poll->stop();
+    m_cmd->stop();
+    m_v = 0.0;                  /* 断链即视为零速，防止重连后突然带速起步 */
+    m_w = 0.0;
     emit logLine("disconnected");
     emit disconnected();
 }
@@ -80,6 +92,31 @@ void CommWorker::nmtPreOp()
 void CommWorker::nmtStart()
 {
     sendLine(QString("[%1] %2 start").arg(++m_seq).arg(m_node));
+}
+
+/* 下行：SDO 写主控 OD 0x7000(cmd_vel)。语法(网关 help)：
+ *   [<seq>] <node> w[rite] <index> <subindex> <datatype> <value>
+ * 0x7000 子 1=v(m/s)、子 2=ω(rad/s) 均为 REAL32(网关记作 r32)。 */
+void CommWorker::setCmdVel(double v, double w)
+{
+    m_v = v;
+    m_w = w;
+}
+
+void CommWorker::cmdTimeout()
+{
+    /* 周期把当前期望速度重发一遍：既是"稳定下行"，也给主控 deadman 续命。 */
+    sendWrite(1, m_v);
+    sendWrite(2, m_w);
+}
+
+void CommWorker::sendWrite(int subIndex, double value)
+{
+    sendLine(QString("[%1] %2 w 0x7000 %3 r32 %4")
+             .arg(++m_seq)
+             .arg(m_node)
+             .arg(subIndex)
+             .arg(value, 0, 'f', 6));
 }
 
 void CommWorker::sendLine(const QString &s)
@@ -122,7 +159,8 @@ void CommWorker::onReadyRead()
             emit logLine(QString("seq %1: %2").arg(seq).arg(rest));
             m_seq2sub.remove(seq);
         } else if (rest == "OK") {
-            emit logLine(QString("seq %1: OK").arg(seq));
+            /* 写/NMT 的成功响应：cmd_vel 以 150ms 周期重发，若每次都记会刷屏，
+             * 故静默忽略，只把 ERROR 记进日志。 */
         } else {
             bool ok = false;
             const double v = rest.toDouble(&ok);

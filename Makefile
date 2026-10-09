@@ -46,7 +46,9 @@ SOURCES = \
 	$(DRV_SRC)/CO_application.c \
 	$(DRV_SRC)/agv_queue.c \
 	$(DRV_SRC)/agv_pool.c \
-	$(DRV_SRC)/agv_log.c
+	$(DRV_SRC)/agv_log.c \
+	$(DRV_SRC)/agv_kinematics.c \
+	$(DRV_SRC)/agv_modbus.c
 
 
 OBJS = $(SOURCES:%.c=%.o)
@@ -60,7 +62,9 @@ OPT += -g -ggdb
 #OPT += -DCO_USE_GLOBALS
 OPT += -DCO_MULTIPLE_OD
 OPT += -DCO_USE_APPLICATION=1
-OPT += -DCO_CONFIG_HB_CONS=0
+# P1 心跳容错：启用 HBconsumer，配置取 CO_driver_target.h 的 CO_CONFIG_HB_CONS
+# (ENABLE|CALLBACK_CHANGE|QUERY_FUNCT|CALLBACK_PRE|TIMERNEXT|OD_DYNAMIC)
+# OPT += -DCO_CONFIG_HB_CONS=0
 OPT += -DCO_CONFIG_STORAGE=0
 OPT += -Wno-format
 CFLAGS = -Wall $(OPT) $(INCLUDE_DIRS)
@@ -72,7 +76,46 @@ LDFLAGS += -lm
 #Options can be also passed via make: 'make OPT="-g" LDFLAGS="-pthread"'
 
 
-.PHONY: all clean
+.PHONY: all clean install test clean-test test-asan
+
+
+# ===== P2 单元测试(零框架, 见 docs/P2_ENGINEERING_TEST_KNOWLEDGE_print.html §1.5) =====
+# 每个测试是独立可执行文件(自带 main)，只链接被测模块的 .c，绝不碰 CAN/RT。
+# 用法:
+#   make test                                  # 常规跑
+#   make test-asan                             # ASan+UBSan 复核(仅查内存/UB, 不判实时性)
+#   make test SAN="-fsanitize=undefined"       # 自定义 sanitizer
+SAN =
+TEST_CFLAGS  = -Wall -g -O1 -I$(DRV_SRC) -Itests $(SAN)
+TEST_LDFLAGS = -pthread -lm $(SAN)
+
+tests/test_agv_queue: tests/test_agv_queue.c tests/agv_test.h $(DRV_SRC)/agv_queue.c
+	$(CC) $(TEST_CFLAGS) tests/test_agv_queue.c $(DRV_SRC)/agv_queue.c -o $@ $(TEST_LDFLAGS)
+
+tests/test_agv_odom: tests/test_agv_odom.c tests/agv_test.h $(DRV_SRC)/agv_kinematics.c
+	$(CC) $(TEST_CFLAGS) tests/test_agv_odom.c $(DRV_SRC)/agv_kinematics.c -o $@ $(TEST_LDFLAGS)
+
+tests/test_agv_modbus: tests/test_agv_modbus.c tests/agv_test.h $(DRV_SRC)/agv_modbus.c $(DRV_SRC)/agv_modbus.h
+	$(CC) $(TEST_CFLAGS) tests/test_agv_modbus.c $(DRV_SRC)/agv_modbus.c -o $@ $(TEST_LDFLAGS)
+
+clean-test:
+	rm -f tests/test_agv_queue tests/test_agv_odom tests/test_agv_modbus
+
+test: tests/test_agv_queue tests/test_agv_odom tests/test_agv_modbus
+	@echo "== P2 单元测试 =="
+	@tests/test_agv_queue
+	@tests/test_agv_odom
+	@tests/test_agv_modbus
+	@echo "== 全部通过 =="
+
+test-asan:
+	@$(MAKE) --no-print-directory clean-test
+	@ASAN_OPTIONS=abort_on_error=1:detect_leaks=1:verify_asan_link_order=0 \
+	 $(MAKE) --no-print-directory test SAN="-fsanitize=address,undefined -fno-omit-frame-pointer"
+	@$(MAKE) --no-print-directory clean-test   # 清掉 sanitizer 版二进制，避免下次 make test 误用
+# 注: verify_asan_link_order=0 用于规避某些环境预加载库导致 ASan 启动报
+#     "runtime does not come first"；该开关只关掉链接顺序自检，内存检查照常。
+
 
 all: clean $(LINK_TARGET)
 

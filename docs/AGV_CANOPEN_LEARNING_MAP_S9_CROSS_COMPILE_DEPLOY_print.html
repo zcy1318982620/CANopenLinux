@@ -1,0 +1,436 @@
+  <!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 9 站 · 交叉编译 &amp; 部署到 i.MX6ULL（附：设备树与 CAN 驱动「够用层」）（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:24%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:76%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-3a th:nth-child(1),.cols-3a td:nth-child(1){width:26%}
+.cols-3a th:nth-child(2),.cols-3a td:nth-child(2){width:34%}
+.cols-3a th:nth-child(3),.cols-3a td:nth-child(3){width:40%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:14%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:30%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:24%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:32%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.good { border:0.6pt solid #2a7; border-left:3pt solid #2a7; background:#f2fbf7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.good strong:first-child { color:#0a6; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 9 站 · 交叉编译 &amp; 部署到 i.MX6ULL</h1>
+
+<div class="meta">
+<p><strong>本站定位</strong>：阶段 C「上位机 &amp; 上板」的最后一站，也是<b>十站地图里唯一还没有独立分册的一站</b>。前八站全部发生在 PC 上（x86 编译、vcan 虚拟总线）。本站回答一个问题：<b>怎么让这套 <code>canopend</code> 真正跑在 i.MX6ULL 板子上。</b></p>
+<p><strong>一句话概括</strong>：在 x86 主机上用 <code>arm-linux-gnueabihf-gcc</code> 编出 ARM 指令，把可执行文件拷到板子，再在板子上把 <code>can0</code> 配好、启动 <code>canopend</code>。四步而已。</p>
+<p><strong>为什么必须自己走一遍</strong>：① 简历/话术里已经写了「部署到 i.MX6ULL 开发板」，面试官一定顺着问怎么部署的，<b>答不上来比不写还减分</b>；② 这是「PC 软件」和「设备固件」的分水岭——不会交叉编译，工程永远停在电脑里；③ 它顺手牵出<b>设备树</b>这项嵌入式门槛知识（§5），而设备树正是「应用岗只需看懂、不必会写内核」的那条边界线。</p>
+<p><strong>阅读顺序</strong>：§0 四步链路（先建全局）→ §1 交叉编译原理 + 本工程工具链逐行 → §2 编译与验证 → §3 部署 → §4 板端启动 → §5 <b>设备树（重点）</b> → §6 SocketCAN 内核链路与驱动「够用层」→ §7 面试自检 → §8 半天补课清单。</p>
+<p><strong>诚实交代</strong>：<code>deploy/canopend_arm</code> 是本工程已产出的 ARM 二进制（已实测为 <code>ELF 32-bit ARM EABI5</code>），但<b>「上板动作」由 AI 代为执行，尚未本人复现</b>；真机 500K 联调仍阻塞（等电机到货）。§8 就是补这一课的动作清单。</p>
+</div>
+
+<h2>§0 一页地图：从源码到板子跑起来，只有四步</h2>
+
+<p>先看全景。整条链路上，只有第 ② 步和第 ④ 步是「嵌入式特有」的知识点，其余两步和你平时在 PC 上开发没本质区别。</p>
+
+<pre>
+ ① 源码（与平台无关）        ② 交叉编译（PC 上做）          ③ 产物                ④ 板端启动（板子上做）
+ ┌────────────────────┐      ┌────────────────────┐       ┌──────────────────┐   ┌────────────────────────┐
+ │ CO_*.c  CO_driver.c│      │ arm-linux-gnueabi  │       │ canopend_arm     │   │ ip link set can0 ...   │
+ │ OD.c    OD_2nd.c   │ ───▶ │ hf-gcc  + sysroot  │ ───▶  │ ELF 32-bit ARM   │──▶│ ip link set can0 up    │
+ │ agv_*.c ...        │      │ toolchain-arm.cmake│       │ EABI5, 396235 B  │   │ canopend can0 -i 1 ... │
+ └────────────────────┘      └────────────────────┘       └──────────────────┘   └────────────────────────┘
+   x86 上也是这一份          改的是「编译器是谁」           用 file 一眼可验        CAN 控制器由设备树打开
+</pre>
+
+<table class="cols-4">
+<caption>表 9-1 四步链路：每步在哪做、关键命令、谁是「必须会讲」的</caption>
+<thead><tr><th>步骤</th><th>在哪做</th><th>关键命令 / 文件</th><th>你必须能讲清什么</th></tr></thead>
+<tbody>
+<tr><td>① 源码</td><td>PC</td><td><code>CO_*.c</code> / <code>application/OD.c</code></td><td>知道 <code>canopend</code> 由 31 个 .c 组成（见 <a href="file:///home/zcy/Project/panasonic_canopen_agv/CMakeLists.txt#L22-L65">CMakeLists.txt L22-L65</a>），源码本身与架构无关</td></tr>
+<tr><td><strong>② 交叉编译</strong></td><td><strong>PC</strong></td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/toolchain-arm.cmake">toolchain-arm.cmake</a></td><td><b>★ 必须会讲</b>：为什么不能本机编、改了哪几项、sysroot 是什么</td></tr>
+<tr><td>③ 产物</td><td>PC</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/deploy/canopend_arm">deploy/canopend_arm</a></td><td>会用 <code>file</code> / <code>readelf</code> 证明「这是给 ARM 的、是硬浮点的、依赖哪些库」</td></tr>
+<tr><td><strong>④ 板端启动</strong></td><td><strong>板子</strong></td><td><code>ip link set can0 ...</code>、<code>canopend can0 -i 1</code></td><td><b>★ 必须会讲</b>：每条命令在干什么、<code>can0</code> 这个名字从哪来（→ §5 设备树）</td></tr>
+</tbody>
+</table>
+
+<div class="good"><strong>一句话把四步串起来：</strong>「同一份 C 源码，换一个编译器（交叉工具链 + sysroot）编出 ARM 二进制，拷到板子上，再把 CAN 控制器配好、把 CANopen 主站跑起来。」——这句就是面试时这段经历的<b>开场白</b>。</div>
+
+<h2 class="pgbreak">§1 为什么必须交叉编译：宿主机 / 目标机 / 工具链 / sysroot</h2>
+
+<h3>1.1 为什么不能在板子上直接编译</h3>
+<ul>
+<li><b>资源不够</b>：i.MX6ULL 是单核 Cortex-A7 + 几十~几百 MB 内存，编 31 个文件还行，编整个内核/大型工程就是灾难。</li>
+<li><b>环境不全</b>：板上的根文件系统是裁剪过的，通常<b>没有 gcc、没有头文件、没有静态库</b>。</li>
+<li><b>产物跑不动</b>：PC 的 gcc 默认生成 <code>x86_64</code> 指令，板子是 <code>ARM</code> 指令——CPU 根本不认识。所以不是「优化问题」，是<b>指令集不同</b>。</li>
+</ul>
+
+<table class="cols-2">
+<caption>表 9-2 四个必须分清的名词</caption>
+<thead><tr><th>名词</th><th>含义（本工程对应）</th></tr></thead>
+<tbody>
+<tr><td>宿主机 host</td><td>你敲命令的 PC：Ubuntu 20.04.6 / x86_64 / gcc 9.4.0</td></tr>
+<tr><td>目标机 target</td><td>程序最终运行的机器：i.MX6ULL（ARM Cortex-A7，ARMv7-A，<b>硬浮点 hard-float</b>）</td></tr>
+<tr><td>交叉工具链 toolchain</td><td>跑在 x86 上、却能生成 ARM 指令的一整套 gcc/binutils：<code>arm-linux-gnueabihf-gcc</code>（Linaro 4.9.4-2017.01）</td></tr>
+<tr><td>sysroot</td><td>工具链自带的一份「目标机文件系统精华」：目标机的 <code>libc</code>、<code>libpthread</code>、头文件。用来解决「在 PC 上编译时，去哪找板子上的库」</td></tr>
+</tbody>
+</table>
+
+<p><b>名字里的玄机</b>：<code>arm-linux-gnueabihf-</code> 拆开读——<code>arm</code>（目标架构）+ <code>linux</code>（目标系统）+ <code>gnu</code>（用 glibc）+ <code>eabi</code>（嵌入式 ABI）+ <code>hf</code>（hard-float，浮点参数用 VFP 寄存器传，不是软件模拟）。<b>目标机的 ABI 必须和工具链后缀一致</b>，否则链接/运行期出各种诡异问题。</p>
+
+<h3>1.2 本工程怎么切到交叉编译：toolchain-arm.cmake 逐行</h3>
+
+<p>交叉编译最规范的做法不是改 Makefile（那是土办法），而是给 CMake 一份「工具链描述文件」。本工程这份共 20 行，全文见 <a href="file:///home/zcy/Project/panasonic_canopen_agv/toolchain-arm.cmake">toolchain-arm.cmake</a>。</p>
+
+<table class="cols-3">
+<caption>表 9-3 toolchain-arm.cmake 逐行讲解（★ 面试高频）</caption>
+<thead><tr><th>行</th><th>代码</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td>L7</td><td><code>set(CMAKE_SYSTEM_NAME Linux)</code></td><td>告诉 CMake「我要编的是 <b>Linux</b> 程序」。<b>这一行是「进入交叉编译模式」的总开关</b>——CMake 检测到它与宿主系统不同，就自动停止尝试运行测试程序。</td></tr>
+<tr><td>L8</td><td><code>set(CMAKE_SYSTEM_PROCESSOR arm)</code></td><td>目标 CPU 架构 = arm（信息性，配合上一条）。</td></tr>
+<tr><td>L10</td><td><code>set(TOOLCHAIN_PREFIX /usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf)</code></td><td>工具链安装路径。抽成一个变量，路径变了只改这一行。</td></tr>
+<tr><td>L11-L12</td><td><code>set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}/bin/arm-linux-gnueabihf-gcc)</code><br><code>set(CMAKE_CXX_COMPILER ...g++)</code></td><td><b>核心</b>：把「编译器是谁」从宿主的 <code>gcc</code> 换成跨平台的 <code>arm-linux-gnueabihf-gcc</code>。</td></tr>
+<tr><td>L13</td><td><code>set(CMAKE_FIND_ROOT_PATH ${TOOLCHAIN_PREFIX}/arm-linux-gnueabihf)</code></td><td>指定 <b>sysroot</b>：以后 CMake <code>find_*</code> 找头文件/库时，都先到这个「目标机文件系统」里找。</td></tr>
+<tr><td>L14</td><td><code>set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)</code></td><td>「<b>找程序</b>」不要进 sysroot——编译过程要用的是<b>宿主</b>的 <code>ld</code>/<code>ar</code> 等工具，它们必须能在 PC 上执行。</td></tr>
+<tr><td>L15-L16</td><td><code>..._MODE_LIBRARY ONLY</code><br><code>..._MODE_INCLUDE ONLY</code></td><td>「<b>找库</b>」和「<b>找头文件</b>」<b>只在</b> sysroot 里找——绝不能误用 PC 上的 x86 库，否则链接出的东西板子跑不了。</td></tr>
+</tbody>
+</table>
+
+<div class="note"><strong>这三行 <code>FIND_ROOT_PATH_MODE_*</code> 是交叉编译最容易踩的坑。</strong>如果不设或设错，CMake 可能一边用 ARM 编译器、一边又找到了宿主机的 <code>/usr/include</code> 和 <code>/usr/lib/x86_64-linux-gnu/*.so</code>，症状是：编译能过、链接报「格式不匹配（file format not recognized）」或运行期段错误。</div>
+
+<div class="good"><strong>对照别处的做法：</strong>若不用 CMake，本工程 <a href="file:///home/zcy/Project/panasonic_canopen_agv/Makefile">Makefile</a> 也留了后门——<code>CC ?= gcc</code> 允许 <code>make CC=arm-linux-gnueabihf-gcc</code> 一行切过去。两种做法的本质相同：<b>换编译器 + 换 sysroot</b>，只是 CMake 把它写成了声明式文件，更规范、更可复现。</div>
+
+<h2 class="pgbreak">§2 编译与验证：怎么证明「这个二进制是给板子的」</h2>
+
+<h3>2.1 两条命令完成交叉编译</h3>
+<pre>
+# ① 配置（指定工具链文件，out-of-source 构建到 build-arm/）
+cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=toolchain-arm.cmake
+
+# ② 编译
+cmake --build build-arm -j16
+
+# 产物：build-arm/canopend   →   拷出来命名成部署用的名字
+cp build-arm/canopend deploy/canopend_arm
+</pre>
+<p>等价的 Makefile 写法：<code>make CC=arm-linux-gnueabihf-gcc -j16</code>。</p>
+
+<h3>2.2 验证：五条命令，一看一验</h3>
+<table class="cols-3a">
+<caption>表 9-4 编译产物的自检命令（★ <code>file</code> 必背）</caption>
+<thead><tr><th>命令</th><th>看什么</th><th>本工程实测输出 / 说明</th></tr></thead>
+<tbody>
+<tr><td><code>file deploy/canopend_arm</code></td><td>文件格式、架构、ABI、解释器</td><td><code>ELF 32-bit LSB executable, ARM, EABI5 ... interpreter /lib/ld-linux-armhf.so.3 ... not stripped</code></td></tr>
+<tr><td><code>readelf -h</code></td><td>ELF 头：<code>Machine</code>、<code>Flags</code></td><td><code>Machine: ARM</code>；<code>Flags</code> 里含 <b>hard-float ABI</b> 标记</td></tr>
+<tr><td><code>readelf -A</code></td><td>ARM 专有属性</td><td><code>Tag_ABI_VFP_args: VFP registers</code> ⇒ 确认走的是 <b>硬浮点</b>（对应工具链的 <code>hf</code>）</td></tr>
+<tr><td><code>readelf -d</code></td><td><code>NEEDED</code>：动态依赖哪些 <code>.so</code></td><td>通常是 <code>libc.so.6</code>（现代 glibc 里 pthread 已并入 libc）。<b>板子上必须存在这些库</b></td></tr>
+<tr><td><code>arm-linux-gnueabihf-ldd</code></td><td>依赖解析</td><td>要用<b>交叉版</b>的 ldd；直接用宿主 <code>ldd</code> 会报「不是动态可执行文件」——因为宿主 ldd 不认 ARM</td></tr>
+</tbody>
+</table>
+
+<div class="warn"><strong>为什么解释器是 <code>/lib/ld-linux-armhf.so.3</code>？</strong>动态链接的程序启动时，内核要先加载「动态链接器」来解析 <code>.so</code>。这个名字里带 <code>armhf</code>，说明它是<b>ARM 硬浮点</b>版的加载器。<b>板子的根文件系统里必须有这个文件</b>，否则运行时报 <code>No such file or directory</code>——注意：这个报错的字面意思是「找不到解释器」，不是「找不到你的程序」，新手极易误解。</div>
+
+<h2 class="pgbreak">§3 部署：把二进制送到板子上</h2>
+
+<h3>3.1 三条常用通道</h3>
+<table class="cols-3a">
+<caption>表 9-5 三种部署通道对比</caption>
+<thead><tr><th>方式</th><th>怎么做</th><th>适用 / 注意</th></tr></thead>
+<tbody>
+<tr><td><b>scp（最常用）</b></td><td><code>scp deploy/canopend_arm root@&lt;板子IP&gt;:/root/</code></td><td>要求板子已联网、开了 ssh 服务。开发阶段反复调试时最快</td></tr>
+<tr><td>NFS 挂载</td><td>PC 上导出目录，板子 <code>mount -t nfs ...</code> 挂上来</td><td>改一次 PC 上的文件、板子立刻可见，<b>免去反复拷贝</b>；适合高频迭代</td></tr>
+<tr><td>tf 卡 / U 盘</td><td>拷贝到卡上，插到板子再 <code>cp</code></td><td>板子还没配网络时的兜底手段</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 拷完还差两步</h3>
+<pre>
+# ① 给执行权限（从 FAT/tf 卡拷过去的文件常常没有 x 位）
+chmod +x /root/canopend_arm
+
+# ② 直接运行（can0 是网卡名，-i 1 是 CANopen 节点号，-c 开启 ASCII 网关）
+./canopend_arm can0 -i 1 -c "tcp-60000"
+</pre>
+
+<div class="warn"><strong>最常见的三个报错，先背下来：</strong>
+<ul>
+<li><code>Permission denied</code> → 忘了 <code>chmod +x</code>。</li>
+<li><code>No such file or directory</code>（但文件明明在）→ 动态链接器 <code>/lib/ld-linux-armhf.so.3</code> 不存在。</li>
+<li><code>... not found (required by ./canopend_arm)</code> 或 <code>version `GLIBC_2.xx' not found</code> → 板子上的 glibc 比编译时用的 sysroot <b>旧</b>。解决办法：换用与板子匹配的旧工具链重编，或把库一起拷过去（用 <code>LD_LIBRARY_PATH</code>）。</li>
+</ul>
+</div>
+
+<div class="note"><strong>工程现状（诚实交代）：</strong><a href="file:///home/zcy/Project/panasonic_canopen_agv/deploy/canopend_arm">deploy/canopend_arm</a> 已经存在且已确认为 ARM 二进制（396235 字节），但<b>是 AI 代为编译并拷贝上板的，本人尚未亲手复现</b>。另外 <code>hmi/mainwindow.cpp</code> 里默认板卡 IP 已改为 <code>169.254.86.72</code>，但 HMI 未重编译验证（HANDOFF 遗留 7）。</div>
+
+<h2 class="pgbreak">§4 板端启动：两条命令 + 一个主站</h2>
+
+<h3>4.1 启动序列</h3>
+<pre>
+# ① 配 CAN 控制器：指定类型/波特率（本工程目标 500 kbit/s）
+ip link set can0 type can bitrate 500000
+
+# ② 启用这块网卡（CAN 在 Linux 里就是一块 net_device）
+ip link set can0 up
+
+# ③ 看一眼细节：波特率、状态、错误计数
+ip -d link show can0
+
+# ④ （可选）裸眼抓帧，验证总线上真有报文
+candump can0
+
+# ⑤ 启动 CANopen 主站：node id = 1，并开启 TCP 60000 的 ASCII 网关
+canopend can0 -i 1 -c "tcp-60000"
+</pre>
+
+<table class="cols-2">
+<caption>表 9-6 每条命令到底在干什么</caption>
+<thead><tr><th>命令片段</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>ip link set can0 type can bitrate 500000</code></td><td>通过 netlink 把「位时序参数」下发给驱动，最终调到 FlexCAN 的 <code>CANCTRL</code> 寄存器（内核路径见 §6）。<b>波特率不在设备树里，是运行期设的。</b></td></tr>
+<tr><td><code>ip link set can0 up</code></td><td>启用控制器、退出 <code>STOP</code> 模式、开始参与总线仲裁。<code>down</code> 状态下无法收发。</td></tr>
+<tr><td><code>canopend can0 -i 1</code></td><td>把 <code>can0</code> 作为 CANopen 通道，本机节点号 1（主站/NMT master）。</td></tr>
+<tr><td><code>-c "tcp-60000"</code></td><td>开启 CiA 309-3 ASCII 网关，监听 TCP 60000，供上位机（第 8 站 Qt / <code>cocomm</code>）用文本命令读写对象字典。</td></tr>
+</tbody>
+</table>
+
+<div class="warn"><strong>真机联调的两个已知坑（HANDOFF 遗留）：</strong>
+<ul>
+<li><b>出厂参数不是 500K</b>：森创驱动器出厂默认为 250K、站址 1，需要先改成 500K 并与本工程两套 OD 的节点号（10 / 11）对齐。</li>
+<li><b>单节点会报 ERROR-WARNING</b>：CAN 需要至少两个节点互相 ACK。只有板子自己挂在总线上时，发送无人应答会产生错误计数并进入错误被动/警告态——<b>这不是你的代码错</b>，接上第二个节点（或第二个 vcan 端口）就好了。</li>
+</ul>
+</div>
+
+<h2 class="pgbreak">§5 设备树（Device Tree）：CAN 为什么叫 can0，谁把它打开的</h2>
+
+<p>这是应用岗最需要「看懂」的一块嵌入式知识。§4 里 <code>ip link set can0</code> 能生效，前提是<b>内核里已经存在一个叫 <code>can0</code> 的网络设备</b>——而它是从哪来的？答案就是设备树。</p>
+
+<h3>5.1 为什么会有设备树</h3>
+<p>早期 ARM 内核为每一块开发板写一份 <code>board-xxx.c</code>，把「板子上有哪些外设、引脚怎么接、时钟多少」硬编码在 C 代码里。结果是：<b>一份内核源码里堆了成百上千块板的适配代码，改一处引脚都要重编内核。</b></p>
+<p>设备树把「硬件长什么样」从<b>代码</b>搬到了<b>数据</b>：</p>
+<pre>
+内核（一份二进制，与板子无关）  +  xxx.dtb（这块板子的硬件描述）  →  启动时解析 → 生成 platform_device → 与驱动匹配
+                                    ▲
+                              编译期由 .dts/.dtsi 生成
+</pre>
+<p>于是：<b>同一份内核镜像，换一个 dtb 就能支持不同的板子</b>。引脚接法不同？改 dts。外设要关掉？改 dts。</p>
+
+<h3>5.2 四件套：dts / dtsi / dtb / dtc</h3>
+<table class="cols-4">
+<caption>表 9-7 设备树文件家族</caption>
+<thead><tr><th>后缀 / 工具</th><th>是什么</th><th>谁写</th><th>本工程关心程度</th></tr></thead>
+<tbody>
+<tr><td><code>.dts</code></td><td>板级设备树源码：<b>这块板子</b>的接法</td><td>板厂 / BSP 工程师</td><td>★ 要会读，会改几行（如 <code>status</code>、<code>pinctrl</code>）</td></tr>
+<tr><td><code>.dtsi</code></td><td>SoC 级共用描述：<b>芯片内部</b>有哪些控制器</td><td>芯片原厂（NXP）</td><td>★ 要会查（如 FlexCAN 寄存器地址、时钟名）</td></tr>
+<tr><td><code>.dtb</code></td><td>编译后的二进制，u-boot 加载并传给内核</td><td>由 <code>dtc</code> 生成</td><td>知道它在启动分区里、可替换</td></tr>
+<tr><td><code>dtc</code></td><td>设备树编译器（dts ⇄ dtb 互转）</td><td>内核源码树自带</td><td>会用 <code>-I fs -O dts</code> 反编译看板子实际配置</td></tr>
+</tbody>
+</table>
+
+<h3>5.3 i.MX6ULL 的 FlexCAN 节点长什么样</h3>
+<p>下面是 <b>i.MX6UL/ULL 主线的典型写法</b>（SoC 级 <code>.dtsi</code> 节选，用于理解结构；<b>迅为板实际的引脚组以其板级 dts 为准</b>）：</p>
+<pre>
+/* ===== SoC 级：imx6ull.dtsi 节选 ===== */
+can1: can@2090000 {
+    compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";  /* ← 驱动靠这个字符串匹配 */
+    reg = &lt;0x02090000 0x4000&gt;;                                /* ← 寄存器基址 + 长度 */
+    interrupts = &lt;GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH&gt;;          /* ← 中断号 */
+    clocks = &lt;&amp;clks IMX6UL_CLK_CAN1_IPG&gt;,                    /* ← 模块时钟 */
+             &lt;&amp;clks IMX6UL_CLK_CAN1_SERIAL&gt;;
+    clock-names = "ipg", "per";
+    fsl,stop-mode = &lt;&amp;gpr 0x10 1&gt;;
+    status = "disabled";                                      /* ← 默认关闭，等板级打开 */
+};
+</pre>
+
+<table class="cols-3a">
+<caption>表 9-8 逐字段读懂一个节点（这是设备树的核心阅读能力）</caption>
+<thead><tr><th>字段</th><th>含义</th><th>对应用</th></tr></thead>
+<tbody>
+<tr><td><code>compatible</code></td><td><b>最重要</b>：告诉内核「用哪个驱动」。内核里 <code>flexcan.c</code> 的匹配表里有 <code>fsl,imx6ul-flexcan</code> 这一项，两边对上，驱动才被加载</td><td>★ 面试会问「驱动怎么和硬件对上」</td></tr>
+<tr><td><code>reg</code></td><td>寄存器物理地址范围（CAN1 基址 <code>0x02090000</code>，长度 0x4000）</td><td>解释「<code>ip</code> 命令怎么最终写到硬件」的起点</td></tr>
+<tr><td><code>interrupts</code></td><td>中断号：收到帧时内核靠它唤醒</td><td>CAN 收帧是中断驱动的</td></tr>
+<tr><td><code>clocks</code> / <code>clock-names</code></td><td>该外设用哪些时钟源，名称为 <code>ipg</code>（寄存器接口时钟）、<code>per</code>（协议时钟）</td><td>解释「为什么波特率配错会报错」——位时序是从 <code>per</code> 时钟分频来的</td></tr>
+<tr><td><code>status</code></td><td><code>"disabled"</code> / <code>"okay"</code>：<b>这个外设开不开</b></td><td>★★ 最常改的一行：板级 dts 里把它改成 <code>"okay"</code>，CAN 才存在</td></tr>
+</tbody>
+</table>
+
+<h3>5.4 引脚复用 pinctrl：一个引脚有 8 种身份</h3>
+<p>SoC 的引脚是复用的：同一个物理管脚可以当 UART、可以当 GPIO、也可以当 CAN。<b>必须显式声明「这个脚用哪个功能」</b>，这就是 pinctrl。板级 dts 里长这样：</p>
+<pre>
+/* ===== 板级：xxx-xxx.dts 节选（典型写法） ===== */
+&amp;iomuxc {
+    pinctrl_flexcan1: flexcan1grp {          /* ← 给这组引脚起个名字 */
+        fsl,pins = &lt;
+            MX6UL_PAD_UART3_RTS_B__FLEXCAN1_RX   0x1b020   /* 该脚 → CAN1 的 RX */
+            MX6UL_PAD_UART3_CTS_B__FLEXCAN1_TX   0x1b020   /* 该脚 → CAN1 的 TX */
+        &gt;;
+    };
+};
+
+&amp;can1 {
+    pinctrl-names = "default";
+    pinctrl-0 = &lt;&amp;pinctrl_flexcan1&gt;;        /* ← 引用上面那组引脚 */
+    status = "okay";                          /* ← 打开这一路 CAN */
+};
+</pre>
+<div class="note"><strong>宏名怎么读：</strong><code>MX6UL_PAD_&lt;引脚&gt;__&lt;功能&gt;</code>。前半段是物理位置，后半段是分配的功能；中间的<b>双下划线</b>是「引脚 __ 功能」的分隔符。<code>0x1b020</code> 是引脚的电气配置（上下拉、驱动强度等），先会读、不必会算。右侧注释里的 RX/TX <b>一旦反接，总线上就永远收不到帧</b>——这是硬件联调第一检查项。</div>
+
+<h3>5.5 怎么在板子上「看见」设备树</h3>
+<pre>
+# ① 标准路径：内核解析后的设备树会以「目录/文件」形式暴露出来
+ls /sys/firmware/devicetree/base/
+cat /sys/firmware/devicetree/base/soc/can@2090000/status     # 看这一路开没开
+
+# ② 老一些的内核走 procfs
+ls /proc/device-tree/
+
+# ③ 把运行中的设备树反编译回 dts（最直观）
+dtc -I fs -O dts /sys/firmware/devicetree/base &gt; /tmp/live.dts
+
+# ④ 看驱动有没有加载、CAN 有没有注册成功
+dmesg | grep -i flexcan
+</pre>
+<p>因果链走通一遍：<b>设备树描述硬件 → 内核据此生成设备 → 驱动被 <code>compatible</code> 匹配上 → 注册出网络设备 → 用户空间看到 <code>can0</code></b>。这条链想清楚，你就真正理解了 <code>ip link set can0</code> 为什么能生效。</p>
+
+<h3>5.6 改设备树的标准流程</h3>
+<pre>
+① 找到板级 dts（板厂提供的通常是 xxx-xxx-emmc.dts）
+② 改内容（如把 &amp;can1 的 status 改 "okay"、改/加 pinctrl 组）
+③ 重新编译出 dtb：在内核源码树里 make dtbs
+   （或单独编：dtc -I dts -O dtb -o new.dtb board.dts）
+④ 把新 dtb 替换到启动分区（u-boot 从那里加载）
+⑤ 重启板子，dmesg 里确认驱动起来了
+</pre>
+
+<div class="warn"><strong>边界：应用岗改到哪一层就够了？</strong>看懂节点、改 <code>status</code>、改引脚组、会反编译查看——<b>到这里为止</b>。再往下（写一个新驱动的 character device、改 <code>flexcan.c</code>、写内核模块）属于驱动/BSP 岗，不是你这次要补的。</div>
+
+<div class="good"><strong>把设备树和你的项目挂上钩（面试话术）：</strong>「Linux 应用层看到的 <code>can0</code> 是一个标准网络设备，它由设备树里的 FlexCAN 节点声明、由 pinctrl 指定引脚、由 <code>compatible</code> 匹配到内核驱动。所以我们的 <code>canopend</code> 完全不用碰硬件细节——它只做 SocketCAN 读写，硬件差异都被设备树和驱动屏蔽掉了。这也是嵌入式 Linux 应用开发能高效迭代的原因。」</div>
+
+<h2 class="pgbreak">§6 SocketCAN 内核链路：一帧从应用到总线，经过谁</h2>
+
+<p>知道「谁把 CAN 打开」之后，再看「一帧数据怎么走」。这张图是应用岗理解驱动的最小必需。</p>
+
+<pre>
+  用户空间
+  ┌────────────────────────────────────────────────────────────┐
+  │ canopend / candump / cansend / ip                           │
+  │   socket(PF_CAN, SOCK_RAW, CAN_RAW) → bind(can0) → read/write│
+  └───────────────────────────┬────────────────────────────────┘
+                              │ 系统调用
+  ────────────────────────────┼─────────────────────────────────  内核
+                              ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ net/can/raw.c        CAN_RAW 套接字：收发、过滤器(filter)     │  ← can-utils/-d 看到的
+  ├────────────────────────────────────────────────────────────┤
+  │ net/can/af_can.c     CAN 协议族：设备注册、按 rx_handler 分发 │
+  ├────────────────────────────────────────────────────────────┤
+  │ drivers/net/can/dev.c   can-dev 公共层：波特率下发、状态机、   │  ← ip link set ... bitrate 落到这里
+  │                          错误计数（ERROR-WARNING 就是它报的） │
+  ├────────────────────────────────────────────────────────────┤
+  │ drivers/net/can/flexcan.c  FlexCAN 控制器驱动：寄存器级收发   │
+  ├────────────────────────────────────────────────────────────┤
+  │ FlexCAN 控制器  →  收发器（CANH/CANL）  →  总线               │
+  └────────────────────────────────────────────────────────────┘
+</pre>
+
+<table class="cols-3a">
+<caption>表 9-9 「够用层」三件事：会看、会配、会验</caption>
+<thead><tr><th>能力</th><th>怎么做</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>会看（诊断）</td><td><code>dmesg | grep -i can</code>、<code>ip -d link show can0</code>、<code>cat /sys/class/net/can0/statistics/*</code></td><td>看清 <code>ERROR-WARNING</code>、<code>bus-off</code> 是 <b>can-dev 公共层</b>报的状态，多与终端电阻/ACK/波特率有关，不一定是代码问题</td></tr>
+<tr><td>会配（使能）</td><td>改板级 dts 的 <code>&amp;canX { status = "okay"; }</code> + 引脚组</td><td>「打开一路 CAN」的全过程，属于 §5 的落地</td></tr>
+<tr><td>会验（联调）</td><td><code>candump can0</code> + 手敲 <code>cansend can0 000#0101</code></td><td>不写一行 C 就能验证总线通不通；配合第 1 站的 vcan 流程</td></tr>
+</tbody>
+</table>
+
+<div class="note"><strong>这就是「应用岗 vs 驱动岗」的分界线：</strong>你<b>不需要</b>会写 <code>flexcan.c</code>，但需要知道「<code>ip link set ... bitrate</code> 会落到 can-dev 层、<code>candump</code> 看的是 raw 层、ERROR-WARNING 来自 can-dev 的状态机」。能说出这条链，面试就够用了。</div>
+
+<h2 class="pgbreak">§7 面试自检：这 8 个问题必须能自己答</h2>
+
+<h3>7.1 部署五问（本站主线）</h3>
+<ol>
+<li><b>为什么要交叉编译？</b>板子资源小、没编译器；PC 的 gcc 产出的 x86 指令板子不认识，必须在 x86 主机上生成 ARM 指令。</li>
+<li><b>你们用的什么工具链，toolchain-arm.cmake 改了哪几项？</b><code>arm-linux-gnueabihf-</code>（Linaro 4.9.4）；改的是 <code>CMAKE_SYSTEM_NAME/PROCESSOR</code>、<code>CMAKE_C_COMPILER</code>、<code>CMAKE_FIND_ROOT_PATH</code>（sysroot）三处。</li>
+<li><b>sysroot 是干什么的？</b> PC 上编译时，头文件和库不能取自宿主机，必须指向「目标机版本的库」，否则链接出 x86 的 .so。</li>
+<li><b>怎么证明编出来是给板子的？</b><code>file</code> 看到 <code>ELF 32-bit ARM EABI5</code>、解释器 <code>/lib/ld-linux-armhf.so.3</code>；再 <code>readelf -A</code> 确认硬浮点 ABI。</li>
+<li><b>二进制怎么到板子、板端怎么启动？</b><code>scp</code>（或 NFS/tf 卡）+ <code>chmod +x</code>；板端 <code>ip link set can0 type can bitrate 500000</code> → <code>ip link set can0 up</code> → <code>canopend can0 -i 1 -c "tcp-60000"</code>。</li>
+</ol>
+
+<h3>7.2 设备树三问（延伸）</h3>
+<ol start="6">
+<li><b>can0 这个网卡是怎么来的？</b>设备树里 FlexCAN 节点 <code>status = "okay"</code>，内核按 <code>compatible</code> 匹配到 flexcan 驱动，注册出网络设备，用户空间才看到 can0。</li>
+<li><b>波特率写在设备树里吗？</b>不写。设备树负责「有没有这个控制器、引脚对不对」，波特率由运行期 <code>ip link set ... bitrate</code> 经 can-dev 下发给驱动。</li>
+<li><b>设备树和驱动怎么绑定？</b>靠 <code>compatible</code> 字符串做匹配：节点写 <code>"fsl,imx6ul-flexcan"</code>，驱动里也有同名匹配项，两边对上就 probe。</li>
+</ol>
+
+<div class="good"><strong>再补一句能加分的：</strong>「我们应用层的 <code>canopend</code> 只依赖 SocketCAN 这套标准接口，硬件差异（引脚、时钟、寄存器）全被设备树和内核驱动屏蔽了。这就是嵌入式 Linux 应用开发的价值——<b>同一份应用代码，换块板子重编一次即可。</b>」</div>
+
+<h2>§8 半天补课清单：把「AI 帮你上板」变成「你自己上板」</h2>
+
+<table class="cols-3a">
+<caption>表 9-10 按顺序做，每步都有可验证的产出</caption>
+<thead><tr><th>步骤</th><th>动作</th><th>做完你应该能回答</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>删掉</b> <a href="file:///home/zcy/Project/panasonic_canopen_agv/deploy/canopend_arm">deploy/canopend_arm</a>，照 <a href="file:///home/zcy/Project/panasonic_canopen_agv/toolchain-arm.cmake">toolchain-arm.cmake</a> 自己重编一遍</td><td>「cmake 的两条命令是什么」「编译时用的哪个编译器」</td></tr>
+<tr><td>2</td><td>用 <code>file</code> / <code>readelf -h -A -d</code> 自己验一遍产物</td><td>「怎么一句话证明这是 ARM 程序」</td></tr>
+<tr><td>3</td><td>自己 <code>scp</code> 拷一次、<code>chmod +x</code> 一次</td><td>「二进制怎么到板子上」</td></tr>
+<tr><td>4</td><td>在板子上自己敲 <code>ip link set can0 ...</code> 两条 + <code>canopend</code>，并 <code>candump can0</code> 看帧</td><td>「板端启动序列」「为什么先配 bitrate 再 up」</td></tr>
+<tr><td>5</td><td>在板子上 <code>dtc -I fs -O dts /sys/firmware/devicetree/base</code> 反编译，<b>找到你的 CAN 节点</b>，把 <code>compatible</code>、<code>reg</code>、<code>status</code> 抄下来</td><td>「设备树在板子上怎么看」「can0 从哪来」</td></tr>
+<tr><td>6</td><td>回头口述 §7 的 8 个问题，答不上来的重看对应小节</td><td>面试整段经历能连贯讲 2 分钟</td></tr>
+</tbody>
+</table>
+
+<div class="good"><strong>做完这 6 步，简历上这句就站得住了：</strong>「基于 i.MX6ULL + Linux 4.1.15，使用 <code>arm-linux-gnueabihf</code> 交叉工具链进行应用的交叉编译与部署，掌握 sysroot/工具链配置、ELF 产物验证、SocketCAN 配置（<code>ip link</code> / <code>candump</code>）与设备树 FlexCAN/pinctrl 节点的阅读与修改。」</div>
+
+<div class="footnote">
+本册为「十站地图」第 9 站（阶段 C 第二站），补齐了十站中唯一缺失的分册。配套阅读：<b>第 1 站（CAN 总线 &amp; SocketCAN）</b>、<b>第 8 站（Qt 上位机）</b>；工具链相关可配合 <b>构建系统（Makefile/CMake）</b> 分册第 §9 节。
+源码/配置引用均为本工程可点击链接：<a href="file:///home/zcy/Project/panasonic_canopen_agv/toolchain-arm.cmake">toolchain-arm.cmake</a>、<a href="file:///home/zcy/Project/panasonic_canopen_agv/CMakeLists.txt">CMakeLists.txt</a>、<a href="file:///home/zcy/Project/panasonic_canopen_agv/Makefile">Makefile</a>、<a href="file:///home/zcy/Project/panasonic_canopen_agv/deploy/canopend_arm">deploy/canopend_arm</a>。
+设备树示例为 i.MX6UL/ULL 主线的<b>典型写法</b>，用于说明结构；迅为 iTOP-i.MX6ULL 开发板实际使用的引脚组与节点参数，需以其板级 dts / 原理图（见 <code>docs/hardware/</code>）为准。
+环境实测：Ubuntu 20.04.6 LTS / gcc 9.4.0 / CMake 3.16.3 / Linaro gcc-linaro-4.9.4-2017.01；产物实测 <code>ELF 32-bit LSB executable, ARM, EABI5</code>，396235 字节。
+</div>
+
+</body>
+</html>

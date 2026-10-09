@@ -33,6 +33,7 @@
 #include "OD.h"
 #include "OD_2nd.h"
 #include "agv_log.h"
+#include "agv_kinematics.h"   /* 里程计正解/逆解纯函数(P2 可测性重构) */
 
 /* ===================== 日志：统一分级 + 异步落盘 =====================
  * 见 LOG_ERROR_HANDLING_print.html §2 与 AGV_ASYNC_LOG_IMPL_print.html。
@@ -46,16 +47,9 @@
 /* 统计窗口：每累计这么多拍输出一行(=1000 拍 ≈ 1 秒) */
 #define RT_STAT_TICKS         1000u
 
-/* ===================== 第 7 站：里程计(差动运动学) ===================== */
-/* ---- 标定参数：按实车改(见分册 §3) ---- */
-#define ODOM_WHEEL_R_M      0.050    /* 驱动轮半径 r，米 */
-#define ODOM_COUNT_PER_REV  10000    /* 每转计数 N，counts/rev */
-#define ODOM_WHEEL_BASE_M   0.300    /* 轮距 b(左右轮中心距)，米 */
-#define ODOM_DIR_R          (+1)     /* 右轮方向：+1 前进为正，否则 -1 */
-#define ODOM_DIR_L          (+1)     /* 左轮方向：+1 前进为正，否则 -1 */
-#define ODOM_PI             3.14159265358979
-/* 每 1 计数对应的轮面位移 k = 2πr / N */
-#define ODOM_K_PER_COUNT    (2.0 * ODOM_PI * ODOM_WHEEL_R_M / ODOM_COUNT_PER_REV)
+/* ===================== 第 7 站：里程计(差动运动学) =====================
+ * 标定参数(ODOM_*)与纯函数(agv_odom_step / agv_inverse_kinematics)已抽到
+ * agv_kinematics.h，便于脱离 RT/CAN 单元测试(见 P2 §1.3)。 */
 
 /* 收帧钩子(H6064_write) → RT 拍钩子(app_programRt) 的共享数据。
  * 二者同处 RT 线程、同圈先后执行，故无需加锁(见分册 §2.3)。 */
@@ -101,6 +95,145 @@ OD_extension_t H6064_extentionL = {
     .object = NULL,
     .read = NULL,
     .write = H6064_write,
+};
+
+/* ===================== 第 8 站：下行控制(CiA402) =====================
+ * 上行(第 7 站)是"听"：从站经 RPDO 把 0x6041 状态字、0x6064 位置回给我们。
+ * 下行是"说"：我们(作 NMT 主站)经 TPDO 把 0x6040 控制字、0x60FF 目标速度
+ * 发给从站。本里程碑只做"使能时序"——把两个从站推进到 Operation enabled，
+ * 目标速度恒为 0(安全)，暂不下发运动指令(那属 P0.5 差速逆运动学)。
+ *
+ * 两本 OD 的不对称坑(见分册 S10 §3)：
+ *   - OD(右轮) 的 0x6040/0x60FF 属性本就是 ODA_TPDO，0x1A00 映射也已就绪；
+ *   - OD_2nd(左轮) 原属性是 ODA_RPDO(不可发)，已改成 ODA_TPDO；0x1A00
+ *     默认空映射，需在 app_programStart 里运行时补齐。
+ */
+
+/* 本节点作 NMT 主站，用这两个 TPDO COB-ID 向左右从站下发(bit31=0 才有效) */
+#define DL_TPDO_COBID_R   0x0000050Au   /* 右轮 TPDO: 0x50A */
+#define DL_TPDO_COBID_L   0x0000050Bu   /* 左轮 TPDO: 0x50B */
+#define DL_NODE_R         10u           /* 右轮从站节点号 */
+#define DL_NODE_L         11u           /* 左轮从站节点号 */
+
+/* 收帧钩子(H6041_write) → 使能推进(app_programRt) 的共享数据。
+ * 同处 RT 线程、同圈先后执行，无需加锁(同第 7 站的 odom_*)。
+ * 上电初始为 0，首个状态字到来前 cia402_step 会返回安全态 0x0006。 */
+static uint16_t dl_swR;             /* 右轮最近一次 0x6041 状态字 */
+static uint16_t dl_swL;             /* 左轮最近一次 0x6041 状态字 */
+
+/* 状态字(0x6041)经 RPDO(映射 0x60410010) 到达后落到此钩子。
+ * 范式同 H6064_write：stream->object 里存的是发送方 COB-ID(0x038A/0x038B)，
+ * 用来分辨左右电机。只"存值"，推进留给 app_programRt 在真节拍里做。
+ * 注意：0x6041 在两本 OD 里 dataOrig 都是 NULL(值被丢弃)，必须靠这个
+ * 写钩子才能把状态字接住，否则下行使能无反馈可依。 */
+ODR_t H6041_write(OD_stream_t *stream, const void *buf,
+                  OD_size_t count, OD_size_t *countWritten)
+{
+    if (stream == NULL || stream->object == NULL || buf == NULL
+        || countWritten == NULL) {
+        return ODR_DEV_INCOMPAT;
+    }
+    uint16_t *can_id = (uint16_t*)stream->object;
+    uint16_t  sw     = *(uint16_t*)buf;     /* 状态字 */
+
+    if (*can_id == 0x038A)      dl_swR = sw;   /* 右轮 */
+    else if (*can_id == 0x038B) dl_swL = sw;   /* 左轮 */
+    else return ODR_DEV_INCOMPAT;
+
+    *countWritten = count;
+    return ODR_OK;
+}
+
+/* 0x6041 状态字扩展：只为接住状态字。read=NULL(禁用读——本项目不读它)。 */
+OD_extension_t H6041_extentionR = {
+    .object = NULL,
+    .read = NULL,
+    .write = H6041_write,
+};
+OD_extension_t H6041_extentionL = {
+    .object = NULL,
+    .read = NULL,
+    .write = H6041_write,
+};
+
+/* 0x6040 控制字扩展：本身是可正常读写的 OD 变量，挂扩展的唯一目的是
+ * "启用 flagsPDO"——OD_getFlagsPDO 要求 entry->extension != NULL，否则
+ * OD_requestTPDO 无效、TPDO 不会因控制字变化而发送。用
+ * OD_readOriginal/OD_writeOriginal 保留原始读写行为。 */
+OD_extension_t H6040_extentionR = {
+    .object = NULL,
+    .read = OD_readOriginal,
+    .write = OD_writeOriginal,
+};
+OD_extension_t H6040_extentionL = {
+    .object = NULL,
+    .read = OD_readOriginal,
+    .write = OD_writeOriginal,
+};
+
+/* CiA402 使能时序(纯函数：由状态字推下一步控制字)。掩码对照见分册表 10-1：
+ *   Switch_on_disabled  (sw&0x4F)==0x40 → 0x0006 Shutdown
+ *   Ready_to_switch_on  (sw&0x6F)==0x21 → 0x0007 Switch on
+ *   Switched_on         (sw&0x6F)==0x23 → 0x000F Enable operation
+ *   Operation_enabled   (sw&0x6F)==0x27 → 0x000F 保持使能
+ *   Fault               (sw&0x4F)==0x08 → 0x0080 Fault reset
+ * 其它/未知 → 0x0006(退回安全态)。目标速度恒为 0，故使能后即静止。 */
+static uint16_t cia402_step(uint16_t sw)
+{
+    if ((sw & 0x004Fu) == 0x0008u) return 0x0080u;  /* Fault → Fault reset */
+    if ((sw & 0x004Fu) == 0x0040u) return 0x0006u;  /* Switch on disabled → Shutdown */
+    if ((sw & 0x006Fu) == 0x0021u) return 0x0007u;  /* Ready to switch on → Switch on */
+    if ((sw & 0x006Fu) == 0x0023u) return 0x000Fu;  /* Switched on → Enable operation */
+    if ((sw & 0x006Fu) == 0x0027u) return 0x000Fu;  /* Operation enabled → 保持 */
+    return 0x0006u;                                 /* 其它 → Shutdown(安全) */
+}
+
+/* ===================== 第 11 站：差速逆运动学 + 运动下发 =====================
+ * 上位机经 SDO 写 0x7000[1]=v(m/s), [2]=ω(rad/s)(cmd_vel)。RT 拍把它逆解成
+ * 两轮轮面线速度 vR=v+ω·b/2、vL=v−ω·b/2(见分册 S11 §1)，换算成 counts/s，
+ * 过安全门限后写入目标速度 0x60FF(第 10 站已把 0x60FF 映射进 TPDO)。
+ *
+ * 两个安全门限(见分册 S11 §5.4)：
+ *   ① 未使能不动：只有两轮都在 Operation enabled 才允许非零轮速；
+ *   ② 失联停车(deadman)：超时未收到新 cmd_vel 就把目标速度清零。
+ *      deadman 不能只靠"数值是否变化"判断——主机持续发同一恒速时数值不变，
+ *      必须由"写动作"本身打时间戳，故给 0x7000 挂写钩子(H7000_write)。
+ */
+
+/* cmd_vel 失联判据：RT 真节拍为 1ms/拍，500 拍 = 500ms 无新指令即停车 */
+#define CMD_TIMEOUT_TICKS  500u
+
+static uint32_t rt_tick_now;        /* RT 真节拍单调计数(1ms/拍) */
+static uint32_t cmd_rx_tick;        /* 最近一次收到 0x7000 写入时刻的节拍号 */
+
+/* 0x7000 写钩子：SDO 写 cmd_vel 时被调用(SDO 服务端已在外层持 CO_LOCK_OD)。
+ * 先落值(OD_writeOriginal)，再刷新 deadman 时间戳。 */
+ODR_t H7000_write(OD_stream_t *stream, const void *buf,
+                  OD_size_t count, OD_size_t *countWritten)
+{
+    ODR_t ret = OD_writeOriginal(stream, buf, count, countWritten);
+    if (ret == ODR_OK) cmd_rx_tick = rt_tick_now;
+    return ret;
+}
+
+OD_extension_t H7000_extention = {
+    .object = NULL,
+    .read = OD_readOriginal,
+    .write = H7000_write,
+};
+
+/* 0x60FF 目标速度扩展：本身是普通 OD 变量，挂扩展的唯一目的是"启用
+ * flagsPDO"——OD_getFlagsPDO 要求 entry->extension != NULL，否则
+ * OD_requestTPDO 无效、TPDO 不会因目标速度变化而发送(同 0x6040 的成法)。 */
+OD_extension_t H60FF_extentionR = {
+    .object = NULL,
+    .read = OD_readOriginal,
+    .write = OD_writeOriginal,
+};
+OD_extension_t H60FF_extentionL = {
+    .object = NULL,
+    .read = OD_readOriginal,
+    .write = OD_writeOriginal,
 };
 
 /******************************************************************************/
@@ -195,6 +328,63 @@ CO_ReturnError_t app_programStart(uint16_t *bitRate,
     H6064_extentionL.object = objL;
     OD_extension_init(OD_2nd_ENTRY_H6064_positionActualValue, &H6064_extentionL);
 
+    //*************************************
+    // TPDO(下行)：右/左轮 控制字 0x6040 + 目标速度 0x60FF
+    // 关键：本函数在 CO_CANopenInit 之前调用，此处写入的映射/COB-ID
+    // 会被随后的 CO_TPDO_init 读到并生效。
+    //*************************************
+    /* 右轮 TPDO：清 bit31 使 0xC000050A → 0x0000050A(bit31=1 表示 PDO 无效)。
+     * 映射(0x1A00 = 0x6040+0x60FF)在 OD.c 里已就绪，无需再改。 */
+    odRet = OD_set_u32(OD_ENTRY_H1800_TPDOCommunicationParameter, 1, DL_TPDO_COBID_R, true);
+    if (odRet != ODR_OK) {
+        if (errInfo != NULL) *errInfo = OD_getIndex(OD_ENTRY_H1800_TPDOCommunicationParameter);
+        return CO_ERROR_OD_PARAMETERS;
+    }
+
+    /* 左轮 TPDO：OD_2nd 的 0x1A00 默认空映射，需补齐 sub0..2；再清 bit31
+     * 使 0xC0000180 → 0x0000050B。
+     * 只改 sub1(COB-ID)——OD_2nd 的 0x1800 子索引布局(6 个)与 OD.c(5 个)
+     * 不同，不要盲改其它子索引以免错位。 */
+    odRet = OD_set_u8(OD_2nd_ENTRY_H1A00_TPDOMappingParameter, 0, 2, true);
+    if (odRet != ODR_OK) {
+        if (errInfo != NULL) *errInfo = OD_getIndex(OD_2nd_ENTRY_H1A00_TPDOMappingParameter);
+        return CO_ERROR_OD_PARAMETERS;
+    }
+    odRet = OD_set_u32(OD_2nd_ENTRY_H1A00_TPDOMappingParameter, 1, 0x60400010, true);
+    if (odRet != ODR_OK) {
+        if (errInfo != NULL) *errInfo = OD_getIndex(OD_2nd_ENTRY_H1A00_TPDOMappingParameter);
+        return CO_ERROR_OD_PARAMETERS;
+    }
+    odRet = OD_set_u32(OD_2nd_ENTRY_H1A00_TPDOMappingParameter, 2, 0x60FF0020, true);
+    if (odRet != ODR_OK) {
+        if (errInfo != NULL) *errInfo = OD_getIndex(OD_2nd_ENTRY_H1A00_TPDOMappingParameter);
+        return CO_ERROR_OD_PARAMETERS;
+    }
+    odRet = OD_set_u32(OD_2nd_ENTRY_H1800_TPDOCommunicationParameter, 1, DL_TPDO_COBID_L, true);
+    if (odRet != ODR_OK) {
+        if (errInfo != NULL) *errInfo = OD_getIndex(OD_2nd_ENTRY_H1800_TPDOCommunicationParameter);
+        return CO_ERROR_OD_PARAMETERS;
+    }
+
+    /* 挂扩展：0x6040 启用 flagsPDO(控制字变化即触发 TPDO)；
+     * 0x6041 接住状态字。.object 复用 objR/objL(存 COB-ID 0x038A/0x038B)，
+     * 供写钩子分辨左右。 */
+    H6040_extentionR.object = objR;
+    OD_extension_init(OD_ENTRY_H6040_controlword, &H6040_extentionR);
+    H6041_extentionR.object = objR;
+    OD_extension_init(OD_ENTRY_H6041_statusword, &H6041_extentionR);
+
+    H6040_extentionL.object = objL;
+    OD_extension_init(OD_2nd_ENTRY_H6040_controlword, &H6040_extentionL);
+    H6041_extentionL.object = objL;
+    OD_extension_init(OD_2nd_ENTRY_H6041_statusword, &H6041_extentionL);
+
+    /* 第 11 站：0x7000 cmd_vel 写钩子(落值 + 刷 deadman 时间戳)；
+     * 0x60FF 目标速度挂扩展，启用 flagsPDO，使 RT 写后 OD_requestTPDO 能触发 TPDO。 */
+    OD_extension_init(OD_ENTRY_H7000_agvCmdVel, &H7000_extention);
+    OD_extension_init(OD_ENTRY_H60FF_targetVelocity, &H60FF_extentionR);
+    OD_extension_init(OD_2nd_ENTRY_H60FF_targetVelocity, &H60FF_extentionL);
+
     return err;
 }
 
@@ -221,7 +411,18 @@ void app_programEnd() {
 
 /******************************************************************************/
 void app_programAsync(CO_t *co, uint32_t timer1usDiff) {
-    (void) co; (void) timer1usDiff; /* unused */
+    (void) timer1usDiff; /* unused */
+
+    /* ===================== 第 8 站：NMT 主站"叫醒"从站 =====================
+     * 本节点作 NMT 主站，上电后把左右两个从站切到 OPERATIONAL——从站只有
+     * 进入 OP 才会处理/回送 PDO。用静态标志保证只发一次。 */
+    static bool_t nmt_sent = false;
+    if (!nmt_sent) {
+        nmt_sent = true;
+        CO_NMT_sendCommand(co->NMT, CO_NMT_ENTER_OPERATIONAL, DL_NODE_R);
+        CO_NMT_sendCommand(co->NMT, CO_NMT_ENTER_OPERATIONAL, DL_NODE_L);
+        AGV_LOGI("[DL] NMT start remote node: R=%u L=%u", DL_NODE_R, DL_NODE_L);
+    }
 }
 
 
@@ -273,6 +474,77 @@ void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent) {
         win_lat_max = 0; win_over = 0; win_other = 0;
     }
 
+    /* ===================== 第 8 站：下行控制(CiA402 使能推进) =====================
+     * 每个真节拍依据最近状态字推进一步控制字，仅当变化时写 OD 并触发 TPDO。
+     * 目标速度 0x60FF 恒为默认值 0(安全)，本里程碑只做"使能"，不发运动指令。
+     * 左轮上电尚未收到状态字时 dl_swL=0 → cia402_step 返回 0x0006(安全态)。
+     * 写侧在 RT 线程、网关读侧在 main 线程，跨线程访问 OD_RAM，用 CO_LOCK_OD 保护。 */
+    uint16_t cwR = cia402_step(dl_swR);
+    uint16_t cwL = cia402_step(dl_swL);
+
+    CO_LOCK_OD(co->CANmodule);
+    if (cwR != OD_RAM.x6040_controlword) {
+        OD_RAM.x6040_controlword = cwR;
+        OD_requestTPDO(OD_getFlagsPDO(OD_ENTRY_H6040_controlword), 0);
+    }
+    if (cwL != OD_2nd_RAM.x6040_controlword) {
+        OD_2nd_RAM.x6040_controlword = cwL;
+        OD_requestTPDO(OD_getFlagsPDO(OD_2nd_ENTRY_H6040_controlword), 0);
+    }
+    CO_UNLOCK_OD(co->CANmodule);
+
+    /* ===================== 第 11 站：逆解 + 目标速度下发 =====================
+     * 顺序：读 cmd_vel(锁内取快照) → 逆解 → 换算 → 安全门限 → 写 0x60FF。
+     * 前提：位置在真节拍段(上面已把非节拍 return 掉)。 */
+    rt_tick_now++;
+
+    float32_t cmd_v, cmd_w;
+    CO_LOCK_OD(co->CANmodule);
+    cmd_v = OD_RAM.x7000_agvCmdVel[0];      /* 子索引 1：v (m/s) */
+    cmd_w = OD_RAM.x7000_agvCmdVel[1];      /* 子索引 2：ω (rad/s) */
+    uint32_t cmd_age = rt_tick_now - cmd_rx_tick;   /* 距上次下发经过的拍数 */
+    CO_UNLOCK_OD(co->CANmodule);
+
+    /* ① 逆解：车体 (v,ω) → 两轮目标速度 (counts/s)。纯函数，可单测。 */
+    int32_t vR_cnt, vL_cnt;
+    agv_inverse_kinematics((double)cmd_v, (double)cmd_w, &vR_cnt, &vL_cnt);
+
+    /* ③ 安全门限：未使能 或 cmd_vel 失联 或 从站心跳超时 → 强制零(见分册 S11 §5.4) */
+    bool_t cmd_timeout = (cmd_age > CMD_TIMEOUT_TICKS);
+
+    /* ④ 心跳容错：任一所监控从站心跳超时 → 判掉线 → 强制零速。
+     * 监控槽在 OD.c 配置：0x1016[1]=node10(右)、[2]=node11(左)，getState 的
+     * idx 为 0 基数组下标(槽 1→idx0、槽 2→idx1)。EMCY 由 HBconsumer 库内自动
+     * 上报，这里只做运动降级；仅在状态跃迁到/退出 TIMEOUT 时打一行日志。 */
+    CO_HBconsumer_state_t hbR = CO_HBconsumer_getState(co->HBcons, 0);
+    CO_HBconsumer_state_t hbL = CO_HBconsumer_getState(co->HBcons, 1);
+    bool_t hb_lost = (hbR == CO_HBconsumer_TIMEOUT || hbL == CO_HBconsumer_TIMEOUT);
+    static bool_t hb_lost_prev;
+    if (hb_lost != hb_lost_prev) {
+        AGV_LOGE("[HB] heartbeat %s: node%u=%u node%u=%u",
+                 hb_lost ? "LOST" : "OK", DL_NODE_R, (unsigned)hbR,
+                 DL_NODE_L, (unsigned)hbL);
+        hb_lost_prev = hb_lost;
+    }
+
+    if ((dl_swR & 0x006Fu) != 0x0027u || (dl_swL & 0x006Fu) != 0x0027u
+        || cmd_timeout || hb_lost) {
+        vR_cnt = 0;
+        vL_cnt = 0;
+    }
+
+    /* ④ 写入并触发 TPDO：仅当变化时发，减少总线占用(0x60FF 已挂扩展) */
+    CO_LOCK_OD(co->CANmodule);
+    if (vR_cnt != OD_RAM.x60FF_targetVelocity) {
+        OD_RAM.x60FF_targetVelocity = vR_cnt;
+        OD_requestTPDO(OD_getFlagsPDO(OD_ENTRY_H60FF_targetVelocity), 0);
+    }
+    if (vL_cnt != OD_2nd_RAM.x60FF_targetVelocity) {
+        OD_2nd_RAM.x60FF_targetVelocity = vL_cnt;
+        OD_requestTPDO(OD_getFlagsPDO(OD_2nd_ENTRY_H60FF_targetVelocity), 0);
+    }
+    CO_UNLOCK_OD(co->CANmodule);
+
     /* ===================== 第 7 站：里程计积分 =====================
      * 只在真节拍(上面已把非节拍 return 掉)且本拍收到过新位置(odom_new)
      * 时积分一次，避免被门铃/报文唤醒或 1ms 内多帧重复积分。
@@ -293,25 +565,11 @@ void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent) {
         return;
     }
 
-    /* ① 本拍两轮各转了多少计数(无符号相减，天然处理 32 位回绕) */
-    int32_t dCntR = (int32_t)((uint32_t)odom_posR_raw - (uint32_t)prevR);
-    int32_t dCntL = (int32_t)((uint32_t)odom_posL_raw - (uint32_t)prevL);
+    /* ①②③ 积分交给纯函数 agv_odom_step(可脱离 RT/CAN 单测，见 P2 §1.7) */
+    agv_odom_step(prevR, prevL, odom_posR_raw, odom_posL_raw,
+                  &odom_x, &odom_y, &odom_th);
     prevR = odom_posR_raw;
     prevL = odom_posL_raw;
-
-    /* ① 计数 → 轮面位移(m)，并用方向系数统一「前进为正」 */
-    double dR = ODOM_DIR_R * ODOM_K_PER_COUNT * (double)dCntR;
-    double dL = ODOM_DIR_L * ODOM_K_PER_COUNT * (double)dCntL;
-
-    /* ② 两轮 → 车体位移/转角 */
-    double d   = (dR + dL) / 2.0;
-    double dth = (dR - dL) / ODOM_WHEEL_BASE_M;
-
-    /* ③ 中点法累加位姿(θmid 用更新前的 θ，θ 最后才加) */
-    double thmid = odom_th + dth / 2.0;
-    odom_x  += d * cos(thmid);
-    odom_y  += d * sin(thmid);
-    odom_th += dth;
 
     /* 把位姿写进自定义 OD 数组 0x6FFF(索引 1/2/3 = x/y/th)，供 CiA-309
      * 网关(Qt 上位机)按 SDO 读取。写侧在 rt_thread，网关读侧在 main 线程，

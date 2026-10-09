@@ -29,7 +29,10 @@ OD_ATTR_PERSIST_COMM OD_PERSIST_COMM_t OD_PERSIST_COMM = {
     .x1014_COB_ID_EMCY = 0x00000080,
     .x1015_inhibitTimeEMCY = 0x0000,
     .x1016_consumerHeartbeatTime_sub0 = 0x08,
-    .x1016_consumerHeartbeatTime = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000},
+    /* 心跳消费者：sub1 监控右轮(node10)、sub2 监控左轮(node11)。
+     * 每槽 32 位 = (nodeId<<16) | 超时ms，0=禁用。1000ms 无心跳 → HBconsumer
+     * 自动置 TIMEOUT 并上报 EMCY(库内建)，RT 拍据此降级为零速(见 CO_application.c)。 */
+    .x1016_consumerHeartbeatTime = {0x000A03E8, 0x000B03E8, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000},
     .x1017_producerHeartbeatTime = 0x0000,
     .x1018_identity = {
         .highestSub_indexSupported = 0x04,
@@ -279,7 +282,9 @@ OD_ATTR_RAM OD_RAM_t OD_RAM = {
     .x67FE_versionNumber = 0x00040100,
     .x67FF_singleDeviceType = 0x00020192,
     .x6FFF_agvOdometry_sub0 = 0x03,
-    .x6FFF_agvOdometry = {0.0f, 0.0f, 0.0f}
+    .x6FFF_agvOdometry = {0.0f, 0.0f, 0.0f},
+    .x7000_agvCmdVel_sub0 = 0x02,
+    .x7000_agvCmdVel = {0.0f, 0.0f}
 };
 
 
@@ -446,6 +451,7 @@ typedef struct {
     OD_obj_var_t o_67FE_versionNumber;
     OD_obj_var_t o_67FF_singleDeviceType;
     OD_obj_array_t o_6FFF_agvOdometry;
+    OD_obj_array_t o_7000_agvCmdVel;
 } ODObjs_t;
 
 static CO_PROGMEM ODObjs_t ODObjs = {
@@ -1961,6 +1967,15 @@ static CO_PROGMEM ODObjs_t ODObjs = {
         .attribute = ODA_SDO_R | ODA_MB,
         .dataElementLength = 4,
         .dataElementSizeof = sizeof(float32_t)
+    },
+    .o_7000_agvCmdVel = {
+        .dataOrig0 = &OD_RAM.x7000_agvCmdVel_sub0,
+        .dataOrig = &OD_RAM.x7000_agvCmdVel[0],
+        .attribute0 = ODA_SDO_R,
+        /* SDO 可写：由上位机经网关下发 cmd_vel；RT 侧读。 */
+        .attribute = ODA_SDO_RW | ODA_MB,
+        .dataElementLength = 4,
+        .dataElementSizeof = sizeof(float32_t)
     }
 };
 
@@ -2129,6 +2144,8 @@ static OD_ATTR_OD OD_entry_t ODList[] = {
     /* 追加在末尾: 0x6FFF > 所有既有索引, 保持 ODList 升序 (OD_find 二分查找)。
      * 第二字段 = 子索引总数 = 数组元素数 + 1 (含 sub0)。 */
     {0x6FFF, 0x04, ODT_ARR, &ODObjs.o_6FFF_agvOdometry, NULL},
+    /* 0x7000 cmd_vel：同样追加在末尾，保持 ODList 升序(0x7000 > 0x6FFF)。 */
+    {0x7000, 0x03, ODT_ARR, &ODObjs.o_7000_agvCmdVel, NULL},
     {0x0000, 0x00, 0, NULL, NULL}
 };
 

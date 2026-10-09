@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Modbus 学习册 · 按岗位要求裁定的学习深度 + 落地到本项目（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:20%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:42%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:38%}
+.cols-4a th:nth-child(1),.cols-4a td:nth-child(1){width:18%}
+.cols-4a th:nth-child(2),.cols-4a td:nth-child(2){width:20%}
+.cols-4a th:nth-child(3),.cols-4a td:nth-child(3){width:22%}
+.cols-4a th:nth-child(4),.cols-4a td:nth-child(4){width:40%}
+.cols-4c th:nth-child(1),.cols-4c td:nth-child(1){width:9%}
+.cols-4c th:nth-child(2),.cols-4c td:nth-child(2){width:27%}
+.cols-4c th:nth-child(3),.cols-4c td:nth-child(3){width:26%}
+.cols-4c th:nth-child(4),.cols-4c td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #99b; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#2255a4; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.figure { border:0.6pt solid #bbb; background:#fff; padding:2mm; margin:2mm 0 3mm; page-break-inside:avoid; }
+.figure svg { width:100%; height:auto; display:block; }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>Modbus 学习册：按岗位要求裁定的学习深度 + 落地到本项目</h1>
+
+<div class="meta">
+<p><strong>这份文档解决什么</strong>：你要学 Modbus，但"学到哪算够"没有标准答案。本册先**按你的岗位定位裁定学习深度**（避免又走进"自研协议栈"的坑），再给**够用的全部知识**，最后落到本项目的**真实产出物**：Modbus RTU IMU 主站。</p>
+<p><strong>裁定结论（先看这个）</strong>：目标深度 = <strong>L3「会写主站」</strong>。即：能自己写出 Modbus 主站把 IMU 调通、能逐字节画清帧格式、能讲清 CRC 与字节序、能处理异常与超时。<strong>不学 L4（自研协议栈 / 网关内核实现）。</strong></p>
+<p><strong>依据</strong>：HANDOFF §16.1/§16.0 的岗位调研——校招线只要求"**了解**"工业总线；Modbus 在 AGV/工控**研发岗**是"熟悉/优先"，**只有"协议栈开发岗"才要求"从零搭建"**（且普遍 3 年+ 经验）。你是**校招 + 主控/应用向**，L3 刚好够"产出成果 + 面试能讲"，再深就越界。</p>
+<p><strong>配套</strong>：HANDOFF §16.5（后续增量：CoE + Modbus RTU IMU）、§6.6（Qt 上行/下行）、§十五 P0/P0.5（主控闭环）。</p>
+<p><strong>Web 检索时间</strong>：2026-10-09。本文示例帧的 CRC 均经程序实算核对（见 §5）。</p>
+</div>
+
+<h2>§1 学习深度裁定（先钉死，照此筛）</h2>
+
+<p>把"学 Modbus"拆成 4 档，直接对标你投的岗位：</p>
+
+<table class="cols-4a">
+<caption>表 1-1　Modbus 四档深度 vs 岗位要求</caption>
+<thead><tr><th>档位</th><th>能力描述</th><th>谁的岗位要求</th><th>你的裁定</th></tr></thead>
+<tbody>
+<tr><td><strong>L1 知道</strong></td><td>知道 Modbus 是主从轮询、RTU 走 RS485、TCP 走 502 端口</td><td>校招 JD 的"了解工业总线"</td><td>必须（面试一句话能说）</td></tr>
+<tr><td><strong>L2 会读</strong></td><td>能看懂 IMU 手册的寄存器表，能用现成工具读出数据</td><td>实施/调试岗</td><td>顺手就会（L3 的副产品）</td></tr>
+<tr><td><strong>L3 会写 ★</strong></td><td><strong>能自己写主站</strong>：逐字节组帧/解帧、CRC16、t3.5 切帧、异常码、超时重试、float32 字节序、RS485 半双工方向控制</td><td>AGV/工控研发岗的"熟悉/优先"</td><td><strong>目标档（本册内容）</strong></td></tr>
+<tr><td>L4 会造</td><td>自研协议栈 / 写网关内核 / 做协议栈移植优化</td><td><strong>协议栈开发岗</strong>（3 年+）</td><td><strong style="color:#a11">不学</strong>（越界，撞 §16.0 定位）</td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>简历话术（L3 达标后可写）</strong>：</p>
+<p>"基于 Modbus RTU 主站接入 IMU：RS485 半双工收发方向控制 + 自定义 CRC16 组帧/校验 + t3.5 帧同步 + 响应超时重试与从站离线判定；数据写入 CANopen 对象字典并参与轮式里程计的航向融合。"</p>
+</div>
+
+<div class="warn">
+<p><strong>别踩的坑</strong>：L1/L2 是"会用软件"，L3 是"会写代码"，L4 是"会造协议栈"。<strong>只做到 L3</strong>——因为你要的是"一个能写进简历的 IMU 接入成果"，不是"去投协议栈开发岗"。这与 HANDOFF §16.0 已排除的两条（CAN 驱动开发、深挖 CAN 电气物理）是同一类边界。</p>
+</div>
+
+<h2>§2 一图：Modbus 在哪里 / 与 CANopen 对照</h2>
+
+<p>读法：左边是 Modbus 的两种形态（RTU 走串口、TCP 走以太网），右边是你已经吃透的 CANopen。★ = 你项目里会用到的那条。</p>
+
+<div class="figure">
+<svg viewBox="0 0 1100 430" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2255a4"/>
+    </marker>
+  </defs>
+
+  <text x="12" y="18" font-size="12" font-weight="700" fill="#2255a4">Modbus 侧（本册）</text>
+  <text x="700" y="18" font-size="12" font-weight="700" fill="#555">CANopen 侧（你已做透）</text>
+
+  <!-- Modbus 栈 -->
+  <rect x="40" y="32" width="460" height="34" rx="4" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="270" y="54" font-size="11.5" text-anchor="middle">应用：读 IMU 角度 / 角速度 → 写 CANopen OD</text>
+
+  <rect x="40" y="74" width="460" height="46" rx="4" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="270" y="94" font-size="11.5" font-weight="700" text-anchor="middle">Modbus 应用协议 PDU（功能码 + 数据）</text>
+  <text x="270" y="111" font-size="10" text-anchor="middle" fill="#333">四区数据模型 · 功能码 · 异常码 · 字节序</text>
+
+  <rect x="40" y="128" width="222" height="60" rx="4" fill="#fdf7e3" stroke="#b8860b"/>
+  <text x="151" y="150" font-size="11" font-weight="700" text-anchor="middle">RTU 封装 ★</text>
+  <text x="151" y="167" font-size="9.6" text-anchor="middle" fill="#333">地址+功能码+数据+CRC16</text>
+  <text x="151" y="181" font-size="9.6" text-anchor="middle" fill="#333">切帧靠 t3.5 静默</text>
+
+  <rect x="278" y="128" width="222" height="60" rx="4" fill="#f2f2f2" stroke="#888"/>
+  <text x="389" y="150" font-size="11" font-weight="700" text-anchor="middle">TCP 封装</text>
+  <text x="389" y="167" font-size="9.6" text-anchor="middle" fill="#333">MBAP 头 7B + PDU</text>
+  <text x="389" y="181" font-size="9.6" text-anchor="middle" fill="#333">无 CRC · 端口 502</text>
+
+  <rect x="40" y="196" width="222" height="36" rx="4" fill="#e8e8e8" stroke="#666"/>
+  <text x="151" y="219" font-size="10.5" font-weight="700" text-anchor="middle">RS485 串行链路（半双工）★</text>
+  <rect x="278" y="196" width="222" height="36" rx="4" fill="#e8e8e8" stroke="#666"/>
+  <text x="389" y="219" font-size="10.5" font-weight="700" text-anchor="middle">以太网 / TCP-IP</text>
+
+  <rect x="40" y="240" width="460" height="34" rx="4" fill="#fff" stroke="#bbb" stroke-dasharray="4 3"/>
+  <text x="270" y="262" font-size="10.3" text-anchor="middle" fill="#333">物理层：A/B 差分双绞 · 两端 120Ω（记结论即可，不深挖）</text>
+
+  <!-- CANopen 栈 -->
+  <rect x="620" y="32" width="440" height="34" rx="4" fill="#f0f0f0" stroke="#555"/>
+  <text x="840" y="54" font-size="11.5" text-anchor="middle">应用：里程计 / 逆解 / CiA-402 使能</text>
+
+  <rect x="620" y="74" width="440" height="46" rx="4" fill="#f0f0f0" stroke="#555"/>
+  <text x="840" y="94" font-size="11.5" font-weight="700" text-anchor="middle">对象字典 OD（索引:子索引，带类型与语义）</text>
+  <text x="840" y="111" font-size="10" text-anchor="middle" fill="#333">0x6FFF 位姿 · 0x7000 cmd_vel · 0x6040/0x6041</text>
+
+  <rect x="620" y="128" width="214" height="60" rx="4" fill="#f0f0f0" stroke="#555"/>
+  <text x="727" y="150" font-size="11" font-weight="700" text-anchor="middle">SDO（请求/响应）</text>
+  <text x="727" y="167" font-size="9.6" text-anchor="middle" fill="#333">配置参数、单点读写</text>
+  <rect x="846" y="128" width="214" height="60" rx="4" fill="#f0f0f0" stroke="#555"/>
+  <text x="953" y="150" font-size="11" font-weight="700" text-anchor="middle">PDO（主动/周期）</text>
+  <text x="953" y="167" font-size="9.6" text-anchor="middle" fill="#333">过程数据、事件驱动</text>
+
+  <rect x="620" y="196" width="440" height="36" rx="4" fill="#e8e8e8" stroke="#666"/>
+  <text x="840" y="219" font-size="10.5" font-weight="700" text-anchor="middle">CAN 总线（多主仲裁 · 硬件 ACK · 自动重传）</text>
+
+  <rect x="620" y="240" width="440" height="34" rx="4" fill="#fff" stroke="#bbb" stroke-dasharray="4 3"/>
+  <text x="840" y="262" font-size="10.3" text-anchor="middle" fill="#333">物理层：CAN_H/CAN_L 差分 · 两端 120Ω</text>
+
+  <!-- 对照箭头 -->
+  <line x1="506" y1="215" x2="614" y2="215" stroke="#2255a4" stroke-width="1.5" marker-end="url(#am)"/>
+  <text x="560" y="205" font-size="10" font-weight="700" fill="#2255a4" text-anchor="middle">对照</text>
+
+  <text x="40" y="300" font-size="11" font-weight="700" fill="#333">本质差异（三条，面试必说）</text>
+  <text x="40" y="322" font-size="10.3">① 模型：Modbus 是"线性寄存器地址"，无类型无语义；CANopen 是"对象字典"，索引自带类型与含义。</text>
+  <text x="40" y="342" font-size="10.3">② 通信：Modbus <tspan font-weight="700">只有请求/响应</tspan>（主站不问，从站不说）；CANopen 的 PDO 能<tspan font-weight="700">主动/周期上报</tspan>。</text>
+  <text x="40" y="362" font-size="10.3">③ 可靠：Modbus 无链路层 ACK/重传，靠<tspan font-weight="700">应用层超时重试</tspan>；CAN 有硬件 ACK 与自动重传。</text>
+  <text x="40" y="386" font-size="10.3" fill="#a11">推论：AGV 要"实时推送位姿"，Modbus 不合适——这正是 CANopen/EtherCAT 的用武之地。IMU 这种<tspan font-weight="700">低频状态量</tspan>才适合 Modbus 轮询。</text>
+</svg>
+</div>
+
+<table class="cols-4a">
+<caption>表 2-1　Modbus vs CANopen（本项目视角）</caption>
+<thead><tr><th>维度</th><th>Modbus（RTU/TCP）</th><th>CANopen（本项目）</th><th>对你的影响</th></tr></thead>
+<tbody>
+<tr><td>数据模型</td><td>四区线性地址，无类型</td><td>对象字典（索引:子索引，带类型/属性）</td><td>Modbus 要自己约定"哪两个寄存器 = 一个 float32"</td></tr>
+<tr><td>通信模式</td><td>主从轮询，从站不能主动发</td><td>SDO 请求响应 + PDO 主动上报 + 心跳</td><td>IMU 只能被轮询；无从站主动告警</td></tr>
+<tr><td>物理层</td><td>RS485 半双工（2 线）</td><td>CAN（差分，多主仲裁）</td><td>RS485 要手动切收发方向</td></tr>
+<tr><td>可靠性</td><td>无 ACK/重传，靠应用层超时</td><td>硬件 ACK + 自动重传 + 心跳超时</td><td>Modbus 主站必须自己写重试与离线判定</td></tr>
+<tr><td>典型速率</td><td>9600 ~ 115200 bps（串口）</td><td>500 kbps（本项目）</td><td>Modbus 带宽低，只够低频量</td></tr>
+<tr><td>典型用途</td><td>PLC/仪表/传感器接入</td><td>运动控制/多从站实时控制</td><td>两者互补：IMU↔Modbus，电机↔CANopen</td></tr>
+</tbody>
+</table>
+
+<h2 class="pgbreak">§3 数据模型：四个区 + 地址编号</h2>
+
+<p>Modbus 把从站的数据摊成 <strong>4 个区</strong>，按"位/字"和"只读/可读写"两个维度划分。这是理解一切功能码的根。</p>
+
+<table class="cols-4c">
+<caption>表 3-1　Modbus 四区模型（★ = 本项目会用到）</caption>
+<thead><tr><th>区</th><th>位宽 / 读写</th><th>传统编号 / 协议偏移</th><th>读 / 写功能码</th></tr></thead>
+<tbody>
+<tr><td>线圈<br>Coils</td><td>1 bit，可读可写</td><td><code>0xxxx</code>（从 1 起）<br>PDU 内从 0 起</td><td>读 <code>0x01</code>／写单 <code>0x05</code>／写多 <code>0x0F</code></td></tr>
+<tr><td>离散输入<br>Discrete Inputs</td><td>1 bit，只读</td><td><code>1xxxx</code><br>PDU 内从 0 起</td><td>读 <code>0x02</code></td></tr>
+<tr><td>输入寄存器 ★<br>Input Registers</td><td>16 bit，只读</td><td><code>3xxxx</code><br>PDU 内从 0 起</td><td>读 <code>0x04</code></td></tr>
+<tr><td>保持寄存器<br>Holding Registers</td><td>16 bit，可读可写</td><td><code>4xxxx</code><br>PDU 内从 0 起</td><td>读 <code>0x03</code>／写单 <code>0x06</code>／写多 <code>0x10</code></td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>头号地址坑</strong>：手册写"40001"，协议帧里是 <code>0x0000</code>；手册写"30001"，帧里也是 <code>0x0000</code>。即<strong>区号只是给人看的，帧里只发"区内的 0 基偏移"</strong>。换算：<code>帧偏移 = 传统编号 − 区基数</code>（4xxxx→减 40001，3xxxx→减 30001）。IMU 手册两种写法都可能出现，联调时先对齐这一点。</p>
+</div>
+
+<div class="note">
+<p><strong>本项目怎么用</strong>：IMU 实时值（角度、角速度）放<strong>输入寄存器（只读，3x/0x04 读）</strong>；IMU 的配置项（零偏校准、量程、安装方向）放<strong>保持寄存器（可写，0x06/0x10 写）</strong>。这套分工是工业惯例，照着做面试也能讲。</p>
+</div>
+
+<h2>§4 功能码速查表</h2>
+
+<table class="cols-3">
+<caption>表 4-1　常用功能码（够 L3 用；★ = 本项目必会）</caption>
+<thead><tr><th>功能码</th><th>名称 / 作用</th><th>请求与响应要点</th></tr></thead>
+<tbody>
+<tr><td><code>0x01</code></td><td>Read Coils　读线圈</td><td>给起始地址+数量；响应按位打包（8 位/字节）</td></tr>
+<tr><td><code>0x02</code></td><td>Read Discrete Inputs　读离散输入</td><td>同上，只读区</td></tr>
+<tr><td><code>0x03</code></td><td>Read Holding Registers　读保持寄存器 ★</td><td>响应含"字节数"字段 = 寄存器数 × 2</td></tr>
+<tr><td><code>0x04</code></td><td>Read Input Registers　读输入寄存器 ★</td><td>本项目读 IMU 实时值用它</td></tr>
+<tr><td><code>0x05</code></td><td>Write Single Coil　写单个线圈</td><td>值只能是 <code>0xFF00</code>(ON) / <code>0x0000</code>(OFF)</td></tr>
+<tr><td><code>0x06</code></td><td>Write Single Register　写单个寄存器 ★</td><td>响应 = <strong>原样回显请求</strong></td></tr>
+<tr><td><code>0x0F</code></td><td>Write Multiple Coils　写多个线圈</td><td>请求带"字节数 + 位打包数据"</td></tr>
+<tr><td><code>0x10</code></td><td>Write Multiple Registers　写多个寄存器 ★</td><td>请求带"寄存器数 + 字节数 + 数据"；响应回"起始地址+数量"</td></tr>
+</tbody>
+</table>
+
+<h2 class="pgbreak">§5 Modbus RTU 帧格式（逐字节 · 含实算 CRC）</h2>
+
+<p>RTU 帧就 4 段，没有长度字段——<strong>靠"静默间隔"切帧</strong>：</p>
+
+<div class="figure">
+<svg viewBox="0 0 1080 200" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+  <text x="10" y="16" font-size="11" font-weight="700">RTU 帧结构（读保持寄存器示例：从站 1，起始 0，读 2 个）</text>
+
+  <rect x="20" y="30" width="130" height="46" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="85" y="52" font-size="11" font-weight="700" text-anchor="middle">从站地址</text>
+  <text x="85" y="68" font-size="10" text-anchor="middle" fill="#333">1 字节 = 0x01</text>
+
+  <rect x="152" y="30" width="130" height="46" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="217" y="52" font-size="11" font-weight="700" text-anchor="middle">功能码</text>
+  <text x="217" y="68" font-size="10" text-anchor="middle" fill="#333">1 字节 = 0x03</text>
+
+  <rect x="284" y="30" width="300" height="46" fill="#fdf7e3" stroke="#b8860b"/>
+  <text x="434" y="52" font-size="11" font-weight="700" text-anchor="middle">数据 N 字节</text>
+  <text x="434" y="68" font-size="10" text-anchor="middle" fill="#333">起始 0x0000 + 数量 0x0002</text>
+
+  <rect x="586" y="30" width="170" height="46" fill="#fdf5f5" stroke="#b33"/>
+  <text x="671" y="52" font-size="11" font-weight="700" text-anchor="middle">CRC16</text>
+  <text x="671" y="68" font-size="10" text-anchor="middle" fill="#333">2 字节，低字节先发</text>
+
+  <text x="20" y="104" font-size="10.5" font-weight="700">实际字节流：</text>
+  <text x="20" y="126" font-family="DejaVu Sans Mono, monospace" font-size="12" font-weight="700" fill="#2255a4">01 03 00 00 00 02 C4 0B</text>
+  <text x="20" y="146" font-size="9.6" fill="#333">└地址┘└功能┘└──数据（起址+数量）──┘└CRC┘　　CRC 计算值 = 0x0BC4，故发 C4 0B（低字节先）。</text>
+
+  <text x="20" y="176" font-size="9.6" fill="#666">帧前/帧后必须各留 ≥ t3.5 的静默（见下表），中间任意两字符间隔 &gt; t1.5 视为帧错误。</text>
+</svg>
+</div>
+
+<h3>5.1 完整命令/响应示例（CRC 已实算核对）</h3>
+
+<table class="cols-4c">
+<caption>表 5-1　RTU 常见往返（从站地址 01；CRC 低字节先发）</caption>
+<thead><tr><th>场景</th><th>请求（主站→从站）</th><th>响应（从站→主站）</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>读保持寄存器</td><td><code>01 03 00 00 00 02 C4 0B</code></td><td><code>01 03 04 AA BB CC DD 7B CD</code></td><td>读 2 个寄存器；响应"04"=字节数=2×2</td></tr>
+<tr><td>读输入寄存器 ★</td><td><code>01 04 00 00 00 02 71 CB</code></td><td><code>01 04 04 AA BB CC DD CRC</code></td><td>读 IMU 实时值走这条</td></tr>
+<tr><td>写单个寄存器</td><td><code>01 06 00 10 00 64 89 E4</code></td><td><code>01 06 00 10 00 64 89 E4</code></td><td>0x06 的响应 = <strong>原样回显</strong></td></tr>
+<tr><td>写多个寄存器</td><td><code>01 10 00 10 00 02 04 41 20 00 00 E7 55</code></td><td><code>01 10 00 10 00 02 CRC</code></td><td>写 float32=10.0（见 §8）</td></tr>
+<tr><td>异常：地址非法</td><td><code>01 03 00 00 00 02 C4 0B</code></td><td><code>01 83 02 C0 F1</code></td><td>功能码｜0x80 + 异常码 0x02</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 CRC16（Modbus 版）算法</h3>
+
+<pre>:  参数：多项式 0xA001（反射）、初值 0xFFFF、无最终异或
+:  发送：CRC 低字节先发（如上例 0x0BC4 → 发 C4 0B）
+uint16_t crc16_modbus(const uint8_t *buf, int len)
+{
+    uint16_t crc = 0xFFFF;
+    for (int i = 0; i &lt; len; i++) {
+        crc ^= buf[i];
+        for (int b = 0; b &lt; 8; b++)
+            crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : (crc >> 1);
+    }
+    return crc;
+}
+:  校验：对整帧（含末尾 CRC 两字节）再算一次，结果应为 0
+</pre>
+
+<h3>5.3 切帧：为什么"静默间隔"是关键</h3>
+
+<p>RTU 帧<strong>没有长度字段</strong>，从站靠"总线静默"判断一帧结束。这决定了两件事：主站发送后必须等最后一个字节<strong>真正移出</strong>再动作；接收方要按字符间隔判断帧异常。</p>
+
+<table class="cols-3">
+<caption>表 5-2　切帧时间与波特率（t = 1 字符含起始/数据/校验/停止位，按 8N1 = 10 位）</caption>
+<thead><tr><th>波特率</th><th>t1.5（帧内间隔上限）</th><th>t3.5（帧间静默）</th></tr></thead>
+<tbody>
+<tr><td>9600</td><td>≈ 1.56 ms</td><td>≈ 3.65 ms</td></tr>
+<tr><td>19200</td><td>≈ 0.78 ms</td><td>≈ 1.82 ms</td></tr>
+<tr><td>38400</td><td>≈ 0.39 ms</td><td>≈ 0.91 ms</td></tr>
+<tr><td>115200</td><td>≈ 0.13 ms</td><td>≈ 0.30 ms</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong>串口参数（IMU 常见）</strong>：<code>9600</code> 或 <code>115200</code>、8 数据位、<strong>无校验(N)</strong> 或偶校验(E)、1 停止位 → 记作 <code>8N1</code> / <code>8E1</code>。以 IMU 手册为准，参数不匹配 = 全是乱码/CRC 错。</p>
+</div>
+
+<h2 class="pgbreak">§6 Modbus TCP 帧格式（MBAP 头）</h2>
+
+<p>Modbus TCP 把 RTU 的"地址+CRC"换成了 <strong>7 字节 MBAP 头</strong>，其他（功能码、数据、异常码）与 RTU 完全一致。TCP 靠 TCP 保证完整性与顺序，所以<strong>没有 CRC</strong>。</p>
+
+<table class="cols-4a">
+<caption>表 6-1　MBAP 头（共 7 字节）+ PDU</caption>
+<thead><tr><th>字段</th><th>长度</th><th>取值 / 说明</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td>事务标识符</td><td>2 B</td><td>主站自增（如 0x0001）</td><td>把响应与请求对上号（并发时必需）</td></tr>
+<tr><td>协议标识符</td><td>2 B</td><td><strong>恒为 0x0000</strong></td><td>Modbus 专用；非 0 视为非 Modbus</td></tr>
+<tr><td>长度</td><td>2 B</td><td>= 后续字节数 = 1 + PDU 长度</td><td><strong>有长度字段，所以不需要静默切帧</strong></td></tr>
+<tr><td>单元标识符</td><td>1 B</td><td>= RTU 里的"从站地址"</td><td>网关后面挂串行从站时用；直连从站常填 0x01</td></tr>
+<tr><td colspan="4"><strong>PDU（与 RTU 相同）</strong>：功能码(1B) + 数据(NB)</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong>示例</strong>：读保持寄存器，从站 1、起始 0、数量 2，事务号 0x0001：<br>
+<code>00 01 00 00 00 06 01 03 00 00 00 02</code>　（前 7 B = MBAP，"06" = 单元ID 1 + PDU 5 字节；<strong>无 CRC</strong>）</p>
+<p>端口恒为 <strong>TCP 502</strong>。调试用 Wireshark 直接能解（内置 Modbus TCP dissector）。</p>
+</div>
+
+<h2>§7 异常响应</h2>
+
+<p>从站处理不了时，把<strong>功能码最高位置 1（即 +0x80）</strong>，再跟一个异常码：</p>
+
+<table class="cols-4a">
+<caption>表 7-1　异常码（够用即可，不必背全）</caption>
+<thead><tr><th>异常码</th><th>名称</th><th>触发场景</th><th>你项目里的含义</th></tr></thead>
+<tbody>
+<tr><td><code>0x01</code></td><td>ILLEGAL FUNCTION</td><td>从站不支持该功能码</td><td>IMU 不支持 0x10 → 改单写 0x06</td></tr>
+<tr><td><code>0x02</code></td><td>ILLEGAL DATA ADDRESS</td><td>地址或数量越界</td><td>寄存器表抄错 / 地址换算错方位</td></tr>
+<tr><td><code>0x03</code></td><td>ILLEGAL DATA VALUE</td><td>数据值非法</td><td>校准值超量程</td></tr>
+<tr><td><code>0x04</code></td><td>SLAVE DEVICE FAILURE</td><td>从站内部故障</td><td>IMU 自检失败</td></tr>
+<tr><td><code>0x05</code></td><td>ACKNOWLEDGE</td><td>已接受但需长时处理</td><td>IMU 正在校准，稍后再轮询</td></tr>
+<tr><td><code>0x06</code></td><td>SLAVE DEVICE BUSY</td><td>从站忙</td><td>重试即可</td></tr>
+<tr><td><code>0x0A/0x0B</code></td><td>GATEWAY PATH/TARGET…</td><td>网关类错误</td><td>经网关访问时才见</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>主站必须处理异常，不能只看"没收到响应"</strong>。异常响应是<strong>正常帧</strong>（CRC 正确、有响应），只是功能码高位为 1。把异常当"丢包"重试，会永远重试下去。</p>
+</div>
+
+<h2 class="pgbreak">§8 字节序：float32 跨两个寄存器（联调头号坑）</h2>
+
+<p>Modbus 只定义"<strong>16 位寄存器内部按大端传</strong>"（高字节在前）。但一个 float32 要占<strong>两个寄存器</strong>，这两个寄存器谁先谁后、字节怎么摆，协议<strong>没有规定</strong>——由设备厂商自定，于是有了 4 种排列：</p>
+
+<table class="cols-4a">
+<caption>表 8-1　float32 = 25.0（IEEE754 = 0x41C80000）的 4 种排法</caption>
+<thead><tr><th>名称</th><th>寄存器顺序</th><th>字节流</th><th>口诀 / 常见于</th></tr></thead>
+<tbody>
+<tr><td>ABCD</td><td>大端（Big-endian）</td><td><code>41 C8 00 00</code></td><td>"先高字、再低字"；很多 PLC 默认</td></tr>
+<tr><td>CDAB</td><td>字交换（Word swap）</td><td><code>00 00 41 C8</code></td><td>最常见的"读出来是 0"元凶</td></tr>
+<tr><td>BADC</td><td>字节交换（Byte swap）</td><td><code>C8 41 00 00</code></td><td>部分国产仪表</td></tr>
+<tr><td>DCBA</td><td>小端（Little-endian）</td><td><code>00 00 C8 41</code></td><td>ARM 内存直出常见</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>怎么定这个坑</strong>：① 先查 IMU 手册（多半会写 "32-bit float, word order: low word first"）；② 查不到就用一个"已知值"校准——把 IMU 静止放平，看读回来的 4 字节能否还原成合理的 0/9.8/角度值；③ 代码里把"字序"做成一个配置项，联调时改一行就切。别硬编码。</p>
+</div>
+
+<h2>§9 主站实现要点（L3 的全部技术点）</h2>
+
+<table class="cols-3">
+<caption>表 9-1　写一个 Modbus 主站要处理的 6 件事</caption>
+<thead><tr><th>要点</th><th>做法</th><th>本项目落点</th></tr></thead>
+<tbody>
+<tr><td>① RS485 方向控制</td><td>发之前切"发"、发完切"收"。用 <code>ioctl(fd, TIOCSRS485, …)</code> 开内核自动方向，或 GPIO 手动控制 DE/RE；<strong>发完要等最后一个字节移出档期(t3.5)</strong> 再切收，否则吞掉响应头</td><td>主站线程内部封装 <code>send_then_recv()</code></td></tr>
+<tr><td>② 组帧 + CRC</td><td>按 §5 组 <code>[addr][fc][data][crc_lo][crc_hi]</code>；用 §5.2 的 CRC 函数</td><td>独立 <code>mb_build()/mb_check()</code></td></tr>
+<tr><td>③ 超时重试</td><td>用 <code>select/poll</code> 带超时读（如 100~300ms）；超时则重试 N 次（如 3 次），仍失败 → 标记从站离线</td><td>复用项目 <code>agv_log</code> 打离线告警</td></tr>
+<tr><td>④ 帧同步</td><td>上电/出错后总线可能有残帧：先"静默 ≥ t3.5"再发；收到残帧先丢弃直到静默</td><td>启动时先 <code>tcflush()</code></td></tr>
+<tr><td>⑤ 轮询调度</td><td>半双工"单主多从"，<strong>同一时刻只允许一个请求在飞</strong>；按周期轮询各从站/各寄存器块</td><td>主站线程 20~50ms 一轮</td></tr>
+<tr><td>⑥ 解析 + 字节序</td><td>读响应 → 校验 CRC → 查异常位 → 按 §8 还原 float32</td><td>写入 OD <code>0x7010</code></td></tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>面试可直接讲的一句话</strong>："Modbus RTU 主站的核心难点不在功能码，而在<strong>半双工方向切换的时机</strong>和<strong>t3.5 帧同步</strong>——发完不等待就切收，会吃掉响应的第一个字节；这是纯软件仿真发现不了的坑。"</p>
+</div>
+
+<h2 class="pgbreak">§10 落地到本项目：Modbus RTU IMU 主站</h2>
+
+<p>这是本册的"成果出口"——把 §1~§9 的知识变成两样东西：<strong>① IMU 接入</strong>，<strong>② 一个 Modbus 成果</strong>。</p>
+
+<div class="figure">
+<svg viewBox="0 0 1080 250" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="ag2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2255a4"/>
+    </marker>
+  </defs>
+  <text x="10" y="16" font-size="11" font-weight="700" fill="#2255a4">新增：Modbus RTU IMU 链路（蓝）　—　与既有 CANopen 电机链路（灰）并存</text>
+
+  <rect x="20" y="34" width="170" height="66" rx="5" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="105" y="60" font-size="11.5" font-weight="700" text-anchor="middle">IMU 模块</text>
+  <text x="105" y="78" font-size="9.6" text-anchor="middle" fill="#333">角度 / 角速度</text>
+  <text x="105" y="92" font-size="9.6" text-anchor="middle" fill="#333">RS485 接口</text>
+
+  <rect x="240" y="34" width="180" height="66" rx="5" fill="#fdf7e3" stroke="#b8860b"/>
+  <text x="330" y="58" font-size="11" font-weight="700" text-anchor="middle">RS485 半双工</text>
+  <text x="330" y="76" font-size="9.6" text-anchor="middle" fill="#333">A/B 差分 · 120Ω</text>
+  <text x="330" y="91" font-size="9.6" text-anchor="middle" fill="#333">9600~115200 8N1</text>
+
+  <rect x="470" y="34" width="230" height="66" rx="5" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="585" y="56" font-size="11.5" font-weight="700" text-anchor="middle">Modbus RTU 主站线程 ★</text>
+  <text x="585" y="74" font-size="9.6" text-anchor="middle" fill="#333">组帧/CRC/超时重试/方向控制</text>
+  <text x="585" y="90" font-size="9.6" text-anchor="middle" fill="#333">轮询 0x04 读输入寄存器</text>
+
+  <rect x="750" y="34" width="150" height="66" rx="5" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="825" y="58" font-size="11.5" font-weight="700" text-anchor="middle">OD 0x7010 imu</text>
+  <text x="825" y="76" font-size="9.6" text-anchor="middle" fill="#333">子1 yawrate / 子2 姿态</text>
+
+  <rect x="930" y="34" width="130" height="66" rx="5" fill="#e8e8e8" stroke="#666"/>
+  <text x="995" y="58" font-size="11" font-weight="700" text-anchor="middle">0x6FFF 位姿</text>
+  <text x="995" y="76" font-size="9.6" text-anchor="middle" fill="#333">航向互补融合</text>
+
+  <line x1="190" y1="67" x2="236" y2="67" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ag2)"/>
+  <line x1="420" y1="67" x2="466" y2="67" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ag2)"/>
+  <line x1="700" y1="67" x2="746" y2="67" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ag2)"/>
+  <line x1="900" y1="67" x2="926" y2="67" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ag2)"/>
+
+  <text x="20" y="134" font-size="11" font-weight="700" fill="#555">既有（不动）：</text>
+  <rect x="20" y="146" width="1040" height="30" rx="4" fill="#f0f0f0" stroke="#555"/>
+  <text x="540" y="166" font-size="10.3" text-anchor="middle">CAN 总线：node10/11 电机（0x38A/0x38B 上行 · 0x50A/0x50B 下行）· 0x6FFF 轮式里程计 · 0x7000 cmd_vel</text>
+
+  <text x="20" y="204" font-size="10.3" fill="#333">融合思路：轮式里程计积分得 θ_wheel（会漂）；IMU 给角速度 ω_imu。互补滤波：</text>
+  <text x="20" y="226" font-family="DejaVu Sans Mono, monospace" font-size="11" font-weight="700" fill="#2255a4">θ ← α·(θ + ω_wheel·dt) + (1−α)·θ_imu　（α≈0.95，抑制转角漂移）</text>
+</svg>
+</div>
+
+<h3>10.1 寄存器映射建议（写在头文件里，别散落）</h3>
+
+<table class="cols-4a">
+<caption>表 10-1　IMU 寄存器映射（示例，以实物手册为准）</caption>
+<thead><tr><th>内容</th><th>区 / 功能码</th><th>地址(0 基)</th><th>类型与字节序</th></tr></thead>
+<tbody>
+<tr><td>姿态角 roll/pitch/yaw</td><td>输入寄存器 <code>0x04</code></td><td>0x0000~0x0005</td><td>3×float32，<strong>字序待实测定</strong>（§8）</td></tr>
+<tr><td>角速度 gyro_x/y/z</td><td>输入寄存器 <code>0x04</code></td><td>0x0006~0x000B</td><td>3×float32</td></tr>
+<tr><td>加速度 acc_x/y/z</td><td>输入寄存器 <code>0x04</code></td><td>0x000C~0x0011</td><td>3×float32</td></tr>
+<tr><td>零偏校准命令</td><td>保持寄存器 <code>0x06</code></td><td>0x0100</td><td>uint16，写 1 触发</td></tr>
+<tr><td>输出速率配置</td><td>保持寄存器 <code>0x06</code></td><td>0x0101</td><td>uint16，如 100(Hz)</td></tr>
+</tbody>
+</table>
+
+<h3>10.2 主站骨架（C 伪代码）</h3>
+
+<pre>:  文件：新增 src/agv_imu_modbus.c（示意骨架，非最终实现）
+int mb_open(const char *dev, int baud)      /* 开串口 + 8N1 + 可选 TIOCSRS485 */
+{
+    int fd = open(dev, O_RDWR | O_NOCTTY);
+    cfmakeraw(&tio); tio.c_cflag |= CLOCAL | CREAD;      /* 原始模式 */
+    cfsetispeed(&tio, B9600); cfsetospeed(&tio, B9600);  /* 以 IMU 手册为准 */
+    tcsetattr(fd, TCSANOW, &tio); tcflush(fd, TCIOFLUSH);/* 上电清残帧(§9-④) */
+    return fd;
+}
+
+int mb_read_input_regs(int fd, uint8_t addr, uint16_t reg, uint16_t n, uint8_t *out)
+{
+    uint8_t req[8]; int len = mb_build(req, addr, 0x04, reg, n);  /* 组帧+CRC(§5) */
+    rs485_tx_enable();                    /* ① 切"发" */
+    write(fd, req, len);
+    tcdrain(fd);                          /* ★ 等最后一个字节真正移出(§9-①) */
+    rs485_rx_enable();                    /* 切"收" */
+    int r = wait_readable(fd, 300);       /* ③ 300ms 超时 */
+    if (r &lt;= 0) return -1;                /* 超时 → 调用方重试/判离线 */
+    read(fd, resp, sizeof resp);
+    if (resp[1] & 0x80) return -(resp[2]);/* ⑦ 异常码(§7)，负值返回 */
+    if (crc16_modbus(resp, rlen) != 0) return -2;   /* CRC 校验 */
+    memcpy(out, resp + 3, resp[2]);       /* 数据区(§5) */
+    return resp[2];
+}
+
+float be_to_float32(uint16_t hi, uint16_t lo, int word_order)  /* ⑧ 字节序(§8) */
+{
+    uint8_t b[4];
+    if (word_order == ABCD) { b[0]=hi>>8; b[1]=hi; b[2]=lo>>8; b[3]=lo; }
+    else /* CDAB */         { b[0]=lo>>8; b[1]=lo; b[2]=hi>>8; b[3]=hi; }
+    float f; memcpy(&f, b, 4); return f;
+}
+</pre>
+
+<h3>10.3 接到项目既有资产</h3>
+
+<table class="cols-3">
+<caption>表 10-2　复用清单（不重复造）</caption>
+<thead><tr><th>要做的</th><th>改哪个</th><th>怎么改</th></tr></thead>
+<tbody>
+<tr><td>新增 IMU 对象</td><td>[OD.c](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c) / [OD.h](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h)</td><td>照 <code>0x7000</code> 模式：<strong>追加到 <code>ODList[]</code> 末尾</strong>（保持升序，二分查找才不坏）+ 加 <code>OD_CNT_ARR_7010</code>/成员/宏</td></tr>
+<tr><td>日志与告警</td><td><code>agv_log.c</code></td><td>离线/异常/CRC 错 分级打印</td></tr>
+<tr><td>线程承载</td><td><code>agv_queue.c</code> / <code>agv_pool.c</code></td><td>IMU 采集线程与主控线程间用队列传数</td></tr>
+<tr><td>航向融合</td><td>[CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c)</td><td>里程计积分处加入互补滤波（§10 图末行公式）</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<p><strong>无硬件也能先做（重要）</strong>：本机没 IMU 时，用 <code>socat -d -d pty,raw,echo=0 pty,raw,echo=0</code> 造一对虚拟串口，一端跑 pymodbus 的 RTU 从站（自造寄存器），另一端跑你的 C 主站。这样 CRC、切帧、超时、异常码、字节序<strong>全部能先调通</strong>——和本项目"用 vcan 仿真从站"是同一套思路。</p>
+</div>
+
+<h2 class="pgbreak">§11 自测题（L3 达标标准）</h2>
+
+<ol>
+<li>Modbus 四个区分别是什么？各自"位宽 / 读写属性"？</li>
+<li>手册写"40011"，协议帧里该发什么地址？为什么？</li>
+<li>RTU 帧没有长度字段，从站靠什么判断"一帧结束"？</li>
+<li>CRC16(Modbus) 的多项式与初值？结果两个字节怎么发？</li>
+<li><code>01 04 00 00 00 02</code> 这 6 个字节发出去后，若一切正常，响应大概长什么样？</li>
+<li>收到 <code>01 83 02 …</code>，说明什么？主站该怎么处理（能当丢包重试吗）？</li>
+<li><code>0x06</code> 和 <code>0x10</code> 的区别？为什么 <code>0x06</code> 的响应是"原样回显"？</li>
+<li>读回来 float32 是 0，可能是什么原因？怎么快速定位？</li>
+<li>RS485 半双工，为什么"发完立刻切接收"会吞字节？正确做法？</li>
+<li>Modbus 与 CANopen PDO 最本质的区别是什么？为什么 AGV 位姿不适合用 Modbus 推送？</li>
+</ol>
+
+<div class="note">
+<p><strong>参考答案要点</strong>：1) 线圈(1b,RW)/离散输入(1b,RO)/输入寄存器(16b,RO)/保持寄存器(16b,RW)。2) 发 <code>0x000A</code>（40011−40001=10）；区号只是给人看的。3) 总线静默 ≥ t3.5。4) 0xA001、0xFFFF，<strong>低字节先发</strong>。5) <code>01 04 04 xx xx xx xx CRC</code>（功能码+字节数4+4 字节数据+CRC）。6) 从站返回异常、异常码 0x02=非法数据地址；<strong>不能</strong>当丢包重试，要先修地址。7) 0x06 写单个、0x10 写多个；回显用于主站确认写入值一致。8) 多半是 float32 字序不匹配（§8 四种之一）；用已知值/静止态校准。9) 最后一个字节还在移位寄存器里，切收会截断响应首字节；应先 <code>tcdrain()</code> 等发完（或延时 ≥ t3.5）再切。10) Modbus 只有主站轮询、从站不能主动发；PDO 是主动/周期上报——实时推送场景该用 CANopen/EtherCAT。</p>
+</div>
+
+<h2>§12 工具与资源</h2>
+
+<table class="cols-3">
+<caption>表 12-1　干活用的工具（按用途选，不要全会）</caption>
+<thead><tr><th>工具</th><th>用途</th><th>备注</th></tr></thead>
+<tbody>
+<tr><td><code>pymodbus</code>（Python）</td><td>快速造从站/主站原型，做仿真</td><td>无硬件先练首选；用 §10.1 的寄存器表造从站</td></tr>
+<tr><td><code>libmodbus</code>（C）</td><td>生产代码可选库</td><td>本机 <strong>未安装</strong>（HANDOFF §九）；也可自己搓（更能体现 L3）</td></tr>
+<tr><td><code>socat</code></td><td>造虚拟串口对</td><td>无 RS485 硬件时练 RTU</td></tr>
+<tr><td>Wireshark</td><td>抓 Modbus TCP 帧</td><td>内置 dissector，直接解 MBAP</td></tr>
+<tr><td>Modbus Poll / Slave</td><td>Windows 调试主/从站</td><td>联调时对照"我的帧对不对"</td></tr>
+<tr><td><code>mbpoll</code> / <code>modbus_cli</code></td><td>命令行读写寄存器</td><td>快速验证 IMU 寄存器表</td></tr>
+</tbody>
+</table>
+
+<div class="footnote">
+<p><strong>学习顺序建议</strong>：① 用 pymodbus 造从站 + mbpoll 读 → 先建立"帧 ↔ 数据"的直觉（≈ 半天）；② 自己用 C 写组帧/CRC/超时，对 pymodbus 从站跑通（≈ 2~3 天，这是 L3 的核心）；③ 接真 IMU，解决字序与方向切换（≈ 联调 1~2 天）；④ 写进 OD <code>0x7010</code> 并做航向融合（≈ 1~2 天）。</p>
+<p><strong>边界重申</strong>：本册到 L3 为止。RS485 收发器电气时序、终端电阻取值、Modbus Plus、网关内核、自研协议栈——<strong>都不学</strong>，与 HANDOFF §16.0 定位一致。</p>
+<p><strong>行号与素材基线</strong>：2026-10-09 工作区；OD 引用见 [application/OD.c](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c) 与 [application/OD.h](file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h)；主控见 [CO_application.c](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c)。示例帧 CRC 均由程序实算（多项式 0xA001 / 初值 0xFFFF）。</p>
+</div>
+
+</body>
+</html>

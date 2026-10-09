@@ -735,14 +735,18 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 
     errno = 0;
     ssize_t n = send(interface->fd, buffer, CAN_MTU, MSG_DONTWAIT);
-    if (errno == 0 && n == CAN_MTU) {
+    /* 注意: 按 POSIX, errno 仅在调用失败时有意义。某些内核 (如 5.15 的 vcan)
+     * 在 send() 已成功返回 CAN_MTU 时仍会把 errno 置为 EOPNOTSUPP, 故成功只能
+     * 以返回值 n==CAN_MTU 判定, 不能附加 errno==0 条件 (否则会误判成功为失败,
+     * 进而置 TX_OVERFLOW / 触发 EMCY, 使节点掉回 pre-operational)。 */
+    if (n == CAN_MTU) {
         /* success */
         if (buffer->bufferFull) {
             buffer->bufferFull = false;
             CANmodule->CANtxCount--;
         }
     }
-    else if (errno == EINTR || errno == EAGAIN || errno == ENOBUFS) {
+    else if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == ENOBUFS)) {
         /* Send failed, message will be re-sent by CO_CANmodule_process() */
         if (!buffer->bufferFull) {
             buffer->bufferFull = true;

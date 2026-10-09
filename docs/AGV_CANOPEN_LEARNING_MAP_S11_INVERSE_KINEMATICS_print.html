@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第 11 站 · 下行控制（下）：运动下发与差速逆运动学（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:16%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:40%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:44%}
+.cols-4 th:nth-child(1),.cols-4 td:nth-child(1){width:12%}
+.cols-4 th:nth-child(2),.cols-4 td:nth-child(2){width:24%}
+.cols-4 th:nth-child(3),.cols-4 td:nth-child(3){width:26%}
+.cols-4 th:nth-child(4),.cols-4 td:nth-child(4){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>第 11 站 · 下行控制（下）：运动下发与差速逆运动学</h1>
+
+<div class="meta">
+<p><strong>本站定位</strong>：第 10 站让电机「<strong>能转</strong>」了——两个从站被推进到 <code>Operation enabled</code>，但轮速 <code>0x60FF</code> <strong>恒为 0</strong>（安全起见没发运动指令）。本站补上最后一块：让车「<strong>会走</strong>」。做法是给上位机一个入口 <code>cmd_vel</code>（线速度 v + 角速度 ω），用<strong>差速逆运动学</strong>反解成左右轮目标转速，写进第 10 站已经建好的下行通道 <code>0x60FF</code>。</p>
+<p><strong>一句话概括</strong>：第 10 站回答了「电机凭什么能转」（使能时序），本站回答「车凭什么按你说的走」（<code>(v,ω) → 两轮转速</code>）。</p>
+<p><strong>为什么值得单独一站</strong>：① 这是 <strong>AMR/AGV 控制岗的「标准考点」</strong>——差速底盘的 <code>v,ω ↔ 轮速</code> 换算必问；② 它是「能看」（收位置）与「能控」（发速度）之间<strong>真正闭环</strong>的那一环；③ 做完本站，本项目就有了「<strong>上位机下指令 → 底盘动 → 里程计回读</strong>」的完整叙事。</p>
+<p><strong>阅读顺序</strong>：§0 地图 → §1 逆运动学（纯数学）→ §2 单位换算 → §3 cmd_vel 入口 → §4 模式选型 → §5 RT 拍落地 → §6 零硬件验证 → §7 小结。</p>
+</div>
+
+<h2>§0 一页地图：从「能转」到「会走」</h2>
+
+<p>先看全局。第 10 站已经接通了下行「说」的通道（虚线框内是本站要补的部分）。</p>
+
+<pre>
+【第 10 站已完成：电机能转，但轮速恒为 0】
+
+  上位机 ──(无运动指令)──► [ cmd_vel 入口 ✗ 缺 ]
+                                │
+                                ▼
+  应用层 ──写 0x6040 使能时序──► TPDO 0x50A/0x50B ──► 驱动器 ──► 电机（使能但静止）
+                                ▲                                      │
+                                │                                      │ 位置
+                        状态字 0x6041 ◄── RPDO 0x38A/0x38B ◄──────────┘
+                                │
+                                ▼
+                        里程计正解 → 0x6FFF → Qt 画轨迹
+
+【本站：补上 cmd_vel → 逆解 → 轮速】
+
+  上位机 ──SDO 写 0x7000 : (v, ω)──► [ cmd_vel 入口 ★新增 ]
+                                          │
+                                          ▼
+                                   差速逆运动学：
+                                   vR = v + ω·b/2
+                                   vL = v − ω·b/2
+                                          │
+                                          ▼
+  应用层 ──写 0x60FF 目标速度──► TPDO 0x50A/0x50B ──► 驱动器 ──► 电机（真的转了）
+                                                                      │
+                                                    里程计正解 ◄───────┘
+                                                （拿回读验证 cmd_vel 是否落地）
+</pre>
+
+<p class="note"><strong>关键点先摆在这里</strong>：本站<strong>不碰使能时序</strong>（第 10 站的事），也<strong>不新增协议</strong>——只是往已经建好的 <code>0x60FF</code> 通道里，填上「算出来的数」。真正的工作量在两步：<strong>把 (v,ω) 算成两轮转速</strong>（§1~§2），和<strong>给上位机一个下发入口</strong>（§3）。</p>
+
+<h2>§1 差速底盘：正解回顾与逆解推导</h2>
+
+<h3>1.1 先回忆正解（第 7 站已落地）</h3>
+
+<p>第 7 站的里程计解的是<strong>正问题</strong>：已知左右轮各转了多远（<code>dR</code>/<code>dL</code>），求车体走了多远、转了多大角度。代码在 <code>CO_application.c:479-480</code>：</p>
+
+<pre>
+/* 第 7 站正解（已在跑）：两轮位移 → 车体位移/转角 */
+double d   = (dR + dL) / 2.0;                 /* 车体前进量 */
+double dth = (dR - dL) / ODOM_WHEEL_BASE_M;   /* 车体转角 */
+</pre>
+
+<p>把它写成<strong>速度</strong>形式（两边同除时间），就得到差速底盘的<strong>正解关系</strong>：</p>
+
+<pre>
+  v = (vR + vL) / 2          v  : 车体线速度 (m/s)
+  ω = (vR - vL) / b          ω  : 车体角速度 (rad/s)
+                             b  : 轮距（左右轮中心距，本工程 0.300 m）
+</pre>
+
+<h3>1.2 逆解的推导：一个二元一次方程组</h3>
+
+<p>控制要解的是<strong>逆问题</strong>：已知想让车怎么走（<code>v</code>, <code>ω</code>），求左右轮各该多快（<code>vR</code>, <code>vL</code>）。把上面两个式子当方程组，联立解出 <code>vR</code>/<code>vL</code>：</p>
+
+<pre>
+  ① v = (vR + vL) / 2   →   vR + vL = 2v
+  ② ω = (vR − vL) / b   →   vR − vL = ω·b
+
+  ①+② :  2·vR = 2v + ω·b   →   vR = v + ω·b/2      ★ 右轮
+  ①−② :  2·vL = 2v − ω·b   →   vL = v − ω·b/2      ★ 左轮
+</pre>
+
+<p class="note"><strong>这是本站在面试里最该背下来的两行</strong>：
+<code>vR = v + ω·b/2</code>、<code>vL = v − ω·b/2</code>。<br>
+系数 <code>b/2</code> 的物理含义：车体绕中心旋转时，左右轮各在半径 <code>b/2</code> 处，速度 = 角速度 × 半径 = <code>ω·b/2</code>。左轮与右轮<strong>一正一负</strong>叠加在前进速度上。</p>
+
+<h3>1.3 三种工况的直觉校验</h3>
+
+<p>用公式验算三个典型动作，确认方向对不对（工程里这种「拿退化情形自检」的习惯很值钱）：</p>
+
+<table class="cols-3">
+<caption>表 11-1 逆解的三种工况（取 v 前进为正、ω 逆时针为正，b=0.300）</caption>
+<thead><tr><th>工况</th><th>输入 (v, ω)</th><th>输出的两轮速度</th></tr></thead>
+<tbody>
+<tr><td><strong>直行</strong></td><td>v=0.2, ω=0</td><td>vR = vL = 0.2 → 两轮同速同向</td></tr>
+<tr><td><strong>原地自转</strong></td><td>v=0, ω=1.0</td><td>vR = +0.15, vL = −0.15 → 两轮等速<strong>反向</strong>，车原地打转</td></tr>
+<tr><td><strong>走弧线</strong></td><td>v=0.2, ω=0.5</td><td>vR = 0.275, vL = 0.125 → 外侧轮快、内侧轮慢，向右画弧</td></tr>
+</tbody>
+</table>
+
+<p class="warn"><strong>符号约定必须全工程统一</strong>：<code>ω</code> 的正负、左右轮的编号、<code>ODOM_DIR_R/L</code> 的方向系数（<code>CO_application.c:54-55</code>）、以及里程计正解里的 <code>dth=(dR−dL)/b</code>，<strong>任何一处反号，车就会「越纠越偏」</strong>（正反馈）。上车前务必先用 §1.3 这种退化工况把符号对齐。</p>
+
+<h2>§2 单位换算：米/秒 ↔ 计数/秒</h2>
+
+<h3>2.1 逆解的输入输出都是「米/秒」，但驱动器要「计数/秒」</h3>
+
+<p>逆解算出的 <code>vR</code>/<code>vL</code> 单位是 <strong>米/秒</strong>（轮面线速度）。但 <code>0x60FF</code>（目标速度）是驱动器<strong>自定义单位</strong>，大多数量产驱动器按<strong>编码器计数/秒</strong>或 <strong>rpm</strong> 解释。所以要补一步换算。</p>
+
+<h3>2.2 复用第 7 站的常数——正逆解天生对称</h3>
+
+<p>第 7 站里程计正解已经定义过一个常数 <code>ODOM_K_PER_COUNT</code>（<code>CO_application.c:58</code>）：<strong>「1 个计数 = 轮面走多少米」</strong>：</p>
+
+<pre>
+k = 2πr / N         r = 轮半径 0.050 m
+                    N = 每转计数 10000（counts/rev）
+→ k = 2π·0.050 / 10000 = 3.14159e-5  m/count
+</pre>
+
+<p>正解用它把「计数」乘成「米」，逆解自然就是把「米」<strong>除以</strong>它变回「计数」：</p>
+
+<pre>
+  0x60FF[counts/s] = vR[m/s] / k
+                   = vR / ODOM_K_PER_COUNT
+</pre>
+
+<p class="note"><strong>一个漂亮的对称</strong>：同一个 <code>k</code>，正解用乘法、逆解用除法，<strong>互为倒数</strong>。这保证了「发下去多少轮速」与「读回来多少位移」用的是<strong>同一把尺子</strong>——否则里程计和速度控制会各算各的，闭环永远对不上。</p>
+
+<h3>2.3 换算速查表（本工程标定值）</h3>
+
+<table class="cols-3">
+<caption>表 11-2 轮面线速度 ↔ 目标速度（r=0.050m, N=10000, k=3.14159e-5）</caption>
+<thead><tr><th>轮面线速度</th><th><code>0x60FF</code>（若单位=counts/s）</th><th>等价转速（rpm）</th></tr></thead>
+<tbody>
+<tr><td>0.05 m/s</td><td>≈ 1592 counts/s</td><td>≈ 9.5 rpm</td></tr>
+<tr><td>0.20 m/s</td><td>≈ 6366 counts/s</td><td>≈ 38.2 rpm</td></tr>
+<tr><td>0.275 m/s（弧线外轮）</td><td>≈ 8753 counts/s</td><td>≈ 52.5 rpm</td></tr>
+<tr><td>1.00 m/s（满速）</td><td>≈ 31831 counts/s</td><td>≈ 191.0 rpm</td></tr>
+</tbody>
+</table>
+
+<p>若驱动器 <code>0x60FF</code> 用的是 rpm，则用另一条：<code>rpm = vR · 60 / (2πr) = vR · 190.99</code>（每 1 m/s ≈ 191 rpm）。</p>
+
+<p class="warn"><strong>必须先确认真实单位</strong>：<code>0x60FF</code> 到底按 counts/s、rpm 还是 0.1rpm/其它，<strong>以驱动器手册/EDS 为准</strong>（森创一体机的对象字典里 <code>0x60FF</code> 的单位项会写明）。这和第 10 站的 <code>COB-ID</code> 一样，是「真机必须对齐、错了全盘皆输」的参数。零硬件阶段先按 counts/s 建模跑通逻辑，接真机时只改这一个换算系数。</p>
+
+<h2>§3 cmd_vel 从哪来：给对象字典加一个入口</h2>
+
+<h3>3.1 现状：上位机只会「读」，不会「写」</h3>
+
+<p>第 8 站的 Qt 上位机（<code>hmi/commworker.cpp:72</code>）目前只做一件事：经 CiA-309 网关<strong>轮询读</strong> <code>0x6FFF</code> 画轨迹。它没有任何「写」的路径，也就没法把 <code>cmd_vel</code> 送进来。</p>
+
+<h3>3.2 新增自定义对象 <code>0x7000 agvCmdVel</code></h3>
+
+<p>照第 7 站 <code>0x6FFF</code>（里程计）的成法，再追加一个自定义数组对象，专门存放上层下发的期望速度：</p>
+
+<table class="cols-4">
+<caption>表 11-3 新增对象 0x7000（与既有 0x6FFF 同构）</caption>
+<thead><tr><th>子索引</th><th>名称</th><th>类型</th><th>含义 / 默认</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>numberOfEntries</td><td>uint8</td><td>= 2</td></tr>
+<tr><td>1</td><td>cmd_v</td><td>float32</td><td>期望线速度 v (m/s)，默认 0.0</td></tr>
+<tr><td>2</td><td>cmd_w</td><td>float32</td><td>期望角速度 ω (rad/s)，默认 0.0</td></tr>
+</tbody>
+</table>
+
+<p><strong>方向</strong>：SDO 可写（<code>ODA_SDO_RW</code>），由上位机写；RT 拍读。用 <code>float32</code> 而非缩放整数，是为了和 <code>0x6FFF</code> 保持一致、省去定标换算。</p>
+
+<p class="warn"><strong>追加位置有讲究</strong>：本工程的 <code>ODList[]</code> 按索引<strong>升序</strong>排列，<code>OD_find</code> 用<strong>二分查找</strong>；而 <code>OD_ENTRY_H6FFF</code> 被写死成 <code>&amp;OD-&gt;list[157]</code>（<code>OD.h:511</code>）。因此新索引必须<strong>大于 0x6FFF 且追加到末尾</strong>，否则会让 <code>list[157]</code> 这个硬编码下标错位、牵连一堆引用。选 <code>0x7000</code> 正是为此（<code>OD.c:2129-2131</code> 的注释写明了这条规矩）。</p>
+
+<h3>3.3 跨线程读写：又要 <code>CO_LOCK_OD</code></h3>
+
+<p>写侧在上位机 → 网关（main 线程），读侧在 <code>app_programRt</code>（RT 线程），两边访问同一片 <code>OD_RAM</code>——<strong>和第 7 站写 <code>0x6FFF</code> 是同一类竞态</strong>。所以读 <code>0x7000</code> 也要套 <code>CO_LOCK_OD</code>（可和第 10 站写 <code>0x6040</code> 合并进同一次临界区，减少加锁次数，见 §5.3）。</p>
+
+<h2>§4 模式选型：为什么是 <code>0x6060 = 3</code></h2>
+
+<h3>4.1 给速度，就得先选「速度模式」</h3>
+
+<p>CiA402 驱动器用 <code>0x6060</code>（Modes of operation）决定「你怎么理解我给的目标值」。本站下发的是<strong>轮速</strong> <code>0x60FF</code>，对应的模式是 <strong>3 = Profile Velocity（PV，速度模式）</strong>。</p>
+
+<table class="cols-3">
+<caption>表 11-4 常见 CiA402 模式（<code>0x6060</code>）与本工程取舍</caption>
+<thead><tr><th>值</th><th>模式</th><th>用哪个目标对象 / 是否采用</th></tr></thead>
+<tbody>
+<tr><td><strong>3</strong></td><td>Profile Velocity (PV)</td><td>用 <code>0x60FF</code> 目标速度。<strong>本站采用</strong>——差速底盘给「轮子转多快」最直接。</td></tr>
+<tr><td>1</td><td>Profile Position (PP)</td><td>用 <code>0x607A</code> 目标位置。适合「走固定距离」，需自带加减速规划。</td></tr>
+<tr><td>8</td><td>Cyclic Sync Position (CSP)</td><td>用 <code>0x607A</code>，每周期给增量位置，实时性最高、实现最重。</td></tr>
+<tr><td>9</td><td>Cyclic Sync Velocity (CSV)</td><td>用 <code>0x60FF</code>，周期性给速度，适合做闭环调速。</td></tr>
+</tbody>
+</table>
+
+<p class="note"><strong>好消息</strong>：本工程字典里 <code>0x6060</code> 的<strong>默认值就是 3</strong>（<code>OD.c:246</code>，见第 10 站表 10-3）。也就是说驱动器上电默认就在速度模式，本站通常<strong>不必额外写 <code>0x6060</code></strong>——除非你的机型默认不是 3。</p>
+
+<h3>4.2 若确实要写 <code>0x6060</code>：两条路</h3>
+
+<ul>
+<li><strong>SDO 写一次（推荐）</strong>：模式是<strong>静态配置</strong>，开机设一次即可，不必每拍刷。用 SDO 写 <code>0x6060 = 3</code>（需网关/主站具备 SDO client 写能力）。</li>
+<li><strong>加进 TPDO</strong>：若希望跟着控制字一起周期下发，可把 <code>0x60600008</code>（1 字节）追加进 <code>0x1A00</code> 映射。代价是每帧多 1 字节，且要重排映射项。</li>
+</ul>
+
+<p class="warn"><strong>注意 <code>0x6060</code> 现在的处境</strong>：第 10 站的 TPDO 映射只含 <code>0x6040 + 0x60FF</code>（<code>OD.c:148-158</code>），<strong>没映射 <code>0x6060</code></strong>。所以「靠写 OD 自动发出」这条路对 <code>0x6060</code> <strong>不成立</strong>——要么走 SDO，要么显式加映射。别想当然。</p>
+
+<h2>§5 逆解落地：写进 RT 拍的哪一处</h2>
+
+<h3>5.1 位置：紧跟第 10 站的使能推进之后</h3>
+
+<p>逆解的输入是「最新 cmd_vel」与「是否已使能」，两样都只在<strong>真节拍</strong>里才有意义。所以它放在 <code>app_programRt</code>、<code>if (!timerEvent) return;</code> 之后的真节拍段落，和第 10 站的 <code>cia402_step</code>、第 7 站的里程计积分同一层（<code>CO_application.c:429-446</code>）。</p>
+
+<h3>5.2 骨架代码</h3>
+
+<pre>
+/* ===================== 第 11 站：差速逆运动学 + 运动下发 ===================== */
+
+/* 从 0x7000 读 cmd_vel（float32×2）。跨线程，需锁。 */
+static double cmd_v, cmd_w;
+CO_LOCK_OD(co->CANmodule);
+cmd_v = (double)OD_RAM.x7000_agvCmdVel[0];   /* 子索引 1 */
+cmd_w = (double)OD_RAM.x7000_agvCmdVel[1];   /* 子索引 2 */
+CO_UNLOCK_OD(co->CANmodule);
+
+/* ① 逆解：车体 (v,ω) → 两轮轮面线速度 (m/s) */
+double vR_ms = cmd_v + cmd_w * ODOM_WHEEL_BASE_M / 2.0;   /* vR = v + ω·b/2 */
+double vL_ms = cmd_v - cmd_w * ODOM_WHEEL_BASE_M / 2.0;   /* vL = v − ω·b/2 */
+
+/* ② 单位换算：轮面线速度 → 目标速度计数 (counts/s) */
+int32_t vR_cnt = (int32_t)(ODOM_DIR_R * vR_ms / ODOM_K_PER_COUNT);
+int32_t vL_cnt = (int32_t)(ODOM_DIR_L * vL_ms / ODOM_K_PER_COUNT);
+
+/* ③ 安全门限：未使能 或 cmd_vel 超时失联 → 强制 0（见 §5.4） */
+if (stR != 3 || stL != 3 || cmdTimedOut()) { vR_cnt = 0; vL_cnt = 0; }
+
+/* ④ 写入 OD 目标速度：0x60FF。第 10 站已把它映射进 TPDO。 */
+CO_LOCK_OD(co->CANmodule);
+if (vR_cnt != OD_RAM.x60FF_targetVelocity) {
+    OD_RAM.x60FF_targetVelocity = vR_cnt;
+    OD_requestTPDO(OD_getFlagsPDO(OD_ENTRY_H60FF_targetVelocity), 0);  /* 见 §5.3 */
+}
+if (vL_cnt != OD_2nd_RAM.x60FF_targetVelocity) {
+    OD_2nd_RAM.x60FF_targetVelocity = vL_cnt;
+    OD_requestTPDO(OD_getFlagsPDO(OD_2nd_ENTRY_H60FF_targetVelocity), 0);
+}
+CO_UNLOCK_OD(co->CANmodule);
+</pre>
+
+<h3>5.3 ⚠ 一个要提前处理的坑：<code>0x60FF</code> 现在触发不了 TPDO</h3>
+
+<p>第 10 站能给 <code>0x6040</code>「写完自动发出」，是因为给它挂了扩展，从而启用了 <code>flagsPDO</code>（见第 10 站 4.2 的说明：<code>OD_getFlagsPDO</code> 要求 <code>entry-&gt;extension != NULL</code>）。但 <code>0x60FF</code> <strong>没有挂扩展</strong>，直接 <code>OD_requestTPDO</code> 不起作用。两条对策：</p>
+
+<ul>
+<li><strong>方案 A（照搬第 10 站）</strong>：给 <code>0x60FF</code> 也挂一个「仅启用 flagsPDO」的扩展（<code>read/write = OD_readOriginal/OD_writeOriginal</code>），它就和 <code>0x6040</code> 一样「写即发」。</li>
+<li><strong>方案 B（同步发送，更常规）</strong>：本工程 SYNC 是开着的（100 ms，<code>CO_application.c:209</code>）。把 TPDO 的 <code>transmissionType</code> 改成同步型（如 <code>1</code> = 每个 SYNC 发一次），则轮速随 100 ms 节拍<strong>固定周期</strong>下发，不依赖「变化即发」。</li>
+</ul>
+
+<p class="note"><strong>怎么选</strong>：速度控制在多数 AGV 上就用<strong>同步 TPDO（方案 B）</strong>——周期确定、行为可预期。若想「只在变了才发」省带宽，用方案 A。两者都行，但<strong>别什么都不做</strong>：否则 <code>0x60FF</code> 只能靠 <code>eventTimer</code> 兜底（<code>OD.c:120</code> 附近，约 256 ms），对运动控制太慢。</p>
+
+<h3>5.4 产品级必须有的两条「保命逻辑」</h3>
+
+<ol>
+<li><strong>未使能就不动</strong>：只有左右轮都到 <code>Operation enabled</code>（第 10 站的 <code>stR==3 &amp;&amp; stL==3</code>）才允许输出非零轮速。否则按零。<strong>否则会出现「状态字还没爬到能转、速度命令却已经压上去」的失控隐患</strong>。</li>
+<li><strong>失联停车（deadman）</strong>：上位机若一段时间（如 500 ms）没刷新 <code>cmd_vel</code>，RT 侧必须<strong>自动把目标速度清零</strong>并可选报 EMCY。用一个「最近一次 <code>0x7000</code> 变化的时间戳/节拍计数」来判断即可。这是所有运动控制器的底线——<strong>没这条，上位机一崩，车不会停</strong>。</li>
+</ol>
+
+<h2>§6 零硬件验证：在 vcan 上跑通整条闭环</h2>
+
+<h3>6.1 用第 10 站的「会回话」从站</h3>
+
+<p>第 10 站做了 <code>tools/sim_motors_downlink.py</code>：它<strong>收下行</strong>（<code>0x50A</code>/<code>0x180</code> 里的 <code>0x6040</code>+<code>0x60FF</code>），跑一个迷你 CiA402 状态机，再<strong>回发</strong>状态字到 <code>0x38A</code>/<code>0x38B</code>。本站正好复用它——因为它已经会「按收到的目标速度积分位置」，也就等价于「一台真的会转的电机」。</p>
+
+<h3>6.2 闭环自检：cmd_vel 出去，位姿回来</h3>
+
+<pre>
+  ① 写 cmd_vel = (v=0.2, ω=0)   ──SDO──► 0x7000
+  ② 逆解 ──► vR = vL = 0.2 m/s  ──► 0x60FF 两轮相同
+  ③ sim 从站按 0x60FF 积分位置，回发 0x38A/0x38B
+  ④ 主站里程计正解 ──► 0x6FFF 应呈「直线：x 增、y 不变、θ 不变」
+  ⑤ 换 cmd_vel = (v=0, ω=1)     ──► 原地转：0x6FFF 的 θ 线性增长、x/y 近似不变
+</pre>
+
+<p class="note"><strong>判据（把两条链对起来看）</strong>：<code>cmd_vel</code> 是<strong>逆解</strong>的输入、<code>0x6FFF</code> 是<strong>正解</strong>的输出。<strong>逆解 → 仿真 → 正解</strong>这一圈若能让「指令直线」走成「直线」、「指令自转」转成「自转」，就说明<strong>符号、轮距、单位换算全对了</strong>——这正是 HANDOFF 里说的「正逆闭环，看是否闭合」。</p>
+
+<h3>6.3 验证命令清单</h3>
+
+<pre>
+# ① 虚拟总线（已存在则跳过 add）
+sudo modprobe vcan
+sudo ip link add dev can0 type vcan
+sudo ip link set up can0
+
+# ② 抓包（唯一的"眼睛"）
+candump -td can0
+
+# ③ AGV 主站
+./canopen_agv can0
+
+# ④ "会回话"的仿真从站
+python3 tools/sim_motors_downlink.py can0
+
+# ⑤ 下发 cmd_vel（用网关 SDO 写；或用 candump/自写脚本发 0x600+node 的 SDO 写帧）
+#    目标：让 0x7000 的 v=0.2, ω=0，然后观察 0x50A 里的 0x60FF 变成 ≈6366
+</pre>
+
+<p><strong>观察三个量对齐</strong>：<code>0x7000[v,ω]</code> → 经逆解 → <code>0x50A</code> 里的 <code>0x60FF</code>（两轮值应分别等于 <code>v ± ω·b/2</code> 的换算值）→ 经仿真与正解 → <code>0x6FFF[x,y,θ]</code> 的变化方向。三者方向一致即通。</p>
+
+<h2>§7 小结与衔接</h2>
+
+<h3>7.1 一句话链路</h3>
+
+<p><strong>上位机写 <code>0x7000</code>(v,ω)</strong>（§3）→ <strong>RT 拍读并逆解</strong> <code>vR=v+ωb/2, vL=v−ωb/2</code>（§1）→ <strong>换算成 counts/s</strong>（§2）→ <strong>安全门限</strong>（§5.4）→ <strong>写 <code>0x60FF</code> 自动/同步发出</strong>（§5.3）→ 驱动器转 → <strong>里程计正解回读</strong>（第 7 站）。至此「<strong>下指令 → 底盘动 → 回读</strong>」闭环成立。</p>
+
+<h3>7.2 读完应能回答</h3>
+
+<ol>
+<li>差速底盘逆解的两行公式是什么？（<code>vR = v + ω·b/2</code>，<code>vL = v − ω·b/2</code>）</li>
+<li><code>b</code> 是什么？<code>b/2</code> 从哪来？（轮距；车体中心到单轮的距离，旋转时轮速=ω×半径）</li>
+<li>为什么逆解用「除」<code>ODOM_K_PER_COUNT</code>，正解用「乘」？（两者互为倒数，共用一把尺子）</li>
+<li>给速度该用哪个模式？用哪个目标对象？（<code>0x6060=3</code> PV；<code>0x60FF</code>）</li>
+<li>为什么新对象要用 <code>0x7000</code> 并追加到 <code>ODList</code> 末尾？（保持升序二分查找；<code>OD_ENTRY_H6FFF=&amp;list[157]</code> 是硬编码下标，不能错位）</li>
+<li>两条「保命逻辑」分别防什么？（未使能不动；cmd_vel 超时失联自动停车）</li>
+<li><code>0x60FF</code> 现在为什么触发不了 TPDO？怎么修？（未挂扩展=无 flagsPDO；挂扩展或改同步型 TPDO）</li>
+</ol>
+
+<h3>7.3 与下一站的衔接</h3>
+
+<p>本站让车「<strong>听指令走</strong>」，但还假设「<strong>总线永远好、从站永远在</strong>」。真实产品里，驱动器会掉线、会报故障。下一站 <strong>P1 心跳容错</strong>就把工程里「注册了却没用」的 <strong>HBconsumer（8 槽）</strong>真正用起来：给左右从站各配心跳监控，实现「<strong>心跳超时 → 判掉线 → 清零轮速（本站的 <code>0x60FF</code>）→ 报 EMCY → 尝试恢复</strong>」。注意它和本站天然咬合——<strong>掉线的第一动作就是本站的「失联停车」</strong>。</p>
+
+<div class="footnote">
+<p><strong>取证位置汇总（便于对照源码）</strong></p>
+<ul>
+<li><strong>正解与标定常数</strong>：<code>CO_application.c:51-58</code>（<code>ODOM_WHEEL_R_M</code>/<code>ODOM_COUNT_PER_REV</code>/<code>ODOM_WHEEL_BASE_M</code>/<code>ODOM_DIR_R/L</code>/<code>ODOM_K_PER_COUNT</code>）；正解积分 <code>:479-486</code>。</li>
+<li><strong>下行通道与使能时序（第 10 站已落地）</strong>：<code>CO_application.c:106-195</code>（<code>cia402_step</code> 等）、<code>:289-338</code>（TPDO 配置与扩展注册）、<code>:429-446</code>（每拍推进）。</li>
+<li><strong>0x60FF / 0x6060 / 0x607A / 0x6040</strong>：<code>application/OD.h:288</code>（<code>x6040_controlword</code>）、<code>:294</code>（<code>x6060</code>）、<code>:300</code>（<code>x607A</code>）、<code>:325</code>（<code>x60FF_targetVelocity</code>）；默认值 <code>OD.c:240/246/252</code>；TPDO 默认映射 <code>OD.c:148-158</code>。</li>
+<li><strong>自定义对象成法与约束</strong>：<code>0x6FFF</code> 定义 <code>OD.c:281-282/1957-1959/2131</code>、<code>OD.h:329-330/511</code>；追加规矩注释见 <code>OD.c:2129-2131</code>。</li>
+<li><strong>Qt 上位机现状（只读）</strong>：<code>hmi/commworker.cpp:72</code>、<code>hmi/commworker.h:10</code>。</li>
+<li><strong>SYNC 周期</strong>：<code>CO_application.c:209</code>（100 ms）。</li>
+<li><strong>仿真从站</strong>：<code>tools/sim_motors_downlink.py</code>（第 10 站建）；运行与抓包见 <code>HANDOFF.md</code> §6.2 / §6.7。</li>
+<li><strong>延伸阅读</strong>：第 10 站分册 <code>AGV_CANOPEN_LEARNING_MAP_S10_DOWNLINK_CIA402_print.html</code>（使能时序/下行通道）、第 7 站分册 <code>..._S7_ODOMETRY_print.html</code>（正解与标定常数）、第 8 站分册 <code>..._S8_QT_HMI_print.html</code>（上位机网关）。</li>
+</ul>
+<p><strong>建议阅读顺序</strong>：§0 地图 → §1 逆解 → §2 单位 → §3 入口 → §4 模式 → §5 落地 → §6 验证 → §7 小结。只读 §0/§1 也能先建立「(v,ω) → 轮速」的完整直觉。</p>
+</div>
+
+</body>
+</html>

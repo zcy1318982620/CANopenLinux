@@ -94,7 +94,7 @@ OD_2nd_ATTR_PERSIST_COMM OD_2nd_PERSIST_COMM_t OD_2nd_PERSIST_COMM = {
         .COB_IDUsedByTPDO = 0xC0000180,
         .transmissionType = 0xFE,
         .inhibitTime = 0x0000,
-        .eventTimer = 0x0000,
+        .eventTimer = 0x0100,
         .SYNCStartValue = 0x00
     },
     .x1801_TPDOCommunicationParameter = {
@@ -1451,7 +1451,10 @@ static CO_PROGMEM OD_2ndObjs_t OD_2ndObjs = {
     },
     .o_6040_controlword = {
         .dataOrig = &OD_2nd_RAM.x6040_controlword,
-        .attribute = ODA_SDO_RW | ODA_RPDO | ODA_MB,
+        /* 下行控制：0x6040 需由本节点(主站)经 TPDO 发给左轮从站，
+         * 故必须可映射进 TPDO(ODA_TPDO)。原来误标 RPDO 会导致
+         * CO_TPDO_init 映射校验失败(CO_ERROR_OD_PARAMETERS)。 */
+        .attribute = ODA_SDO_RW | ODA_TPDO | ODA_MB,
         .dataLength = 2
     },
     .o_6041_statusword = {
@@ -1722,7 +1725,8 @@ static CO_PROGMEM OD_2ndObjs_t OD_2ndObjs = {
     },
     .o_60FF_targetVelocity = {
         .dataOrig = &OD_2nd_RAM.x60FF_targetVelocity,
-        .attribute = ODA_SDO_RW | ODA_RPDO | ODA_MB,
+        /* 下行控制：目标速度经 TPDO 发给左轮从站，同 0x6040，须 ODA_TPDO。 */
+        .attribute = ODA_SDO_RW | ODA_TPDO | ODA_MB,
         .dataLength = 4
     },
     .o_6502_supportedDriveModes = {

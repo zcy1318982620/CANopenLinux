@@ -1,6 +1,7 @@
 /html
 /canopend
 /cocomm/cocomm
+/build*/
 *.o
 *.persist
 *.persist.old

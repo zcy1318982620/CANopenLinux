@@ -63,6 +63,7 @@
 #define OD_CNT_ARR_60E3 11
 #define OD_CNT_ARR_60FE 1
 #define OD_CNT_ARR_6FFF 3
+#define OD_CNT_ARR_7000 2
 
 
 /*******************************************************************************
@@ -328,6 +329,10 @@ typedef struct {
     uint32_t x67FF_singleDeviceType;
     uint8_t x6FFF_agvOdometry_sub0;
     float32_t x6FFF_agvOdometry[OD_CNT_ARR_6FFF];
+    /* 第 11 站：上层下发的期望速度 cmd_vel。sub1=线速度 v(m/s), sub2=角速度 ω(rad/s)。
+     * 追加在末尾(0x7000 > 0x6FFF)，保持 OD_RAM 成员顺序与 CANopenEditor 生成风格一致。 */
+    uint8_t x7000_agvCmdVel_sub0;
+    float32_t x7000_agvCmdVel[OD_CNT_ARR_7000];
 } OD_RAM_t;
 
 #ifndef OD_ATTR_PERSIST_COMM
@@ -509,6 +514,7 @@ extern OD_ATTR_OD OD_t *OD;
 /* 自定义条目追加在 ODList[] 末尾, 索引 0x6FFF 大于所有既有索引,
  * 保证 ODList[] 仍按 index 升序 (OD_find 是二分查找). */
 #define OD_ENTRY_H6FFF &OD->list[157]
+#define OD_ENTRY_H7000 &OD->list[158]
 
 
 /*******************************************************************************
@@ -672,6 +678,7 @@ extern OD_ATTR_OD OD_t *OD;
 #define OD_ENTRY_H67FE_versionNumber &OD->list[155]
 #define OD_ENTRY_H67FF_singleDeviceType &OD->list[156]
 #define OD_ENTRY_H6FFF_agvOdometry &OD->list[157]
+#define OD_ENTRY_H7000_agvCmdVel &OD->list[158]
 
 
 /*******************************************************************************

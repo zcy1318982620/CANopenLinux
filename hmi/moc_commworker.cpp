@@ -21,8 +21,8 @@ QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_CommWorker_t {
-    QByteArrayData data[25];
-    char stringdata0[234];
+    QByteArrayData data[29];
+    char stringdata0[259];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -49,22 +49,27 @@ QT_MOC_LITERAL(14, 105, 7), // "setNode"
 QT_MOC_LITERAL(15, 113, 4), // "node"
 QT_MOC_LITERAL(16, 118, 8), // "nmtPreOp"
 QT_MOC_LITERAL(17, 127, 8), // "nmtStart"
-QT_MOC_LITERAL(18, 136, 11), // "onConnected"
-QT_MOC_LITERAL(19, 148, 14), // "onDisconnected"
-QT_MOC_LITERAL(20, 163, 11), // "onReadyRead"
-QT_MOC_LITERAL(21, 175, 13), // "onSocketError"
-QT_MOC_LITERAL(22, 189, 28), // "QAbstractSocket::SocketError"
-QT_MOC_LITERAL(23, 218, 3), // "err"
-QT_MOC_LITERAL(24, 222, 11) // "pollTimeout"
+QT_MOC_LITERAL(18, 136, 9), // "setCmdVel"
+QT_MOC_LITERAL(19, 146, 1), // "v"
+QT_MOC_LITERAL(20, 148, 1), // "w"
+QT_MOC_LITERAL(21, 150, 11), // "onConnected"
+QT_MOC_LITERAL(22, 162, 14), // "onDisconnected"
+QT_MOC_LITERAL(23, 177, 11), // "onReadyRead"
+QT_MOC_LITERAL(24, 189, 13), // "onSocketError"
+QT_MOC_LITERAL(25, 203, 28), // "QAbstractSocket::SocketError"
+QT_MOC_LITERAL(26, 232, 3), // "err"
+QT_MOC_LITERAL(27, 236, 11), // "pollTimeout"
+QT_MOC_LITERAL(28, 248, 10) // "cmdTimeout"
 
     },
     "CommWorker\0connected\0\0disconnected\0"
     "poseUpdated\0x\0y\0th\0logLine\0msg\0"
     "connectBoard\0host\0port\0disconnectBoard\0"
-    "setNode\0node\0nmtPreOp\0nmtStart\0"
-    "onConnected\0onDisconnected\0onReadyRead\0"
-    "onSocketError\0QAbstractSocket::SocketError\0"
-    "err\0pollTimeout"
+    "setNode\0node\0nmtPreOp\0nmtStart\0setCmdVel\0"
+    "v\0w\0onConnected\0onDisconnected\0"
+    "onReadyRead\0onSocketError\0"
+    "QAbstractSocket::SocketError\0err\0"
+    "pollTimeout\0cmdTimeout"
 };
 #undef QT_MOC_LITERAL
 
@@ -74,7 +79,7 @@ static const uint qt_meta_data_CommWorker[] = {
        8,       // revision
        0,       // classname
        0,    0, // classinfo
-      14,   14, // methods
+      16,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -82,22 +87,24 @@ static const uint qt_meta_data_CommWorker[] = {
        4,       // signalCount
 
  // signals: name, argc, parameters, tag, flags
-       1,    0,   84,    2, 0x06 /* Public */,
-       3,    0,   85,    2, 0x06 /* Public */,
-       4,    3,   86,    2, 0x06 /* Public */,
-       8,    1,   93,    2, 0x06 /* Public */,
+       1,    0,   94,    2, 0x06 /* Public */,
+       3,    0,   95,    2, 0x06 /* Public */,
+       4,    3,   96,    2, 0x06 /* Public */,
+       8,    1,  103,    2, 0x06 /* Public */,
 
  // slots: name, argc, parameters, tag, flags
-      10,    2,   96,    2, 0x0a /* Public */,
-      13,    0,  101,    2, 0x0a /* Public */,
-      14,    1,  102,    2, 0x0a /* Public */,
-      16,    0,  105,    2, 0x0a /* Public */,
-      17,    0,  106,    2, 0x0a /* Public */,
-      18,    0,  107,    2, 0x08 /* Private */,
-      19,    0,  108,    2, 0x08 /* Private */,
-      20,    0,  109,    2, 0x08 /* Private */,
-      21,    1,  110,    2, 0x08 /* Private */,
-      24,    0,  113,    2, 0x08 /* Private */,
+      10,    2,  106,    2, 0x0a /* Public */,
+      13,    0,  111,    2, 0x0a /* Public */,
+      14,    1,  112,    2, 0x0a /* Public */,
+      16,    0,  115,    2, 0x0a /* Public */,
+      17,    0,  116,    2, 0x0a /* Public */,
+      18,    2,  117,    2, 0x0a /* Public */,
+      21,    0,  122,    2, 0x08 /* Private */,
+      22,    0,  123,    2, 0x08 /* Private */,
+      23,    0,  124,    2, 0x08 /* Private */,
+      24,    1,  125,    2, 0x08 /* Private */,
+      27,    0,  128,    2, 0x08 /* Private */,
+      28,    0,  129,    2, 0x08 /* Private */,
 
  // signals: parameters
     QMetaType::Void,
@@ -111,10 +118,12 @@ static const uint qt_meta_data_CommWorker[] = {
     QMetaType::Void, QMetaType::Int,   15,
     QMetaType::Void,
     QMetaType::Void,
+    QMetaType::Void, QMetaType::Double, QMetaType::Double,   19,   20,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 22,   23,
+    QMetaType::Void, 0x80000000 | 25,   26,
+    QMetaType::Void,
     QMetaType::Void,
 
        0        // eod
@@ -135,17 +144,19 @@ void CommWorker::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 6: _t->setNode((*reinterpret_cast< int(*)>(_a[1]))); break;
         case 7: _t->nmtPreOp(); break;
         case 8: _t->nmtStart(); break;
-        case 9: _t->onConnected(); break;
-        case 10: _t->onDisconnected(); break;
-        case 11: _t->onReadyRead(); break;
-        case 12: _t->onSocketError((*reinterpret_cast< QAbstractSocket::SocketError(*)>(_a[1]))); break;
-        case 13: _t->pollTimeout(); break;
+        case 9: _t->setCmdVel((*reinterpret_cast< double(*)>(_a[1])),(*reinterpret_cast< double(*)>(_a[2]))); break;
+        case 10: _t->onConnected(); break;
+        case 11: _t->onDisconnected(); break;
+        case 12: _t->onReadyRead(); break;
+        case 13: _t->onSocketError((*reinterpret_cast< QAbstractSocket::SocketError(*)>(_a[1]))); break;
+        case 14: _t->pollTimeout(); break;
+        case 15: _t->cmdTimeout(); break;
         default: ;
         }
     } else if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
         switch (_id) {
         default: *reinterpret_cast<int*>(_a[0]) = -1; break;
-        case 12:
+        case 13:
             switch (*reinterpret_cast<int*>(_a[1])) {
             default: *reinterpret_cast<int*>(_a[0]) = -1; break;
             case 0:
@@ -215,13 +226,13 @@ int CommWorker::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 14)
+        if (_id < 16)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 14;
+        _id -= 16;
     } else if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 14)
+        if (_id < 16)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 14;
+        _id -= 16;
     }
     return _id;
 }

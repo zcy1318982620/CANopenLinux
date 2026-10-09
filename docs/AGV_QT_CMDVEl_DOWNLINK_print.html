@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Qt 上位机下行打通 · 经 CiA-309 网关 SDO 写 0x7000 cmd_vel（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:20%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:42%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:38%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.star { font-weight:700; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.figure { border:0.6pt solid #bbb; background:#fff; padding:2mm; margin:2mm 0 3mm; page-break-inside:avoid; }
+.figure svg { width:100%; height:auto; display:block; }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>Qt 上位机下行打通：经 CiA-309 网关 SDO 写 <code>0x7000</code> cmd_vel</h1>
+
+<div class="meta">
+<p><strong>这份文档解决什么</strong>：主控侧（第 10/11 站）早已能「读 <code>0x7000</code> → 逆解 → 写 <code>0x60FF</code> 下发」，但<strong>没人给它写</strong>——Qt 上位机只做了上行（轮询 <code>0x6FFF</code> 画轨迹）。本册补齐<strong>下行那一半</strong>：让 Qt 经同一根 <code>tcp-60000</code> 网关，用 SDO <strong>周期写</strong> <code>0x7000</code>，把「Qt → 网关 → 逆解 → 下发」整条链在 HMI 侧合拢。</p>
+<p><strong>一句话</strong>：Qt 只是换了个"写"的动作——把滑条的 (v, ω) 拼成网关 ASCII 报文 <code>[seq] 1 w 0x7000 1 r32 0.200000</code> 发出去，剩下的逆解/使能/下发全是主控既有逻辑。</p>
+<p><strong>素材来源</strong>：代码 <code>hmi/commworker.{h,cpp}</code>、<code>hmi/mainwindow.{h,cpp}</code>；主控侧见 <code>docs/AGV_MASTER_CONTROL_DATAFLOW_print.html</code> 与 S11 分册。</p>
+<p><strong>行号基线</strong>：2026-10-09 工作区（<code>commworker.cpp</code> 177 行、<code>mainwindow.cpp</code> 287 行）。若之后改动代码，请以源码为准。</p>
+</div>
+
+<h2>§1 一图：下行链路（Qt 侧新添的部分在下半）</h2>
+
+<p>上半（灰）是主控已有的；<strong>下半（蓝）是本册新增</strong>。读法：箭头 = 数据交给谁；★ = 安全相关。</p>
+
+<div class="figure">
+<svg viewBox="0 0 1100 470" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2255a4"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- 上半：主控已有 -->
+  <text x="12" y="20" font-size="12" font-weight="700" fill="#555">主控（已有，本册不改）</text>
+  <g>
+    <rect x="60" y="34" width="200" height="70" rx="6" fill="#f0f0f0" stroke="#555"/>
+    <text x="160" y="62" font-size="13" font-weight="700" text-anchor="middle">OD 0x7000 cmd_vel</text>
+    <text x="160" y="82" font-size="10.5" text-anchor="middle" fill="#333">子1 v(m/s) / 子2 ω(rad/s)</text>
+
+    <rect x="330" y="34" width="200" height="70" rx="6" fill="#f0f0f0" stroke="#555"/>
+    <text x="430" y="62" font-size="13" font-weight="700" text-anchor="middle">H7000_write ★</text>
+    <text x="430" y="82" font-size="10.5" text-anchor="middle" fill="#333">打 deadman 时间戳</text>
+
+    <rect x="600" y="34" width="200" height="70" rx="6" fill="#f0f0f0" stroke="#555"/>
+    <text x="700" y="62" font-size="13" font-weight="700" text-anchor="middle">RT 拍：逆解 + 门限 ★</text>
+    <text x="700" y="82" font-size="10.5" text-anchor="middle" fill="#333">v±ωb/2 → counts/s → 0x60FF</text>
+
+    <rect x="870" y="34" width="190" height="70" rx="6" fill="#f0f0f0" stroke="#555"/>
+    <text x="965" y="62" font-size="13" font-weight="700" text-anchor="middle">TPDO 0x50A/0x50B</text>
+    <text x="965" y="82" font-size="10.5" text-anchor="middle" fill="#333">→ 驱动器 node10/11</text>
+  </g>
+  <line x1="260" y1="69" x2="326" y2="69" stroke="#555" stroke-width="1.5" marker-end="url(#ag)"/>
+  <line x1="530" y1="69" x2="596" y2="69" stroke="#555" stroke-width="1.5" marker-end="url(#ag)"/>
+  <line x1="800" y1="69" x2="866" y2="69" stroke="#555" stroke-width="1.5" marker-end="url(#ag)"/>
+
+  <!-- 中缝：网关 -->
+  <rect x="60" y="150" width="1000" height="34" rx="5" fill="#fdf7e3" stroke="#b8860b"/>
+  <text x="560" y="172" font-size="12.5" font-weight="700" text-anchor="middle">CiA-309 ASCII 网关（canopend -c "tcp-60000"）—— 文本命令 → SDO</text>
+
+  <!-- 下半：Qt 新增 -->
+  <text x="12" y="228" font-size="12" font-weight="700" fill="#2255a4">Qt 上位机（本册新增，蓝）</text>
+  <g>
+    <rect x="60" y="242" width="200" height="80" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="160" y="270" font-size="13" font-weight="700" text-anchor="middle">① 滑条 v / ω</text>
+    <text x="160" y="290" font-size="10.5" text-anchor="middle" fill="#333">mainwindow.cpp:184-188</text>
+    <text x="160" y="307" font-size="10.5" text-anchor="middle" fill="#333">±0.5 m/s · ±1.0 rad/s</text>
+
+    <rect x="330" y="242" width="200" height="80" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="430" y="270" font-size="13" font-weight="700" text-anchor="middle">② onCmdChanged</text>
+    <text x="430" y="290" font-size="10.5" text-anchor="middle" fill="#333">存值 → setCmdVel</text>
+    <text x="430" y="307" font-size="10.5" text-anchor="middle" fill="#333">mainwindow.cpp:262-271</text>
+
+    <rect x="600" y="242" width="200" height="80" rx="6" fill="#fdf5f5" stroke="#b33"/>
+    <text x="700" y="270" font-size="13" font-weight="700" text-anchor="middle">③ m_cmd 150ms ★</text>
+    <text x="700" y="290" font-size="10.5" text-anchor="middle" fill="#333">周期重发(deadman 续命)</text>
+    <text x="700" y="307" font-size="10.5" text-anchor="middle" fill="#333">commworker.cpp:105-110</text>
+
+    <rect x="870" y="242" width="190" height="80" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+    <text x="965" y="270" font-size="13" font-weight="700" text-anchor="middle">④ sendWrite</text>
+    <text x="965" y="290" font-size="10.5" text-anchor="middle" fill="#333">拼 ASCII 报文</text>
+    <text x="965" y="307" font-size="10.5" text-anchor="middle" fill="#333">commworker.cpp:112-119</text>
+  </g>
+  <line x1="260" y1="282" x2="326" y2="282" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ab)"/>
+  <line x1="530" y1="282" x2="596" y2="282" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ab)"/>
+  <line x1="800" y1="282" x2="866" y2="282" stroke="#2255a4" stroke-width="1.5" marker-end="url(#ab)"/>
+
+  <!-- ④ -> 网关 -> OD 0x7000 -->
+  <polyline points="965,322 965,360 160,360 160,167" fill="none" stroke="#2255a4" stroke-width="1.6" marker-end="url(#ab)"/>
+  <text x="560" y="376" font-size="11" fill="#2255a4" text-anchor="middle">TCP 文本行 &quot;[seq] 1 w 0x7000 1 r32 0.200000\n&quot; → 网关转 SDO 下载 → 落到主控 OD 0x7000</text>
+
+  <!-- 停车分支 -->
+  <rect x="330" y="400" width="440" height="52" rx="6" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="550" y="422" font-size="12" font-weight="700" text-anchor="middle">「停车(发零)」按钮 / 断开连接 → (v,ω)=(0,0)</text>
+  <text x="550" y="441" font-size="10.5" text-anchor="middle" fill="#333">mainwindow.cpp:273-278 · onConnState 归零 :255-258</text>
+</svg>
+</div>
+
+<h2>§2 网关命令语法：读改写成写（逐字）</h2>
+
+<p>网关（<code>CANopenNode/309/CO_gateway_ascii.c</code>）的 help 原文给的就是两条语法，读/写只差中间一个字母和一个尾参：</p>
+
+<pre>[[&lt;net&gt;] &lt;node&gt;] r[ead]  &lt;index&gt; &lt;subindex&gt; [&lt;datatype&gt;]          # SDO 上传
+[[&lt;net&gt;] &lt;node&gt;] w[rite] &lt;index&gt; &lt;subindex&gt;  &lt;datatype&gt; &lt;value&gt;  # SDO 下载</pre>
+
+<table class="cols-2">
+<caption>表 2-1 Qt 实际发出的报文（<code>node=1</code> 即主控自己）</caption>
+<thead><tr><th>用途</th><th>报文</th></tr></thead>
+<tbody>
+<tr><td>上行：读位姿 x/y/θ</td><td><code>[7] 1 r 0x6FFF 1 r32</code>（[commworker.cpp:79-84](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L79-L84)，子索引 1/2/3 轮询）</td></tr>
+<tr><td>下行：写线速度 v</td><td><code>[21] 1 w 0x7000 1 r32 0.200000</code>（[commworker.cpp:112-119](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L112-L119)）</td></tr>
+<tr><td>下行：写角速度 ω</td><td><code>[22] 1 w 0x7000 2 r32 0.000000</code></td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>数据类型</strong>：<code>0x7000</code> 两子索引都是 <code>REAL32</code>，网关记作 <code>r32</code>（4 字节浮点，见 <code>CO_gateway_ascii.c:341</code> 的 <code>{"r32",4,...}</code>）。值用 <code>QString::arg(value,0,'f',6)</code> 格式化，保证有符号、有小数、够精度。
+</div>
+
+<div class="warn">
+<strong>节点号必须是 1（主控自己）</strong>：<code>0x7000</code> 定义在主控自己的 OD 里，网关再经 SDO 客户端把它下回来给本节点——和上行读 <code>0x6FFF</code> 是同一套机制。Qt 里节点号由 UI「节点号」输入框设成 <code>m_node</code>，默认 1。
+</div>
+
+<h2 class="pgbreak">§3 代码走读（文件:行号）</h2>
+
+<h3>3.1 CommWorker：从"只读"扩成"可写"</h3>
+<table class="cols-3">
+<caption>表 3-1 通信线程改动点</caption>
+<thead><tr><th>单元</th><th>做了什么</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>构造</td><td>新增 <code>m_cmd</code> 定时器，周期 <strong>150ms</strong>；接 <code>cmdTimeout</code></td><td>[commworker.cpp:5-23](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L5-L23)</td></tr>
+<tr><td><code>setCmdVel(v,w)</code></td><td>槽：只把期望速度存进 <code>m_v/m_w</code>（界面线程经队列连接调它）</td><td>[commworker.cpp:99-103](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L99-L103)</td></tr>
+<tr><td><code>cmdTimeout()</code></td><td>每拍把子 1、子 2 各写一次 → 稳定下行 + 给 deadman 续命</td><td>[commworker.cpp:105-110](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L105-L110)</td></tr>
+<tr><td><code>sendWrite()</code></td><td>拼并发出 <code>[seq] &lt;node&gt; w 0x7000 &lt;sub&gt; r32 &lt;v&gt;</code></td><td>[commworker.cpp:112-119](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L112-L119)</td></tr>
+<tr><td>连接/断开</td><td>连上启 <code>m_poll</code>+<code>m_cmd</code>；断开停两者并把 <code>m_v=m_w=0</code></td><td>[commworker.cpp:54-71](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L54-L71)</td></tr>
+<tr><td>收包</td><td>写成功的 <code>OK</code> <strong>静默丢弃</strong>（150ms 两写，记日志会刷屏）；<code>ERROR</code> 仍记</td><td>[commworker.cpp:158-164](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L158-L164)</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 MainWindow：滑条 + 停车按钮</h3>
+<table class="cols-3">
+<caption>表 3-2 界面改动点</caption>
+<thead><tr><th>单元</th><th>做了什么</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>控件</td><td>组「运动控制 (cmd_vel → 0x7000)」：v 滑条 <code>-500..500</code>、ω 滑条 <code>-1000..1000</code>、数值标签、停车按钮</td><td>[mainwindow.cpp:179-205](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L179-L205)</td></tr>
+<tr><td>连线</td><td><code>requestCmdVel</code> → worker <code>setCmdVel</code>（队列连接）；两滑条 <code>valueChanged</code> → <code>onCmdChanged</code></td><td>[mainwindow.cpp:116](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L116) / [225-228](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L225-L228)</td></tr>
+<tr><td>标度</td><td>滑条整数 ÷ <code>CMD_SCALE=1000</code> → 物理量</td><td>[mainwindow.cpp:18-20](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L18-L20)</td></tr>
+<tr><td>联动</td><td>连上才使能本组；断开自动滑条归零（触发发零）</td><td>[mainwindow.cpp:246-260](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L246-L260)</td></tr>
+<tr><td>停车</td><td>两滑条置 0 + 兜底显式发 <code>(0,0)</code></td><td>[mainwindow.cpp:273-278](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L273-L278)</td></tr>
+</tbody>
+</table>
+
+<h2>§4 为什么必须"周期重发"（本册最容易踩的坑）</h2>
+
+<p>主控侧有一条<strong>失联停车（deadman）</strong>安全门限：RT 拍每 1ms 走一次，若 <code>cmd_rx_tick</code> 超过 <code>CMD_TIMEOUT_TICKS=500</code>（≈500ms）没被刷新，就把两轮目标速度强制清零（[CO_application.c:203-217](file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L203-L217)、门限合并在 :530-534）。而时间戳只由<strong>"写动作本身"</strong>刷新——主机持续发同一个恒速时数值不变，靠"值变化"是判断不出来的。</p>
+
+<table class="cols-2">
+<caption>表 4-1 若只发一次会怎样</caption>
+<thead><tr><th>做法</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>滑条变动才发一次</td><td>车动约 500ms 后<strong>自己停下</strong>（deadman 判定失联）→ 像是"指令没生效"</td></tr>
+<tr><td><strong>150ms 周期重发（本册做法）</strong></td><td>时间戳被持续刷新，车速稳定维持；停止时靠显式发零</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>150ms 怎么定的</strong>：deadman 门限 500ms，取 150ms 约 3 倍余量，兼顾"总线不刷屏"与"掉链也不误停"。滑条是<strong>绝对量</strong>不是点动（jog）——松手不停，这是刻意选择；停车走「停车」按钮或断开连接。
+</div>
+
+<h2>§5 安全设计小结</h2>
+<ul>
+<li><span class="star">默认零速</span>：滑条初值 0；连上后第一拍 <code>cmdTimeout</code> 发的就是 <code>(0,0)</code>，不会一上电就窜。</li>
+<li><span class="star">断链即归零</span>：<code>onDisconnected</code> 把 <code>m_v=m_w=0</code> 且滑条归零（[commworker.cpp:63-71](file:///home/zcy/Project/panasonic_canopen_agv/hmi/commworker.cpp#L63-L71)）。</li>
+<li><span class="star">未连接禁止发令</span>：控制组默认 <code>setEnabled(false)</code>，连上才可操作（[mainwindow.cpp:230](file:///home/zcy/Project/panasonic_canopen_agv/hmi/mainwindow.cpp#L230)）。</li>
+<li><span class="star">真正兜底在主控</span>：即使 Qt 崩了/网线断了，主控的 deadman 与"未使能不动"两道门限仍会停车——Qt 这层是"便利"，不是"安全依靠"。</li>
+</ul>
+
+<h2>§6 vcan 零硬件验证（2026-10-09 PASS）</h2>
+
+<p>环境：<code>canopend vcan0 -i 1 -c "tcp-60000"</code> + <code>tools/sim_motors.py vcan0 1 --both</code>（从站状态字恒 <code>0x0237</code>=Operation enabled，满足"未使能不动"门限）。上位机脚本<strong>逐字复刻 Qt <code>sendWrite()</code></strong> 的报文，按 150ms 节奏发，并抓 TPDO 末帧：</p>
+
+<pre>=== A 直行 v=+0.2 : cmd_vel v=0.200 w=0.000 (2.0s) ===
+  0x50A(右轮) cw=0x000F  0x60FF=6366
+  0x50B(左轮) cw=0x000F  0x60FF=6366          # = 0.2 / 3.14159e-5
+
+=== B 停车(发零) : cmd_vel v=0.000 w=0.000 (1.0s) ===
+  0x50A(右轮) cw=0x000F  0x60FF=0
+  0x50B(左轮) cw=0x000F  0x60FF=0
+
+=== C 原地转 ω=-0.5(验证子2) : cmd_vel v=0.000 w=-0.500 (2.0s) ===
+  0x50A(右轮) cw=0x000F  0x60FF=-2387
+  0x50B(左轮) cw=0x000F  0x60FF=2387          # 左右反向 ⇒ 原地转，符号正确
+[结果] PASS</pre>
+
+<table class="cols-2">
+<caption>表 6-1 三层证据链</caption>
+<thead><tr><th>层</th><th>证据</th></tr></thead>
+<tbody>
+<tr><td>Qt 编译</td><td><code>qmake hmi.pro &amp;&amp; make</code> 通过（Qt 5.12.8，无警告）</td></tr>
+<tr><td>协议一致</td><td>验证脚本发出的每个字节 = <code>sendWrite()</code> 生成格式（<code>[seq] 1 w 0x7000 &lt;sub&gt; r32 %6f</code>）</td></tr>
+<tr><td>端到端</td><td><code>0x60FF</code> 随 (v,ω) 精确变化、停车精确归零 ⇒ 「Qt 报文 → 网关 → SDO → 逆解 → 下发」贯通</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<strong>可信度边界</strong>：本环境无显示器、无法点到 GUI 滑条，故验证走的是"<strong>复刻 Qt 实际发出的报文</strong>"这条路，而非直接操作 GUI 进程。报文格式由 <code>sendWrite()</code> 唯一确定且已逐字比对；真机/带屏联调时只需点一下滑条即可复现同一串报文。
+</div>
+
+<div class="footnote">
+配套：主控侧落脚点见 <code>docs/AGV_MASTER_CONTROL_DATAFLOW_print.html</code> §2/§3（<code>0x7000</code> → 逆解 → 门限 → <code>0x60FF</code>）；逆解与安全门限细节见 <code>..._S11_INVERSE_KINEMATICS_print.html</code>；网关语法全貌见 <code>..._S8_QT_HMI_print.html</code>。行号基线 2026-10-09。
+</div>
+
+</body>
+</html>

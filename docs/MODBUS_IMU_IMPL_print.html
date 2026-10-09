@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Modbus RTU IMU 主站实现册：函数职责 + 完整链路（打印版）</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+       font-size:10pt; line-height:1.55; color:#111; background:#fff; margin:0 auto; max-width:190mm; padding:6mm 0; }
+h1 { font-size:17pt; margin:0 0 2mm; padding-bottom:2mm; border-bottom:2.5pt solid #111; }
+h2 { font-size:13pt; margin:7mm 0 2mm; padding:1.2mm 0 1.2mm 2.5mm; border-left:4pt solid #111;
+     background:#f0f0f0; page-break-after:avoid; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; page-break-after:avoid; }
+h4 { font-size:10pt; margin:3mm 0 1mm; page-break-after:avoid; }
+p { margin:1.5mm 0; }
+ul,ol { margin:1.5mm 0 1.5mm 5mm; padding:0; }
+li { margin:0.8mm 0; }
+code { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.6pt;
+       background:#f2f2f2; padding:0 0.6mm; border-radius:1pt; word-break:break-all; }
+pre { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:7.8pt; line-height:1.35;
+      background:#fafafa; border:0.6pt solid #bbb; border-left:2.5pt solid #666; padding:2.5mm 3mm; margin:2mm 0;
+      white-space:pre; overflow-x:auto; page-break-inside:avoid; }
+table { width:100%; border-collapse:collapse; margin:2mm 0 3mm; font-size:8.8pt; table-layout:fixed; }
+caption { caption-side:top; text-align:left; font-weight:700; font-size:9.5pt; padding:0 0 1.2mm; }
+th,td { border:0.6pt solid #999; padding:1.4mm 1.8mm; text-align:left; vertical-align:top;
+        word-wrap:break-word; overflow-wrap:anywhere; }
+th { background:#e8e8e8; font-weight:700; }
+tr { page-break-inside:avoid; }
+thead { display:table-header-group; }
+/* 函数表列宽：函数 / 做什么 / 传参 / 返回 */
+.fn th:nth-child(1),.fn td:nth-child(1){width:22%}
+.fn th:nth-child(2),.fn td:nth-child(2){width:40%}
+.fn th:nth-child(3),.fn td:nth-child(3){width:24%}
+.fn th:nth-child(4),.fn td:nth-child(4){width:14%}
+.cols-2 th:nth-child(1),.cols-2 td:nth-child(1){width:26%}
+.cols-2 th:nth-child(2),.cols-2 td:nth-child(2){width:74%}
+.cols-3 th:nth-child(1),.cols-3 td:nth-child(1){width:20%}
+.cols-3 th:nth-child(2),.cols-3 td:nth-child(2){width:44%}
+.cols-3 th:nth-child(3),.cols-3 td:nth-child(3){width:36%}
+.cols-4a th:nth-child(1),.cols-4a td:nth-child(1){width:18%}
+.cols-4a th:nth-child(2),.cols-4a td:nth-child(2){width:20%}
+.cols-4a th:nth-child(3),.cols-4a td:nth-child(3){width:22%}
+.cols-4a th:nth-child(4),.cols-4a td:nth-child(4){width:40%}
+.meta { font-size:8.6pt; color:#333; border:0.6pt dashed #888; background:#fafafa; padding:2.5mm 3mm; margin:0 0 4mm; }
+.meta p { margin:0.6mm 0; }
+.pgbreak { page-break-before:always; }
+.note { border:0.6pt solid #999; border-left:3pt solid #333; background:#f7f7f7; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn { border:0.6pt solid #b33; border-left:3pt solid #b33; background:#fdf5f5; padding:2mm 3mm;
+        margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.warn strong:first-child { color:#a11; }
+.cpp { border:0.6pt solid #99b; border-left:3pt solid #2255a4; background:#f4f7fc; padding:2mm 3mm;
+       margin:2.5mm 0; font-size:9pt; page-break-inside:avoid; }
+.cpp strong:first-child { color:#2255a4; }
+.toolbar { text-align:right; margin-bottom:3mm; }
+.toolbar button { font-size:10pt; padding:2mm 5mm; cursor:pointer; border:1pt solid #333; background:#fff; }
+@media print { .toolbar{display:none;} body{padding:0;max-width:none;} a{color:#111;text-decoration:none;} }
+.figure { border:0.6pt solid #bbb; background:#fff; padding:2mm; margin:2mm 0 3mm; page-break-inside:avoid; }
+.figure svg { width:100%; height:auto; display:block; }
+.footnote { margin-top:6mm; padding-top:2mm; border-top:0.6pt solid #bbb; font-size:8pt; color:#444; }
+/* 链路方框流程（与《异步日志改造》分册一致的写法） */
+.flow { margin:2mm 0; }
+.flow .row { display:flex; align-items:center; flex-wrap:wrap; gap:1.5mm; margin:1.2mm 0; }
+.flow .box { border:0.6pt solid #999; border-radius:2pt; padding:1.4mm 2.2mm; font-size:8.4pt;
+             background:#fff; white-space:nowrap; }
+.flow .box.hi { background:#eef3fb; border-color:#2255a4; color:#2255a4; font-weight:700; }
+.flow .box.mut { background:#f2f2f2; color:#444; }
+.flow .arw { color:#2255a4; font-weight:700; font-size:9pt; }
+.flow .down { color:#2255a4; font-weight:700; margin-left:6mm; }
+code.ok { background:#e7f5e7; }
+.mono { font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace; font-size:8.4pt; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h1>Modbus RTU IMU 主站实现册：函数职责 + 完整链路</h1>
+
+<div class="meta">
+<p><strong>这份文档解决什么</strong>：把这次写的 Modbus RTU 主站（<code>agv_modbus</code>）讲清楚两件事——<strong>① 每个函数到底干什么</strong>；<strong>② 一次读/写从应用一路走到从站、再走回来，整条链路是什么</strong>。讲法是「函数表 + 链路方框 + 行号链接」，与工程里《S6A RT 线程》《S7 里程计》《异步日志改造》等分册一致。</p>
+<p><strong>学习深度</strong>：对齐学习册裁定的 <strong>L3「会写主站」</strong>（组帧/解帧/CRC/t3.5/异常码/重试/字序/RS485 方向）；<strong>不碰 L4（自研协议栈/网关内核）</strong>。</p>
+<p><strong>无硬件前提</strong>：本机无 IMU，对端用纯标准库虚拟从站 <code>tools/sim_imu_modbus.py</code>（pty），与项目里「vcan + <code>sim_motors.py</code>」同思路。</p>
+<p><strong>验证状态</strong>：单测 46 断言全过；pty 端到端读回 9 个 float32 PASS；故障注入（异常码/坏 CRC/丢帧重试）按预期；<code>make test</code> 与 <code>ctest</code> 全过。</p>
+<p><strong>关联</strong>：学习册 <code>MODBUS_LEARNING_MAP_print.html</code>（协议原理）、HANDOFF §16.5。<strong>成文时间</strong>：2026-10-09。</p>
+</div>
+
+<h2>§0 一页地图：这次改了什么、在哪改</h2>
+
+<table class="cols-4a">
+<caption>表 0-1　新增/涉及的文件</caption>
+<thead><tr><th>文件</th><th>层</th><th>职责</th><th>本册在哪讲</th></tr></thead>
+<tbody>
+<tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h">agv_modbus.h</a></td><td>接口</td><td>功能码 / 错误码 / 字序枚举 / 配置结构 / 函数声明</td><td>§1 数据结构</td></tr>
+<tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c">agv_modbus.c</a></td><td>实现</td><td>纯函数层 + 串口/485 层 + 事务层</td><td>§2 函数表 · §3 链路</td></tr>
+<tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/tests/test_agv_modbus.c">tests/test_agv_modbus.c</a></td><td>测试</td><td>46 断言：CRC/组帧/解帧/异常/四种字序</td><td>§7 验证</td></tr>
+<tr><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/tools/sim_imu_modbus.py">tools/sim_imu_modbus.py</a></td><td>仿真</td><td>虚拟 IMU 从站（pty/串口 + 故障注入）</td><td>§7 验证</td></tr>
+</tbody>
+</table>
+
+<h3>0.1 分三层：谁调用谁</h3>
+
+<p>顶层是调用方（未来的 IMU 采集线程或调试程序），往下依次是事务层 → 帧层 → 纯函数层，最底下落到串口驱动。<strong>箭头方向就是调用方向</strong>；纯函数层不再向下依赖任何东西。</p>
+
+<div class="figure">
+<svg viewBox="0 0 1080 250" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2255a4"/>
+    </marker>
+  </defs>
+  <rect x="330" y="14" width="420" height="30" rx="4" fill="#f0f0f0" stroke="#555"/>
+  <text x="540" y="34" font-size="10.5" text-anchor="middle">调用方：IMU 采集线程 / 调试程序（下一阶段）</text>
+
+  <rect x="330" y="56" width="420" height="34" rx="4" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="540" y="78" font-size="10.5" font-weight="700" text-anchor="middle">事务层　mb_read_regs / mb_write_reg(s) / mb_read_float32</text>
+
+  <rect x="330" y="102" width="420" height="34" rx="4" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="540" y="124" font-size="10.5" font-weight="700" text-anchor="middle">帧层　mb_build_* / mb_parse_read_resp / mb_expected_len</text>
+
+  <rect x="330" y="148" width="420" height="34" rx="4" fill="#eef3fb" stroke="#2255a4"/>
+  <text x="540" y="170" font-size="10.5" font-weight="700" text-anchor="middle">纯函数层　mb_crc16 / mb_append_crc / mb_regs_to_float32</text>
+
+  <rect x="330" y="194" width="420" height="34" rx="4" fill="#fdf7e3" stroke="#b8860b"/>
+  <text x="540" y="216" font-size="10.5" font-weight="700" text-anchor="middle">串口 / RS485　mb_open · mb_tx · mb_rx · tcdrain · TIOCSRS485</text>
+
+  <line x1="540" y1="44" x2="540" y2="54" stroke="#2255a4" stroke-width="1.4" marker-end="url(#a1)"/>
+  <line x1="540" y1="90" x2="540" y2="100" stroke="#2255a4" stroke-width="1.4" marker-end="url(#a1)"/>
+  <line x1="540" y1="136" x2="540" y2="146" stroke="#2255a4" stroke-width="1.4" marker-end="url(#a1)"/>
+  <line x1="540" y1="182" x2="540" y2="192" stroke="#2255a4" stroke-width="1.4" marker-end="url(#a1)"/>
+
+  <rect x="20" y="56" width="270" height="122" rx="4" fill="#fafafa" stroke="#bbb" stroke-dasharray="4 3"/>
+  <text x="34" y="76" font-size="9.6" font-weight="700" fill="#444">为什么纯函数要单独成层</text>
+  <text x="34" y="94" font-size="9" fill="#555">CRC / 组帧 / 字序不碰硬件、</text>
+  <text x="34" y="108" font-size="9" fill="#555">相同输入必得相同输出 →</text>
+  <text x="34" y="122" font-size="9" fill="#555">单测只链接 agv_modbus.c</text>
+  <text x="34" y="136" font-size="9" fill="#555">就能覆盖最易错的部分，</text>
+  <text x="34" y="150" font-size="9" fill="#555">无需串口、无需实车。</text>
+  <text x="34" y="168" font-size="9" fill="#888">（与 agv_kinematics 同一原则）</text>
+
+  <rect x="790" y="56" width="270" height="172" rx="4" fill="#fff" stroke="#888" stroke-dasharray="5 3"/>
+  <text x="804" y="76" font-size="9.6" font-weight="700" fill="#555">下一阶段（本册不做）</text>
+  <text x="804" y="96" font-size="9" fill="#666">新增 OD 0x7010 imu</text>
+  <text x="804" y="112" font-size="9" fill="#666">IMU 采集线程（轮询 0x04）</text>
+  <text x="804" y="128" font-size="9" fill="#666">与 0x6FFF 航向互补滤波</text>
+  <text x="804" y="150" font-size="9" fill="#666">θ ← α(θ+ω·dt)+(1−α)θ_imu</text>
+  <text x="804" y="176" font-size="8.6" fill="#888">接线时把 mb_open() 打开真</text>
+  <text x="804" y="190" font-size="8.6" fill="#888">串口即可，本册模块不用改。</text>
+</svg>
+</div>
+
+<h2>§1 数据结构</h2>
+
+<h3>1.1 <code>mb_word_order_t</code>（float32 字序枚举，<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L56-L61">agv_modbus.h#L56-61</a>）</h3>
+<table class="cols-3">
+<thead><tr><th>取值</th><th>含义（r0=低地址寄存器，r1=高地址）</th><th>1.5f 时 (r0,r1)</th></tr></thead>
+<tbody>
+<tr><td><code>MB_WORD_ABCD</code></td><td>大端：<code>r0=AB, r1=CD</code>（最常见）</td><td><code>0x3FC0, 0x0000</code></td></tr>
+<tr><td><code>MB_WORD_CDAB</code></td><td>字交换：<code>r0=CD, r1=AB</code></td><td><code>0x0000, 0x3FC0</code></td></tr>
+<tr><td><code>MB_WORD_BADC</code></td><td>字节交换：<code>r0=BA, r1=DC</code></td><td><code>0xC03F, 0x0000</code></td></tr>
+<tr><td><code>MB_WORD_DCBA</code></td><td>全小端：<code>r0=DC, r1=BA</code></td><td><code>0x0000, 0xC03F</code></td></tr>
+</tbody>
+</table>
+
+<h3>1.2 <code>mb_cfg_t</code>（主站配置，<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L64-L83">agv_modbus.h#L64-83</a>）</h3>
+<table class="cols-2">
+<thead><tr><th>字段</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>baud</code></td><td>波特率：9600/19200/38400/57600/115200/230400</td></tr>
+<tr><td><code>slave</code></td><td>从站地址（1..247）</td></tr>
+<tr><td><code>timeout_ms</code></td><td>单次等响应超时（毫秒），常用 300</td></tr>
+<tr><td><code>retries</code></td><td>失败重试次数（不含首次）；<strong>异常响应不重试</strong></td></tr>
+<tr><td><code>rs485</code></td><td>1=启用 RS485 方向控制（内核 ioctl 优先，RTS 兜底）</td></tr>
+<tr><td><code>word_order</code></td><td>float32 字序，接真机后按实测校准</td></tr>
+</tbody>
+</table>
+<p><code>MB_CFG_DEFAULT_INIT(cfg)</code> 宏给出默认值：115200 / 从站 1 / 300ms / 重试 2 / 启用 485 / ABCD。</p>
+
+<h3>1.3 <code>mb_ctx_t</code>（运行时句柄，<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L31-L46">agv_modbus.c#L31-46</a>）</h3>
+<p>结构体定义在 <code>.c</code> 内部（头文件只给不透明指针 <code>mb_ctx_t *</code>），调用方不直接碰字段。</p>
+<table class="cols-2">
+<thead><tr><th>字段</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>fd</code></td><td>串口文件描述符</td></tr>
+<tr><td><code>slave / baud / timeout_ms / retries / rs485</code></td><td>由配置拷入的运行参数</td></tr>
+<tr><td><code>rs485_kernel</code></td><td>1=内核已接管方向控制；0=用 RTS 手动切换</td></tr>
+<tr><td><code>word_order</code></td><td>读 float32 时用的字序</td></tr>
+<tr><td><code>stat_ok / stat_err</code></td><td>成功/失败事务累计计数</td></tr>
+<tr><td><code>consec_fail</code></td><td>连续失败次数（成功清零），离线判定用</td></tr>
+</tbody>
+</table>
+
+<h3>1.4 错误码与异常码（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L28-L53">agv_modbus.h#L28-53</a>）</h3>
+<table class="cols-4a">
+<thead><tr><th>区间/值</th><th>宏</th><th>含义</th><th>是否重试</th></tr></thead>
+<tbody>
+<tr><td><code>&gt;=0</code></td><td>—</td><td>成功（读写成功的寄存器个数）</td><td>—</td></tr>
+<tr><td><code>-1</code></td><td><code>MB_E_PARAM</code></td><td>入参非法（地址/数量/功能码）</td><td>否</td></tr>
+<tr><td><code>-2</code></td><td><code>MB_E_IO</code></td><td>串口读写/配置失败</td><td>是</td></tr>
+<tr><td><code>-3</code></td><td><code>MB_E_TIMEOUT</code></td><td>等响应超时</td><td>是</td></tr>
+<tr><td><code>-4</code></td><td><code>MB_E_CRC</code></td><td>CRC 校验失败</td><td>是</td></tr>
+<tr><td><code>-5</code></td><td><code>MB_E_FRAME</code></td><td>帧结构非法（长度/地址/功能码不符）</td><td>是</td></tr>
+<tr><td><code>-257..-511</code></td><td><code>MB_ERR_EXC(code)</code></td><td>从站异常响应，<code>code</code> 即异常码</td><td><strong>否</strong></td></tr>
+</tbody>
+</table>
+
+<h2 class="pgbreak">§2 每个函数做什么</h2>
+
+<p>按层列出全部函数。<strong>点函数名</strong>跳到源码对应行；<code>static</code> 表示内部函数，不对外暴露。</p>
+
+<h3>2.1 纯函数层（不碰硬件，单测主力）</h3>
+<table class="fn">
+<caption>表 2-1　帧与数据的纯计算</caption>
+<thead><tr><th>函数</th><th>做什么</th><th>传参</th><th>返回</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L53-L67"><code>mb_crc16</code></a></td>
+  <td>CRC16-Modbus：初值 <code>0xFFFF</code>、多项式 <code>0xA001</code>，逐字节按位运算</td>
+  <td><code>buf</code> 数据首地址；<code>len</code> 字节数</td>
+  <td>16 位 CRC（发送时低字节先）</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L69-L75"><code>mb_append_crc</code></a>（static）</td>
+  <td>给 <code>out[0..len-1]</code> 末尾追加 CRC 两字节（<strong>低字节先发</strong>）</td>
+  <td><code>out</code> 帧缓冲；<code>len</code> 当前长度</td>
+  <td>新长度 <code>len+2</code></td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L77-L86"><code>mb_build_read</code></a></td>
+  <td>组「读寄存器」请求帧（功能码 <code>0x03</code>/<code>0x04</code>）</td>
+  <td><code>out</code>；<code>addr</code> 从站；<code>func</code>；<code>reg</code> 起始地址；<code>n</code> 数量</td>
+  <td>帧长 8</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L88-L97"><code>mb_build_write_single</code></a></td>
+  <td>组「写单个寄存器」请求帧（<code>0x06</code>）</td>
+  <td><code>out</code>；<code>addr</code>；<code>reg</code>；<code>val</code> 写入值</td>
+  <td>帧长 8</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L99-L114"><code>mb_build_write_multi</code></a></td>
+  <td>组「写多个寄存器」请求帧（<code>0x10</code>），含字节数=2n 与数据区</td>
+  <td><code>out</code>；<code>addr</code>；<code>reg</code>；<code>n</code>；<code>vals</code> 值数组</td>
+  <td>帧长 9+2n</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L116-L145"><code>mb_parse_read_resp</code></a></td>
+  <td>解析读响应：校验地址/功能码/字节数/整帧 CRC；<strong>异常响应转成 <code>MB_ERR_EXC(code)</code></strong>；正常则按大端拼出各寄存器</td>
+  <td><code>resp</code> 收到的帧；<code>len</code>；<code>addr</code> 期望从站；<code>func</code>；<code>n</code> 期望数量；<code>out</code> 输出数组</td>
+  <td><code>n</code> / 负错误码 / 异常码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L150-L179"><code>mb_regs_to_float32</code></a></td>
+  <td>按四种字序把两个寄存器还原为 float32（<strong>先拼大端 32 位整数再解释</strong>，见 §5）</td>
+  <td><code>r0</code> 低地址寄存器；<code>r1</code> 高地址；<code>order</code> 字序</td>
+  <td>float 值</td>
+</tr>
+</tbody>
+</table>
+
+<h3>2.2 串口 / RS485 层</h3>
+<table class="fn">
+<caption>表 2-2　打开、配置与收发</caption>
+<thead><tr><th>函数</th><th>做什么</th><th>传参</th><th>返回</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L183-L194"><code>mb_baud_const</code></a>（static）</td>
+  <td>把整数波特率映射到 termios 的 <code>speed_t</code> 常量</td>
+  <td><code>baud</code> 整数波特率</td>
+  <td><code>speed_t</code>；非法 -1</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L196-L222"><code>mb_setup_port</code></a>（static）</td>
+  <td>把串口配成 raw 8N1（关回显/行缓冲/校验/停位），并 <code>tcflush</code> 清残帧</td>
+  <td><code>fd</code>；<code>baud</code></td>
+  <td><code>MB_OK</code> / <code>MB_E_*</code></td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L224-L230"><code>mb_set_rts</code></a>（static）</td>
+  <td>拉高/拉低 RTS —— RS485 方向控制的<strong>兜底</strong>方案</td>
+  <td><code>fd</code>；<code>level</code> 1=发 0=收</td>
+  <td>无</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L232-L243"><code>mb_try_kernel_rs485</code></a>（static）</td>
+  <td>尝试 <code>ioctl(TIOCSRS485)</code> 让<strong>内核自动</strong>收发切换方向</td>
+  <td><code>fd</code></td>
+  <td>1 内核接管 / 0 不支持</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L245-L286"><code>mb_open</code></a></td>
+  <td>打开设备 → 配串口 → 分配并填充上下文 → 尝试内核 485（失败则用 RTS）</td>
+  <td><code>dev</code> 设备路径；<code>cfg</code> 配置（NULL 用默认）</td>
+  <td>句柄；失败 <code>NULL</code></td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L288-L298"><code>mb_close</code></a></td>
+  <td>关串口 + 释放上下文</td>
+  <td><code>ctx</code></td>
+  <td>无</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L300-L312"><code>mb_t35_delay</code></a>（static）</td>
+  <td>帧间静默 t3.5：波特率 &gt;19200 固定 1.75ms，否则 <code>3.5×11/baud</code></td>
+  <td><code>ctx</code></td>
+  <td>无</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L314-L340"><code>mb_tx</code></a>（static）</td>
+  <td>发送一帧：<strong>切「发」→ write 全帧 → <code>tcdrain()</code> → 切「收」</strong>（485 时）</td>
+  <td><code>ctx</code>；<code>buf</code>；<code>len</code></td>
+  <td><code>MB_OK</code> / <code>MB_E_IO</code></td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L342-L359"><code>mb_expected_len</code></a>（static）</td>
+  <td>由已收前几字节<strong>推断整帧长度</strong>（异常=5；读=<code>3+字节数+2</code>；写=8）</td>
+  <td><code>b</code> 缓冲；<code>len</code> 已收字节数</td>
+  <td>期望长度 / 0 未知</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L361-L388"><code>mb_rx</code></a>（static）</td>
+  <td>收一帧：<code>poll()</code> 等首字节 → <code>read()</code> → 用 <code>mb_expected_len</code> 判齐</td>
+  <td><code>ctx</code>；<code>buf</code>；<code>cap</code></td>
+  <td>帧长 / <code>MB_E_TIMEOUT/FRAME/IO</code></td>
+</tr>
+</tbody>
+</table>
+
+<h3>2.3 事务层（对调用方暴露的 API）</h3>
+<table class="fn">
+<caption>表 2-3　一次读写的完整事务</caption>
+<thead><tr><th>函数</th><th>做什么</th><th>传参</th><th>返回</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L390-L394"><code>mb_note_ok</code></a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L396-L403"><code>mb_note_fail</code></a>（static）</td>
+  <td>更新成功/失败计数与连续失败数（离线判定的基础）</td>
+  <td><code>ctx</code></td>
+  <td>无</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L405-L435"><code>mb_read_regs</code></a></td>
+  <td><strong>读事务主函数</strong>：入参校验 → 组帧 → 循环{静默 → 收发 → 解帧}；<strong>异常立即返回不重试</strong></td>
+  <td><code>ctx</code>；<code>func</code>(0x03/0x04)；<code>reg</code>；<code>n</code>；<code>out</code></td>
+  <td><code>n</code> / 负错误码 / 异常码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L437-L461"><code>mb_parse_write_resp</code></a>（static）</td>
+  <td>校验写响应：CRC + 回显是否一致（<code>0x06</code> 校验地址+值；<code>0x10</code> 校验起始+数量）</td>
+  <td><code>resp</code>；<code>len</code>；<code>addr</code>；<code>func</code>；<code>reg</code>；<code>n</code></td>
+  <td><code>MB_OK</code> / 负错误码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L463-L496"><code>mb_write_common</code></a>（static）</td>
+  <td>写事务公共体：<code>0x06</code>/<code>0x10</code> 组帧 → 循环{静默→收发} → 校验回显；异常响应（5 字节）单独分支</td>
+  <td><code>ctx</code>；<code>func</code>；<code>reg</code>；<code>n</code>；<code>vals</code></td>
+  <td>1 或 n / 负错误码 / 异常码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L498-L503"><code>mb_write_reg</code></a></td>
+  <td>写单个保持寄存器（<code>0x06</code> 的包装）</td>
+  <td><code>ctx</code>；<code>reg</code>；<code>val</code></td>
+  <td>1 / 负错误码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L505-L510"><code>mb_write_regs</code></a></td>
+  <td>写多个保持寄存器（<code>0x10</code> 的包装，n≤123）</td>
+  <td><code>ctx</code>；<code>reg</code>；<code>n</code>；<code>vals</code></td>
+  <td>n / 负错误码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L512-L522"><code>mb_read_float32</code></a></td>
+  <td>便捷：读 2 个寄存器 + 按 <code>ctx</code> 字序还原成 float</td>
+  <td><code>ctx</code>；<code>func</code>；<code>reg</code>；<code>out</code></td>
+  <td>0 / 负错误码</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L524-L527"><code>mb_is_offline</code></a></td>
+  <td>连续失败 ≥ <code>MB_OFFLINE_THRESHOLD</code>(3) 判从站离线</td>
+  <td><code>ctx</code></td>
+  <td>1 离线 / 0 正常</td>
+</tr>
+<tr>
+  <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L529-L530"><code>mb_stat_ok</code></a> / <code>mb_stat_err</code></td>
+  <td>读事务成功/失败累计计数（观测用）</td>
+  <td><code>ctx</code></td>
+  <td>计数值</td>
+</tr>
+</tbody>
+</table>
+
+<div class="cpp">
+<p><strong>一句话记住调用关系</strong>：<span class="mono">mb_read_regs → mb_build_read → mb_append_crc → mb_crc16 →（mb_t35_delay → mb_tx → mb_rx → mb_expected_len → mb_parse_read_resp → mb_crc16）→ mb_note_ok/fail</span>。写路径只需把 <code>mb_build_read</code> 换成 <code>mb_build_write_*</code>、<code>mb_parse_read_resp</code> 换成 <code>mb_parse_write_resp</code>，其余一致（都走 <code>mb_write_common</code>）。</p>
+</div>
+
+<h2 class="pgbreak">§3 整条链路怎么跑起来</h2>
+
+<h3>3.1 一次「读 IMU」的完整链路（<code>mb_read_regs</code> 主线）</h3>
+
+<p>场景：应用要读 <code>0x04</code> 输入寄存器的 18 个寄存器（= 9 个 float32）。下面每一格都是<strong>一次真实的函数调用</strong>，方框下的编号与 §3.3 的步骤表一一对应。</p>
+
+<div class="flow">
+  <div class="row"><span class="box hi">① mb_read_regs(ctx,0x04,0x0000,18,r)</span><span class="arw">→</span><span class="box">② 入参校验</span><span class="arw">→</span><span class="box hi">③ mb_build_read</span><span class="arw">→</span><span class="box">mb_append_crc</span><span class="arw">→</span><span class="box">mb_crc16</span></div>
+  <div class="row"><span class="arw">↓ 得到 8 字节请求</span></div>
+  <div class="row"><span class="box mut">④ attempt = 0 .. retries</span></div>
+  <div class="row" style="margin-left:6mm;"><span class="arw">↓</span><span class="box">⑤ mb_t35_delay 静默</span><span class="arw">→</span><span class="box hi">⑥ mb_tx</span><span class="arw">→</span><span class="box">[485 切发] write() tcdrain() [切收]</span></div>
+  <div class="row" style="margin-left:6mm;"><span class="arw">↓</span><span class="box hi">⑦ mb_rx</span><span class="arw">→</span><span class="box">poll() read()</span><span class="arw">→</span><span class="box">mb_expected_len 判齐</span></div>
+  <div class="row" style="margin-left:6mm;"><span class="arw">↓</span><span class="box hi">⑧ mb_parse_read_resp</span><span class="arw">→</span><span class="box">校验 addr/func/字节数</span><span class="arw">→</span><span class="box">mb_crc16 整帧==0?</span></div>
+  <div class="row" style="margin-left:6mm;"><span class="arw">↓</span><span class="box">⑨ 判定</span><span class="arw">→</span><span class="box">异常? 立即返回</span><span class="arw">/</span><span class="box">CRC/超时? 重试</span><span class="arw">/</span><span class="box hi">成功? 返回 n</span></div>
+  <div class="row"><span class="arw">↓</span></div>
+  <div class="row"><span class="box hi">⑩ 应用拿到 out[18]</span><span class="arw">→</span><span class="box">⑪ mb_regs_to_float32 还原 9 个 float</span></div>
+</div>
+
+<h3>3.2 对照：请求帧与响应帧在链路上长什么样</h3>
+
+<table class="cols-3">
+<thead><tr><th>环节</th><th>字节流</th><th>由谁产出</th></tr></thead>
+<tbody>
+<tr><td>主站发请求</td><td><code>01 04 00 00 00 12 CRC_Lo CRC_Hi</code></td><td><code>mb_build_read</code> + <code>mb_append_crc</code></td></tr>
+<tr><td>从站回响应</td><td><code>01 04 24 &lt;36 字节数据&gt; CRC_Lo CRC_Hi</code></td><td>从站（本工程为 <code>sim_imu_modbus.py</code>）</td></tr>
+<tr><td>主站解出寄存器</td><td><code>out[0..17]</code>（每 2 个一步还原成 float）</td><td><code>mb_parse_read_resp</code></td></tr>
+<tr><td>异常时从站回</td><td><code>01 84 02 CRC_Lo CRC_Hi</code>（5 字节）</td><td>从站；主站识别为 <code>MB_ERR_EXC(2)</code></td></tr>
+</tbody>
+</table>
+
+<h3>3.3 逐步说明（每步：函数 → 干什么 → 出错会怎样）</h3>
+<table class="cols-4a">
+<thead><tr><th>步</th><th>函数 / 行号</th><th>干什么</th><th>出错 → 返回</th></tr></thead>
+<tbody>
+<tr><td>①</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L405-L435">mb_read_regs</a></td><td>事务入口：读 n 个寄存器到 <code>out</code></td><td>—</td></tr>
+<tr><td>②</td><td>（函数内校验）</td><td>检查 <code>func ∈ {0x03,0x04}</code>、<code>1 ≤ n ≤ 125</code>、指针非空</td><td><code>MB_E_PARAM</code>（不重试）</td></tr>
+<tr><td>③</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L77-L86">mb_build_read</a></td><td>拼出 8 字节请求帧；内部调 <code>mb_append_crc → mb_crc16</code></td><td>—</td></tr>
+<tr><td>④</td><td>（for 循环）</td><td>最多执行 <code>retries+1</code> 次；每次失败重新走 ⑤~⑨</td><td>循环耗尽 → 最后一次错误码</td></tr>
+<tr><td>⑤</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L300-L312">mb_t35_delay</a></td><td>发前静默 ≥ t3.5，让从站把上一帧判完</td><td>—</td></tr>
+<tr><td>⑥</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L314-L340">mb_tx</a></td><td>485 切「发」→ <code>write</code> 全帧 → <code>tcdrain</code> 等末字节移出 → 切「收」</td><td>写失败 → <code>MB_E_IO</code>（重试）</td></tr>
+<tr><td>⑦</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L361-L388">mb_rx</a></td><td><code>poll()</code> 等首字节；读满后用 <code>mb_expected_len</code> 判整帧是否齐</td><td>超时 → <code>MB_E_TIMEOUT</code>（重试）</td></tr>
+<tr><td>⑧</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L116-L145">mb_parse_read_resp</a></td><td>校验地址/功能码/字节数；<code>mb_crc16</code> 整帧为 0 才算过；异常响应转 <code>MB_ERR_EXC</code></td><td>CRC/帧错 → 负码（重试）；异常 → 立即返回</td></tr>
+<tr><td>⑨</td><td>（分支判定）</td><td><strong>异常</strong>立即返回；<strong>CRC/帧/超时</strong>计一次失败并重试；<strong>成功</strong>清零失败计数</td><td>—</td></tr>
+<tr><td>⑩</td><td>（回到调用方）</td><td>返回 <code>n</code>，<code>out[]</code> 内为各寄存器</td><td>—</td></tr>
+<tr><td>⑪</td><td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L150-L179">mb_regs_to_float32</a></td><td>可选：每两个寄存器按字序还原一个 float32</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h3>3.4 三条分支（同一段循环，走向不同）</h3>
+<ul>
+<li><strong>正常路径</strong>：⑤→⑥→⑦ 收齐 → ⑧ CRC 通过 → 返回值 <code>n</code>，<code>mb_note_ok</code> 清零连续失败。</li>
+<li><strong>传输问题（超时 / CRC 错 / 帧不合法）</strong>：⑦ 或 ⑧ 报负码 → <code>mb_note_fail</code> → 回到 ④ 重试；重试耗尽则把<strong>最后一次</strong>错误码返回。这是「可恢复」错误。</li>
+<li><strong>从站异常（如非法地址 0x02）</strong>：⑧ 解析出 <code>MB_ERR_EXC(2)</code> → <strong>立即返回、不重试</strong>。这是「配置错误」，重试无意义，只会拖慢轮询。</li>
+</ul>
+
+<h3>3.5 一次「写（0x06）」的链路（差异点）</h3>
+<div class="flow">
+  <div class="row"><span class="box hi">mb_write_reg(ctx,reg,val)</span><span class="arw">→</span><span class="box hi">mb_write_common</span><span class="arw">→</span><span class="box">mb_build_write_single</span><span class="arw">→</span><span class="box">mb_append_crc→mb_crc16</span></div>
+  <div class="row" style="margin-left:6mm;"><span class="arw">↓</span><span class="box">mb_t35_delay</span><span class="arw">→</span><span class="box">mb_tx</span><span class="arw">→</span><span class="box">mb_rx</span><span class="arw">→</span><span class="box hi">mb_parse_write_resp（校验回显+CRC）</span></div>
+  <div class="row" style="margin-left:6mm;"><span class="arw">↓</span><span class="box">成功返回 1</span><span class="arw">/</span><span class="box">异常(5字节)单独分支 → 立即返回</span></div>
+</div>
+<p>与读的差异只有两处：<strong>① 组帧用 <code>mb_build_write_*</code></strong>；<strong>② 解帧用 <code>mb_parse_write_resp</code> 校验「回显」</strong>——<code>0x06</code> 要求从站把「地址+值」原样回显，<code>0x10</code> 回显「起始地址+数量」，以此确认写入落点。</p>
+
+<h3>3.6 谁在保护谁：为什么不用加锁</h3>
+<p>每个 <code>mb_ctx_t</code> 对应一条串口，一次事务从 <code>mb_t35_delay</code> 到收帧结束是<strong>顺序执行、不可重入</strong>的。因此约定：<strong>一个 ctx 只由一条线程使用</strong>（下一阶段的 IMU 采集线程）。这与工程里「RT 线程独占 CAN 收发」是同一约定，避免了在最底层再引入锁。</p>
+
+<h2>§4 帧格式速查</h2>
+
+<table class="cols-4a">
+<caption>表 4-1　四种帧（<code>Hi/Lo</code> = 大端高低字节；CRC 低字节先发）</caption>
+<thead><tr><th>功能码</th><th>请求帧结构</th><th>帧长</th><th>响应</th></tr></thead>
+<tbody>
+<tr><td><code>0x03/0x04</code></td><td>地址 | 功能码 | 起始Hi 起始Lo | 数量Hi 数量Lo | CRC</td><td>8</td><td>地址 | 功能码 | 字节数(2n) | 数据… | CRC</td></tr>
+<tr><td><code>0x06</code></td><td>地址 | 功能码 | 地址Hi 地址Lo | 值Hi 值Lo | CRC</td><td>8</td><td>原样回显（同结构 8 字节）</td></tr>
+<tr><td><code>0x10</code></td><td>地址 | 功能码 | 起始Hi 起始Lo | 数量Hi 数量Lo | 字节数(2n) | 数据… | CRC</td><td>9+2n</td><td>地址 | 功能码 | 起始Hi 起始Lo | 数量Hi 数量Lo | CRC（8）</td></tr>
+<tr><td>异常</td><td>—</td><td>5</td><td>地址 | 功能码<code>|0x80</code> | 异常码 | CRC</td></tr>
+</tbody>
+</table>
+
+<table class="cols-3">
+<caption>表 4-2　异常码（<code>MB_ERR_EXC(code)</code>）</caption>
+<thead><tr><th>码</th><th>含义</th><th>主站应对</th></tr></thead>
+<tbody>
+<tr><td><code>0x01</code></td><td>非法功能码</td><td>功能码不支持，检查代码</td></tr>
+<tr><td><code>0x02</code></td><td>非法数据地址</td><td><strong>先修地址，别重试</strong></td></tr>
+<tr><td><code>0x03</code></td><td>非法数据值</td><td>数量/值越界</td></tr>
+<tr><td><code>0x04</code></td><td>从站设备故障</td><td>从站内部错误，可重试</td></tr>
+</tbody>
+</table>
+
+<h2>§5 float32 四种字节序</h2>
+
+<p>IMU 的 <code>0x04</code> 区每个量是 <strong>float32 = 2 个 16 位寄存器</strong>。约定 <code>r0</code> 为低地址（先读到）、<code>r1</code> 为高地址；要把它们还原成内存序 <code>A B C D</code>（大端 IEEE754）：</p>
+
+<table class="cols-4a">
+<caption>表 5-1　四种字序（以 <code>1.5f = 0x3FC00000</code>，字节 <code>3F C0 00 00</code> 为例）</caption>
+<thead><tr><th>字序</th><th>r0（低地址）</th><th>r1（高地址）</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>ABCD</code></td><td><code>0x3FC0</code></td><td><code>0x0000</code></td><td>大端：<code>r0=AB, r1=CD</code>（最常见）</td></tr>
+<tr><td><code>CDAB</code></td><td><code>0x0000</code></td><td><code>0x3FC0</code></td><td>字交换：<code>r0=CD, r1=AB</code></td></tr>
+<tr><td><code>BADC</code></td><td><code>0xC03F</code></td><td><code>0x0000</code></td><td>字节交换：<code>r0=BA, r1=DC</code></td></tr>
+<tr><td><code>DCBA</code></td><td><code>0x0000</code></td><td><code>0xC03F</code></td><td>全小端：<code>r0=DC, r1=BA</code></td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>踩过的坑（值得记）</strong>：第一版把按字序拼出的 4 个字节直接 <code>memcpy</code> 进 <code>float</code>，结果 <code>1.5f</code> 读出 <code>6.9e-41</code>。原因：这 4 个字节是<strong>大端数值序</strong>，而 ARM/x86 是<strong>小端存放</strong>，直接搬运等于整体颠倒。正确做法是先拼 32 位整数再解释（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L150-L179">agv_modbus.c#L150-179</a>）：</p>
+<pre>uint32_t v = ((uint32_t)b[0] &lt;&lt; 24) | ((uint32_t)b[1] &lt;&lt; 16)
+           | ((uint32_t)b[2] &lt;&lt; 8)  | (uint32_t)b[3];
+float f; memcpy(&amp;f, &amp;v, sizeof f); return f;</pre>
+</div>
+
+<h2>§6 返回码设计（一个负数里塞三类信息）</h2>
+<p>本模块<strong>不依赖 <code>agv_log</code></strong>（与 <code>agv_queue</code>/<code>agv_pool</code> 同一分层原则），错误全走返回码。难点是既要报「本地错误」又要报「从站异常码」，还不能撞车，于是<strong>分区</strong>（见 §1.4 表）：</p>
+<pre>#define MB_ERR_EXC(code)  (-(int)(0x100 | ((code) &amp; 0xFF)))   /* 0x02 → -258 */
+#define MB_IS_EXC(r)      ((r) &lt;= -257 &amp;&amp; (r) &gt;= -511)
+#define MB_EXC_CODE(r)    ((-(r)) &amp; 0xFF)                      /* 取回异常码 */</pre>
+<p><code>-1..-5</code> 是本地错误，<code>-257..-511</code> 是从站异常，二者绝不重叠；调用方一句 <code>if (MB_IS_EXC(rc))</code> 就能区分「传输失败（可重试）」和「从站拒绝（不可重试）」。</p>
+
+<h2 class="pgbreak">§7 测试与验证</h2>
+
+<table class="cols-3">
+<caption>表 7-1　单测用例（<a href="file:///home/zcy/Project/panasonic_canopen_agv/tests/test_agv_modbus.c">tests/test_agv_modbus.c</a>，46 断言）</caption>
+<thead><tr><th>用例</th><th>验什么</th><th>关键期望</th></tr></thead>
+<tbody>
+<tr><td><code>crc16-modbus</code></td><td>CRC 算法与发送字节序</td><td><code>"123456789"→0x4B37</code>；<code>01 03 00 00 00 02→0x0BC4</code>；整帧自校验 0</td></tr>
+<tr><td><code>build-frame</code></td><td>三种请求逐字节布局与帧长</td><td>读请求 == <code>01 03 00 00 00 02 C4 0B</code>；<code>0x10</code> 帧长 13、字节数位=4</td></tr>
+<tr><td><code>parse-read-resp</code></td><td>正常解帧 + 三类错误</td><td>4 寄存器还原正确；地址/功能/字节数不符→<code>MB_E_FRAME</code>；CRC 破坏→<code>MB_E_CRC</code></td></tr>
+<tr><td><code>parse-exception</code></td><td>异常识别与「不误报」</td><td><code>01 84 02 …</code>→<code>MB_IS_EXC</code> 且码=2；CRC 破坏时报 CRC 而非异常</td></tr>
+<tr><td><code>float32-word-order</code></td><td>四种字序还原</td><td><code>1.5f</code>/<code>-2.5f</code>/<code>3.14159f</code> 在 ABCD/CDAB/BADC/DCBA 下均正确</td></tr>
+</tbody>
+</table>
+
+<p>虚拟从站 <code>tools/sim_imu_modbus.py</code>（纯标准库，pty 或真串口）寄存器表对齐学习册 §10.1：姿态/角速度/加速度在 <code>0x04</code> 区（各 3×float32），校准命令/输出速率在 <code>0x06</code> 区；并可用 <code>--inject-exception/--inject-bad-crc/--inject-drop/--word-order</code> 注入故障。</p>
+
+<table class="cols-3">
+<caption>表 7-2　pty 端到端 + 故障注入结果</caption>
+<thead><tr><th>场景</th><th>结果</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>读 9 个 float32（roll/pitch/yaw、gyro、acc）</td><td>全部与从站给定值一致</td><td><code class="ok">PASS</code></td></tr>
+<tr><td><code>0x06</code> 写校准命令 / <code>0x03</code> 读输出速率</td><td>回显正确 / 读回 100</td><td><code class="ok">PASS</code></td></tr>
+<tr><td>从站回异常码 <code>0x02</code></td><td>返回 <code>-258</code>，不重试</td><td><code class="ok">PASS</code></td></tr>
+<tr><td>响应 CRC 写错</td><td>返回 <code>-4</code> 并重试</td><td><code class="ok">PASS</code></td></tr>
+<tr><td>丢弃第 1 帧响应</td><td>首次超时→重试成功；<code>ok=3 err=1</code></td><td><code class="ok">PASS</code></td></tr>
+</tbody>
+</table>
+
+<pre>== P2 单元测试 ==
+==== PASS: 74 checks, 0 failed ====   (test_agv_queue)
+==== PASS: 19 checks, 0 failed ====   (test_agv_odom)
+==== PASS: 46 checks, 0 failed ====   (test_agv_modbus)
+== 全部通过 ==
+$ ctest --output-on-failure   →  100% tests passed, 0 tests failed out of 3</pre>
+
+<h2>§8 几个容易踩的坑</h2>
+<ul>
+<li><strong>半双工「发完立刻切收」会吞首字节</strong>：<code>write()</code> 返回 ≠ 末字节已移出；必须 <code>tcdrain()</code> 后再切收（<code>mb_tx</code> 已封装）。</li>
+<li><strong>异常不能当丢包重试</strong>：<code>0x02 非法地址</code> 是配置错，重试无意义；只有超时/CRC/帧错才重试。</li>
+<li><strong>字序不是「小端」那么简单</strong>：四种组合，且还原时要「拼大端整数再解释」，不能直接 memcpy 字节数组。</li>
+<li><strong>CRC 低字节先发</strong>：算出的 <code>0x0BC4</code> 上线是 <code>C4 0B</code>；收帧用「整帧 CRC==0」校验最省事。</li>
+<li><strong>一帧的边界靠 t3.5 静默</strong>：两次事务之间必须留够静默，否则从站会把两帧粘在一起。</li>
+<li><strong>一个 ctx 一条线程</strong>：事务不可重入，别在同一串口上并发调用。</li>
+</ul>
+
+<h2>§9 自己复现 / 跑一遍</h2>
+<pre># 1) 单测（含 Modbus 46 断言）
+make test                      # 或 cmake -S . -B build &amp;&amp; cmake --build build &amp;&amp; (cd build &amp;&amp; ctest)
+
+# 2) 无硬件端到端：起虚拟从站，另一窗口用主站读该 pts
+python3 tools/sim_imu_modbus.py pty         # 输出 SLAVE=/dev/pts/N（115200、从站 1）
+
+# 3) 故障注入复现
+python3 tools/sim_imu_modbus.py pty --inject-exception 2
+python3 tools/sim_imu_modbus.py pty --inject-bad-crc
+python3 tools/sim_imu_modbus.py pty --inject-drop 3
+
+# 4) 接真串口（硬件到位后）
+python3 tools/sim_imu_modbus.py /dev/ttyUSB0 --baud 115200 --addr 1</pre>
+
+<h2>§10 边界与下一步</h2>
+
+<div class="warn">
+<p><strong>边界重申（对齐学习册 §1 与 HANDOFF §16.0）</strong>：本册到 <strong>L3</strong> 为止。RS485 收发器电气时序、终端电阻取值、Modbus Plus、网关/路由内核实现、自研协议栈——<strong>都不做</strong>。这是「校招 + 主控/应用向」岗位的合理边界。</p>
+</div>
+
+<table class="cols-3">
+<caption>表 10-1　待做（见 HANDOFF §16.5）</caption>
+<thead><tr><th>步骤</th><th>做的事</th><th>落到哪</th></tr></thead>
+<tbody>
+<tr><td>1. 真机联调</td><td>接真 IMU，校准 float32 字序与 RS485 方向</td><td><code>mb_cfg_t.word_order</code> / <code>mb_open()</code></td></tr>
+<tr><td>2. 新增 OD 对象</td><td><code>0x7010 imu</code>：子1 yaw rate、子2 姿态、子3 accel</td><td><code>OD.c</code>/<code>OD.h</code>（<strong>末尾追加</strong>，保序）</td></tr>
+<tr><td>3. 采集线程</td><td>周期轮询 <code>0x04</code>，把数据写进 OD</td><td>新增线程（复用 <code>agv_queue</code>/<code>agv_log</code>）</td></tr>
+<tr><td>4. 航向融合</td><td>与 <code>0x6FFF</code> 的 θ 做互补滤波</td><td><code>CO_application.c</code>（<code>θ ← α(θ+ω·dt)+(1−α)θ_imu</code>）</td></tr>
+</tbody>
+</table>
+
+<div class="footnote">
+<p><strong>一句话总结</strong>：本册把 Modbus 的 L3 能力落到<strong>可运行、可单测、可端到端复现的代码</strong>——§2 说清「每个函数干什么」，§3 串起「一次读写从应用走到从站再走回来」的完整链路，§7 给出三层验证证据。硬件到位后只需替换对端并补上 OD 与融合，IMU 接入即闭环。</p>
+</div>
+
+</body>
+</html>

@@ -10,9 +10,14 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QSlider>
 #include <QPainter>
 #include <QPainterPath>
 #include <QtMath>
+
+/* cmd_vel 滑条标度：滑条是整数，除以 1000 得到物理量。
+ * v ∈ [-0.5, 0.5] m/s，ω ∈ [-1.0, 1.0] rad/s（与 S11 分册的验证量级一致）。 */
+static const int CMD_SCALE = 1000;
 
 /* ============================ TrajectoryView ============================ */
 
@@ -108,6 +113,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::requestNode,       m_worker, &CommWorker::setNode);
     connect(this, &MainWindow::requestPreOp,      m_worker, &CommWorker::nmtPreOp);
     connect(this, &MainWindow::requestStart,      m_worker, &CommWorker::nmtStart);
+    connect(this, &MainWindow::requestCmdVel,     m_worker, &CommWorker::setCmdVel);
 
     /* 通信线程 -> 界面 */
     connect(m_worker, &CommWorker::poseUpdated, this, &MainWindow::onPose);
@@ -118,7 +124,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     buildUi();
-    setWindowTitle(QStringLiteral("AGV 里程计上位机 (CiA-309 / 0x6FFF)"));
+    setWindowTitle(QStringLiteral("AGV 上位机 (CiA-309 / 读 0x6FFF · 写 0x7000)"));
     resize(900, 520);
 }
 
@@ -171,6 +177,29 @@ void MainWindow::buildUi()
     QVBoxLayout *vp = new QVBoxLayout(boxPose);
     vp->addWidget(m_labX); vp->addWidget(m_labY); vp->addWidget(m_labTh);
 
+    /* --- 运动控制：把 cmd_vel 经网关 SDO 写进主控 OD 0x7000(下行打通) --- */
+    m_boxCmd = new QGroupBox(QStringLiteral("运动控制 (cmd_vel → 0x7000)"), this);
+    QVBoxLayout *vc = new QVBoxLayout(m_boxCmd);
+
+    m_sldV = new QSlider(Qt::Horizontal, this);
+    m_sldV->setRange(-500, 500);            /* ±0.5 m/s */
+    m_sldV->setValue(0);
+    m_sldW = new QSlider(Qt::Horizontal, this);
+    m_sldW->setRange(-1000, 1000);          /* ±1.0 rad/s */
+    m_sldW->setValue(0);
+
+    m_labCmd = new QLabel(QStringLiteral("v = 0.000 m/s   ω = 0.000 rad/s"), this);
+
+    QPushButton *btnStop = new QPushButton(QStringLiteral("停车 (发零)"), this);
+
+    vc->addWidget(new QLabel(QStringLiteral("线速度 v (±0.5 m/s)"), this));
+    vc->addWidget(m_sldV);
+    vc->addWidget(new QLabel(QStringLiteral("角速度 ω (±1.0 rad/s)"), this));
+    vc->addWidget(m_sldW);
+    vc->addWidget(m_labCmd);
+    vc->addWidget(btnStop);
+    vc->addWidget(new QLabel(QStringLiteral("提示：需从站已使能；松手不停，\n请按「停车」或断开连接。"), this));
+
     QGroupBox *boxNmt = new QGroupBox(QStringLiteral("控制"), this);
     QVBoxLayout *vn = new QVBoxLayout(boxNmt);
     vn->addWidget(btnPreOp); vn->addWidget(btnStart); vn->addWidget(btnClear);
@@ -179,6 +208,7 @@ void MainWindow::buildUi()
     QVBoxLayout *right = new QVBoxLayout;
     right->addWidget(boxCtl);
     right->addWidget(boxPose);
+    right->addWidget(m_boxCmd);
     right->addWidget(boxNmt);
     right->addWidget(new QLabel(QStringLiteral("日志"), this));
     right->addWidget(m_log);
@@ -192,6 +222,13 @@ void MainWindow::buildUi()
     connect(btnPreOp, &QPushButton::clicked, this, [this]{ emit requestPreOp(); });
     connect(btnStart, &QPushButton::clicked, this, [this]{ emit requestStart(); });
     connect(btnClear, &QPushButton::clicked, this, [this]{ m_view->clearPath(); });
+
+    /* 滑条任意一路变动 → 立即把 (v,ω) 交给通信线程存值；周期重发由 worker 定时器负责 */
+    connect(m_sldV, &QSlider::valueChanged, this, [this](int){ onCmdChanged(); });
+    connect(m_sldW, &QSlider::valueChanged, this, [this](int){ onCmdChanged(); });
+    connect(btnStop, &QPushButton::clicked, this, &MainWindow::onStopClicked);
+
+    m_boxCmd->setEnabled(false);    /* 未连接前禁止发指令 */
 }
 
 void MainWindow::onConnectClicked()
@@ -213,6 +250,31 @@ void MainWindow::onConnState(bool up)
     m_edHost->setEnabled(!up);
     m_edPort->setEnabled(!up);
     m_edNode->setEnabled(!up);
+    m_boxCmd->setEnabled(up);       /* 连上才允许发运动指令 */
+
+    if (!up) {
+        /* 断开即回零：滑条归零会经 valueChanged → onCmdChanged 发一次零速 */
+        m_sldV->setValue(0);
+        m_sldW->setValue(0);
+    }
+}
+
+/* 滑条变动：更新数值显示，并把 (v,ω) 交给通信线程。真正的周期重发由
+ * CommWorker::cmdTimeout 负责，这里只在变动瞬间推一次，让车及时响应。 */
+void MainWindow::onCmdChanged()
+{
+    const double v = m_sldV->value() / double(CMD_SCALE);
+    const double w = m_sldW->value() / double(CMD_SCALE);
+    m_labCmd->setText(QString("v = %1 m/s   ω = %2 rad/s")
+                      .arg(v, 0, 'f', 3).arg(w, 0, 'f', 3));
+    emit requestCmdVel(v, w);
+}
+
+void MainWindow::onStopClicked()
+{
+    m_sldV->setValue(0);            /* 触发 onCmdChanged → 下发 (0,0) */
+    m_sldW->setValue(0);
+    emit requestCmdVel(0.0, 0.0);   /* 兜底：滑条本就在 0 时也显式发一次零 */
 }
 
 void MainWindow::onPose(double x, double y, double th)
