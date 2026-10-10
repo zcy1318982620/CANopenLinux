@@ -64,6 +64,7 @@
 #define OD_CNT_ARR_60FE 1
 #define OD_CNT_ARR_6FFF 3
 #define OD_CNT_ARR_7000 2
+#define OD_CNT_ARR_7010 9
 
 
 /*******************************************************************************
@@ -333,6 +334,10 @@ typedef struct {
      * 追加在末尾(0x7000 > 0x6FFF)，保持 OD_RAM 成员顺序与 CANopenEditor 生成风格一致。 */
     uint8_t x7000_agvCmdVel_sub0;
     float32_t x7000_agvCmdVel[OD_CNT_ARR_7000];
+    /* 第 12 站：IMU 原始采样(9×float32)。追加在末尾(0x7010 > 0x7000)，保持升序。
+     * sub1..9 = roll,pitch,yaw, gyro_x/y/z, acc_x/y/z。由 RT 拍从采集快照写入。 */
+    uint8_t x7010_imu_sub0;
+    float32_t x7010_imu[OD_CNT_ARR_7010];
 } OD_RAM_t;
 
 #ifndef OD_ATTR_PERSIST_COMM
@@ -515,6 +520,7 @@ extern OD_ATTR_OD OD_t *OD;
  * 保证 ODList[] 仍按 index 升序 (OD_find 是二分查找). */
 #define OD_ENTRY_H6FFF &OD->list[157]
 #define OD_ENTRY_H7000 &OD->list[158]
+#define OD_ENTRY_H7010 &OD->list[159]
 
 
 /*******************************************************************************
@@ -679,6 +685,7 @@ extern OD_ATTR_OD OD_t *OD;
 #define OD_ENTRY_H67FF_singleDeviceType &OD->list[156]
 #define OD_ENTRY_H6FFF_agvOdometry &OD->list[157]
 #define OD_ENTRY_H7000_agvCmdVel &OD->list[158]
+#define OD_ENTRY_H7010_imu &OD->list[159]
 
 
 /*******************************************************************************

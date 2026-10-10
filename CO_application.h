@@ -58,6 +58,16 @@ CO_ReturnError_t app_programStart(uint16_t *bitRate,
 
 
 /**
+ * 设置 IMU 采集串口(第 12 站)。在 app_programStart() 之前调用；传 NULL 或
+ * 不调用则不起 IMU 采集线程，航向按纯里程计运行。
+ *
+ * @param dev 串口设备路径(如 /dev/ttyS1)；非 NULL 时由 app_programStart
+ *            负责打开并起采集线程。
+ */
+void app_setImuDev(const char *dev);
+
+
+/**
  * Function is called after CANopen communication reset.
  *
  * @param co CANopen object.

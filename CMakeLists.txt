@@ -64,6 +64,7 @@ add_executable(canopend
     agv_log.c
     agv_kinematics.c
     agv_modbus.c
+    agv_imu.c
 )
 
 # = Makefile 的 $(INCLUDE_DIRS): -I. -ICANopenNode -Iapplication
@@ -160,3 +161,17 @@ if(AGV_SANITIZE)
 endif()
 
 add_test(NAME agv_modbus COMMAND test_agv_modbus)
+
+# —— IMU 单测：链接 agv_imu.c + agv_modbus.c（纯函数 decode + 状态机）——
+add_executable(test_agv_imu tests/test_agv_imu.c agv_imu.c agv_modbus.c)
+target_include_directories(test_agv_imu PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_options(test_agv_imu PRIVATE ${AGV_TEST_CFLAGS})
+target_link_libraries(test_agv_imu PRIVATE Threads::Threads m)
+if(AGV_SANITIZE)
+    target_link_options(test_agv_imu PRIVATE -fsanitize=address,undefined)
+endif()
+
+add_test(NAME agv_imu COMMAND test_agv_imu)

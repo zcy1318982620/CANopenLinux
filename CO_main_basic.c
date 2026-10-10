@@ -264,7 +264,9 @@ printf(
 printf(
 "\n"
 "Options:\n"
-"  -i <Node ID>        CANopen Node-id (1..127) or 0xFF (LSS unconfigured).\n");
+"  -i <Node ID>        CANopen Node-id (1..127) or 0xFF (LSS unconfigured).\n"
+"  -M <serial dev>     Enable IMU (Modbus RTU) acquisition on serial port,\n"
+"                      e.g. -M /dev/ttyS1. If not set, heading uses odometry only.\n");
 #ifndef CO_SINGLE_THREAD
 printf(
 "  -p <RT priority>    Real-time priority of RT thread (1 .. 99). If not set or\n"
@@ -381,7 +383,7 @@ int main (int argc, char *argv[]) {
         printUsage(argv[0]);
         exit(EXIT_SUCCESS);
     }
-    while((opt = getopt(argc, argv, "i:p:rc:T:s:")) != -1) {
+    while((opt = getopt(argc, argv, "i:p:rc:T:s:M:")) != -1) {
         switch (opt) {
             case 'i': {
                 char *end = NULL;
@@ -395,6 +397,9 @@ int main (int argc, char *argv[]) {
                                ? 0 : (uint8_t)nodeIdLong;
                 break;
             }
+            case 'M':   /* 第 12 站：IMU 采集串口(-M <dev>)，传空则纯里程计 */
+                app_setImuDev(optarg);
+                break;
 #ifndef CO_SINGLE_THREAD
             case 'p': {
                 char *end = NULL;

@@ -34,6 +34,7 @@
 #include "OD_2nd.h"
 #include "agv_log.h"
 #include "agv_kinematics.h"   /* 里程计正解/逆解纯函数(P2 可测性重构) */
+#include "agv_imu.h"          /* 第 12 站：Modbus RTU IMU 采集 */
 
 /* ===================== 日志：统一分级 + 异步落盘 =====================
  * 见 LOG_ERROR_HANDLING_print.html §2 与 AGV_ASYNC_LOG_IMPL_print.html。
@@ -46,6 +47,25 @@
 #define RT_JITTER_OVER_US     200u
 /* 统计窗口：每累计这么多拍输出一行(=1000 拍 ≈ 1 秒) */
 #define RT_STAT_TICKS         1000u
+
+/* ===================== 第 12 站：IMU(Modbus RTU) =====================
+ * 由命令行 -M <dev> 指定 IMU 串口；不给则不起采集线程，里程计照常(纯里程计)。
+ * 采集线程只负责"读 + 发快照"，OD 的写入与航向融合都在 RT 拍内完成。 */
+#define AGV_IMU_FUSE_ALPHA    0.98   /* 互补滤波 α：短时信里程计、长时被 IMU 拉正 */
+
+static const char *s_imu_dev = NULL;
+
+/* main() 解析 -M 后、app_programStart() 前调用。 */
+void app_setImuDev(const char *dev)
+{
+    s_imu_dev = dev;
+}
+
+/* 角度差归一化到 (-π, π]：避免 yaw 在 ±π 处跳变破坏融合。 */
+static double wrap_pi(double a)
+{
+    return atan2(sin(a), cos(a));
+}
 
 /* ===================== 第 7 站：里程计(差动运动学) =====================
  * 标定参数(ODOM_*)与纯函数(agv_odom_step / agv_inverse_kinematics)已抽到
@@ -385,6 +405,22 @@ CO_ReturnError_t app_programStart(uint16_t *bitRate,
     OD_extension_init(OD_ENTRY_H60FF_targetVelocity, &H60FF_extentionR);
     OD_extension_init(OD_2nd_ENTRY_H60FF_targetVelocity, &H60FF_extentionL);
 
+    /* 第 12 站：启动 IMU 采集(仅在 -M 指定串口时)。失败不阻断启动——
+     * 采集线程起不来就退回纯里程计，航向融合逻辑会自动跳过。 */
+    if (s_imu_dev != NULL) {
+        mb_cfg_t imu_cfg;
+        MB_CFG_DEFAULT_INIT(imu_cfg);   /* 115200/从站1/ABCD，接真机后再校准字序 */
+        int r = agv_imu_start(s_imu_dev, &imu_cfg);
+        if (r == 0) {
+            AGV_LOGI("[IMU] 采集已启动: dev=%s baud=%d slave=%u",
+                     s_imu_dev, imu_cfg.baud, imu_cfg.slave);
+        }
+        else {
+            AGV_LOGW("[IMU] 采集启动失败(rc=%d): dev=%s，本次按纯里程计运行",
+                     r, s_imu_dev);
+        }
+    }
+
     return err;
 }
 
@@ -404,6 +440,10 @@ void app_communicationReset(CO_t *co) {
 
 /******************************************************************************/
 void app_programEnd() {
+    /* 第 12 站：先停 IMU 采集线程(join)，再让 main 收尾。
+     * 此刻 rt_thread 已被 join，不再读 IMU 快照，故不会与 stop 竞争。 */
+    agv_imu_stop();
+
     /* 日志生命周期(agv_log_init/agv_log_deinit)现由 main 统一管理：
      * main 结尾还有收尾日志，此处若关日志会把它丢掉，故不再关闭。 */
 }
@@ -571,21 +611,49 @@ void app_programRt(CO_t *co, uint32_t timerLate_us, bool_t timerEvent) {
     prevR = odom_posR_raw;
     prevL = odom_posL_raw;
 
-    /* 把位姿写进自定义 OD 数组 0x6FFF(索引 1/2/3 = x/y/th)，供 CiA-309
-     * 网关(Qt 上位机)按 SDO 读取。写侧在 rt_thread，网关读侧在 main 线程，
-     * 跨线程访问同一 OD_RAM，必须用 CO_LOCK_OD 保护。 */
+    /* ===================== 第 12 站：IMU 航向融合(互补滤波) =====================
+     * 快照由采集线程经 seqlock 无锁发布，RT 拍这里无锁取；仅当"有有效快照
+     * 且从站在线"才融合，IMU 掉线时自动退回纯里程计。
+     *   θ ← θ_odom + (1-α)·wrap(θ_imu − θ_odom)
+     * α=0.98：短程信里程计(高频平滑)，长程靠 IMU 绝对航向慢慢拉正、消累积漂移；
+     * wrap_pi 把差值折到 (-π,π]，避免 yaw 在 ±π 处跳变。 */
+    agv_imu_sample_t imu;
+    bool_t imu_ok = (agv_imu_get(&imu) > 0) && !agv_imu_offline();
+    if (imu_ok) {
+        odom_th += (1.0 - AGV_IMU_FUSE_ALPHA) * wrap_pi((double)imu.yaw - odom_th);
+        odom_th  = wrap_pi(odom_th);
+    }
+
+    /* 位姿写 0x6FFF(索引 1/2/3 = x/y/th)，IMU 9 个量平铺写 0x7010(索引 1..9)，
+     * 供 CiA-309 网关(Qt 上位机)按 SDO 读取。两处合并在同一次 CO_LOCK_OD
+     * 区间内写，省一次上锁：写侧在 rt_thread、网关读侧在 main 线程，
+     * 跨线程访问同一 OD_RAM 必须用 CO_LOCK_OD 保护。 */
     CO_LOCK_OD(co->CANmodule);
     OD_RAM.x6FFF_agvOdometry[0] = (float32_t)odom_x;
     OD_RAM.x6FFF_agvOdometry[1] = (float32_t)odom_y;
     OD_RAM.x6FFF_agvOdometry[2] = (float32_t)odom_th;
+    if (imu_ok) {
+        OD_RAM.x7010_imu[0] = imu.roll;
+        OD_RAM.x7010_imu[1] = imu.pitch;
+        OD_RAM.x7010_imu[2] = imu.yaw;
+        OD_RAM.x7010_imu[3] = imu.gx;
+        OD_RAM.x7010_imu[4] = imu.gy;
+        OD_RAM.x7010_imu[5] = imu.gz;
+        OD_RAM.x7010_imu[6] = imu.ax;
+        OD_RAM.x7010_imu[7] = imu.ay;
+        OD_RAM.x7010_imu[8] = imu.az;
+    }
     CO_UNLOCK_OD(co->CANmodule);
 
     /* 每 1000 拍(≈1s)记录一次，避免 RT 线程终端 IO 拖垮实时性 */
     static uint32_t odom_n;
     if (++odom_n >= 1000u) {
         odom_n = 0;
-        AGV_LOGI("[ODOM] x=%.3f y=%.3f th=%.1fdeg",
-                 odom_x, odom_y, odom_th * 180.0 / ODOM_PI);
+        AGV_LOGI("[ODOM] x=%.3f y=%.3f th=%.1fdeg imu=%s ok=%llu err=%llu",
+                 odom_x, odom_y, odom_th * 180.0 / ODOM_PI,
+                 imu_ok ? "on" : "off",
+                 (unsigned long long)agv_imu_stat_ok(),
+                 (unsigned long long)agv_imu_stat_err());
     }
 #if 0
     /* Simulation: detect change of state of the variable and trigger TPDO, to

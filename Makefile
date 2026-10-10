@@ -48,7 +48,8 @@ SOURCES = \
 	$(DRV_SRC)/agv_pool.c \
 	$(DRV_SRC)/agv_log.c \
 	$(DRV_SRC)/agv_kinematics.c \
-	$(DRV_SRC)/agv_modbus.c
+	$(DRV_SRC)/agv_modbus.c \
+	$(DRV_SRC)/agv_imu.c
 
 
 OBJS = $(SOURCES:%.c=%.o)
@@ -98,14 +99,18 @@ tests/test_agv_odom: tests/test_agv_odom.c tests/agv_test.h $(DRV_SRC)/agv_kinem
 tests/test_agv_modbus: tests/test_agv_modbus.c tests/agv_test.h $(DRV_SRC)/agv_modbus.c $(DRV_SRC)/agv_modbus.h
 	$(CC) $(TEST_CFLAGS) tests/test_agv_modbus.c $(DRV_SRC)/agv_modbus.c -o $@ $(TEST_LDFLAGS)
 
-clean-test:
-	rm -f tests/test_agv_queue tests/test_agv_odom tests/test_agv_modbus
+tests/test_agv_imu: tests/test_agv_imu.c tests/agv_test.h $(DRV_SRC)/agv_imu.c $(DRV_SRC)/agv_imu.h $(DRV_SRC)/agv_modbus.c
+	$(CC) $(TEST_CFLAGS) tests/test_agv_imu.c $(DRV_SRC)/agv_imu.c $(DRV_SRC)/agv_modbus.c -o $@ $(TEST_LDFLAGS)
 
-test: tests/test_agv_queue tests/test_agv_odom tests/test_agv_modbus
+clean-test:
+	rm -f tests/test_agv_queue tests/test_agv_odom tests/test_agv_modbus tests/test_agv_imu
+
+test: tests/test_agv_queue tests/test_agv_odom tests/test_agv_modbus tests/test_agv_imu
 	@echo "== P2 单元测试 =="
 	@tests/test_agv_queue
 	@tests/test_agv_odom
 	@tests/test_agv_modbus
+	@tests/test_agv_imu
 	@echo "== 全部通过 =="
 
 test-asan:

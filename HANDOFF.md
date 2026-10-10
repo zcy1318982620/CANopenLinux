@@ -1029,7 +1029,15 @@ candump -td can0                         # 另开终端
   - 单测 `tests/test_agv_modbus.c`（46 断言：CRC 向量/组帧字节序/读响应/异常/四种字序）；仿真从站 `tools/sim_imu_modbus.py`（纯标准库 pty/串口 + §10.1 寄存器表 + 异常/坏 CRC/丢帧注入）。
   - 集成：`Makefile` 与 `CMakeLists.txt` 均纳入（两处源清单 + 测试目标）；`make test` 与 `ctest` 全过；pty 端到端（C 主站 ↔ Python 从站）读回 9 个 float32 PASS，故障注入（异常码/坏 CRC/丢帧重试）均按预期。
   - 实现走读见 `docs/MODBUS_IMU_IMPL_print.html`。
-- **待硬件到位后**：接真 IMU 校准 float32 字序与 RS485 方向 → 新增 OD `0x7010 imu` → 与 `0x6FFF` 做互补滤波航向融合。
+  - **接入（2026-10-10，软件侧全部做完）**：
+    - 采集模块 `agv_imu.h` / `agv_imu.c`：独立线程按 20Hz 用 agv_modbus 读 `0x04` 输入寄存器（18 个 = 9×float32），**seqlock 无锁快照**发布给 RT 拍；模块不依赖 agv_log/OD（只返回码 + 计数器）。
+    - OD 新增 **`0x7010 imu`**（9×float32 数组，子 1~9 = roll/pitch/yaw、gx/gy/gz、ax/ay/az）；OD.h/OD.c 共四处改动，**追加末尾**保 index 升序（`OD_find` 二分）。
+    - RT 拍 `app_programRt`：里程计积分后做**互补滤波** `θ += (1-0.98)·wrap(θ_imu − θ)`，并在**同一次 `CO_LOCK_OD`** 内把位姿写 `0x6FFF`、IMU 写 `0x7010`；IMU 无效/离线时自动退回纯里程计。
+    - 接线：命令行新增 `-M <serial dev>`（`CO_main_basic.c` + `app_setImuDev()`）；`app_programStart` 启采集（失败只告警、不阻断启动）、`app_programEnd` 停采集。
+    - 单测 `tests/test_agv_imu.c`（44 断言：四种字序 decode + 状态机）；`make test`（74/19/46/44 全过）与 `ctest`（4/4）双构建全绿。
+    - 无硬件端到端：`sim_imu_modbus.py pty` + `sim_motors_downlink.py vcan0` + `canopend vcan0 -i 10 -M /dev/pts/4`，SDO 读回 `0x7010` 9 个值正确。
+    - 实现走读见 `docs/AGV_IMU_INTEGRATION_print.html`。
+- **待硬件到位后**：接真 IMU 校准 float32 字序与 RS485 方向、定 α（当前 0.98）、对齐 yaw 零位与里程计 θ 零位。
 
 **增量 ② · CoE（CANopen over EtherCAT）**
 - 做什么：**知识迁移**，**不做从站协议栈开发**。产出「CANopen ↔ CoE 对照表」：`0x6040`/`0x6041`/`0x60FF` 在 CoE 的 SDO/PDO 下如何映射（复用已有 CiA-402 资产）。可选加分：SOEM 起主站 + Wireshark 抓 EtherCAT 帧。

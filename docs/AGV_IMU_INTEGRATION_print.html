@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>IMU 完整链路实现册：Modbus RTU 主站 → 采集线程 → OD 0x7010 → 航向融合</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1a1a1a; line-height: 1.6; font-size: 13px;
+    max-width: 190mm; margin: 0 auto; padding: 8mm 4mm;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; line-height: 1.35; }
+  h2 { font-size: 16px; margin: 22px 0 8px; padding-bottom: 4px;
+       border-bottom: 2px solid #0FDC78; color: #004D26; }
+  h3 { font-size: 14px; margin: 16px 0 6px; color: #004D26; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+    background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  }
+  a { color: #004D26; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+  th, td { border: 1px solid #d7dbdf; padding: 5px 7px; text-align: left;
+           vertical-align: top; font-size: 12px; }
+  th { background: #E5FFF2; color: #004D26; font-weight: 600; }
+  td.loc { font-family: "SFMono-Regular", Consolas, monospace;
+           white-space: nowrap; font-size: 11.5px; }
+  pre.code {
+    background: #f8f9fa; border: 1px solid #e3e5e8; border-left: 3px solid #0FDC78;
+    padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    line-height: 1.5; margin: 8px 0;
+  }
+  .note {
+    background: #FFF7E5; border-left: 3px solid #f0a020;
+    padding: 8px 12px; border-radius: 4px; margin: 10px 0; font-size: 12.5px;
+  }
+  .flow { margin: 12px 0; }
+  .flow .row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .flow .box {
+    border: 1px solid #b9c0c6; border-radius: 6px; padding: 5px 9px;
+    font-size: 11.5px; background: #fff; white-space: nowrap;
+  }
+  .flow .box small { display: block; color: #777; font-size: 10.5px;
+                     font-family: Consolas, monospace; }
+  .flow .box.hi { background: #E5FFF2; border-color: #0FDC78; color: #004D26; font-weight: 600; }
+  .flow .arw { color: #0FDC78; font-weight: 700; }
+  .pgbreak { page-break-before: always; }
+  .footnote { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e3e5e8;
+              color: #888; font-size: 11.5px; }
+  .toolbar { margin: 10px 0; }
+  .toolbar button {
+    background: #0FDC78; color: #004D26; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  @media print { .toolbar { display: none; } }
+</style>
+</head>
+<body>
+
+<h1>IMU 完整链路实现册<br>Modbus RTU 主站 → 采集线程 → OD 0x7010 → 航向融合</h1>
+<div class="meta">工程：panasonic_canopen_agv ｜ 覆盖：RS485 字节流 → 函数级调用 → OD → SDO 读回 ｜ 所有函数均标注<b>文件:行号</b></div>
+
+<div class="toolbar"><button onclick="window.print()">打印 / 导出 PDF</button></div>
+
+<h2>§1 链路总览</h2>
+<p>整条链路解决一件事：把 RS485 上的一帧 Modbus 应答，变成上位机能读到的车体位姿与 IMU 量。链路被切成三段、跨三个线程，每段只管自己的事：</p>
+<table>
+  <tr><th>层</th><th>文件</th><th>职责</th><th>运行线程</th></tr>
+  <tr>
+    <td>① 协议层</td>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h">agv_modbus.h</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c">agv_modbus.c</a></td>
+    <td>组帧 / CRC16 / 收发 / 超时重试 / 解帧 / float32 字序还原 / RS485 方向控制</td>
+    <td>由调用者决定（此处是采集线程）</td>
+  </tr>
+  <tr>
+    <td>② 采集层</td>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.h">agv_imu.h</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c">agv_imu.c</a></td>
+    <td>20Hz 轮询 IMU、decode 成采样、<b>seqlock 无锁发布</b>快照；不依赖 log/OD</td>
+    <td>采集线程（pthread，普通优先级）</td>
+  </tr>
+  <tr>
+    <td>③ 应用层</td>
+    <td><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c">CO_application.c</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h">OD.h</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c">OD.c</a></td>
+    <td>RT 拍无锁取快照 → 互补滤波 → <code>CO_LOCK_OD</code> 内写 0x6FFF + 0x7010</td>
+    <td>RT 线程（1ms 节拍）</td>
+  </tr>
+</table>
+<p>读侧则是 main 线程的 CiA-309 网关：上位机发 SDO upload，网关直接从 <code>OD_RAM</code> 取值回包。</p>
+
+<h3>1.1 完整链路（一图到底）</h3>
+<div class="flow">
+  <div class="row">
+    <span class="box hi">IMU 硬件<small>RS485 半双工</small></span>
+    <span class="arw">→</span>
+    <span class="box">mb_read_regs<small>agv_modbus.c:405</small></span>
+    <span class="arw">→</span>
+    <span class="box">mb_tx / mb_rx<small>314 / 361</small></span>
+    <span class="arw">→</span>
+    <span class="box">mb_parse_read_resp<small>116</small></span>
+    <span class="arw">→</span>
+    <span class="box">agv_imu_decode<small>agv_imu.c:38</small></span>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <span class="box hi">imu_publish（seqlock 写）<small>agv_imu.c:59</small></span>
+    <span class="arw">→</span>
+    <span class="box hi">RT 拍 agv_imu_get（seqlock 读）<small>agv_imu.c:71</small></span>
+    <span class="arw">→</span>
+    <span class="box">互补滤波<small>CO_application.c:623</small></span>
+    <span class="arw">→</span>
+    <span class="box hi">CO_LOCK_OD 写 0x6FFF + 0x7010<small>CO_application.c:631</small></span>
+    <span class="arw">→</span>
+    <span class="box">SDO 读回<small>网关 / 上位机</small></span>
+  </div>
+</div>
+<p><b>两条线程边界：</b>采集线程 ↔ RT 线程只通过 <b>seqlock 快照</b>；RT 线程 ↔ main 线程只通过 <b>OD_RAM</b>（<code>CO_LOCK_OD</code> 保护）。两条边界互不重叠。</p>
+
+<h2>§2 逐段说明：一帧数据在链路里怎么走</h2>
+<table>
+  <tr><th>#</th><th>函数（位置）</th><th>输入</th><th>干什么</th><th>输出 / 返回</th></tr>
+  <tr>
+    <td>1</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L96-L125">imu_worker<br>agv_imu.c:96-125</a></td>
+    <td>线程入口</td>
+    <td>循环：<code>mb_read_regs(ctx, MB_FC_READ_INPUT=0x04, 0x0000, 18, regs)</code>；成功则 decode+publish，计数清零；失败则 <code>err++</code>、连续失败 +1（上限 <code>MB_OFFLINE_THRESHOLD</code>）；每轮 <code>nanosleep(50ms)</code></td>
+    <td>—（线程主体）</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L405-L434">mb_read_regs<br>agv_modbus.c:405-434</a></td>
+    <td>ctx、功能码、起始寄存器、数量、输出数组</td>
+    <td>事务总控：校验参数 → <code>mb_build_read</code> 组请求 → 重试循环里 <code>mb_tx</code> + <code>mb_rx</code> → <code>mb_parse_read_resp</code> 解帧 → 记录成败</td>
+    <td><code>n</code> 成功；否则 <code>MB_E_*</code></td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L77-L86">mb_build_read<br>agv_modbus.c:77-86</a></td>
+    <td>out、addr、func、reg、n</td>
+    <td>拼 <code>[addr][func][reg_hi][reg_lo][n_hi][n_lo]</code>，再调 <code>mb_append_crc</code> 补 CRC</td>
+    <td>整帧长度（8）</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L69-L75">mb_append_crc<br>agv_modbus.c:69-75</a></td>
+    <td>out、len</td>
+    <td>调 <code>mb_crc16</code>，<b>低字节先放</b>（Modbus 规定）</td>
+    <td>len+2</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L53-L66">mb_crc16<br>agv_modbus.c:53-66</a></td>
+    <td>buf、len</td>
+    <td>初值 <code>0xFFFF</code>，逐字节异或后右移 8 次，<b>多项式 0xA001（反向）</b>，低位先</td>
+    <td>CRC 值</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L314-L339">mb_tx<br>agv_modbus.c:314-339</a></td>
+    <td>ctx、buf、len</td>
+    <td>RS485 先切发送方向 → <code>mb_t35_delay</code> 保证 3.5 字符静默 → <code>write</code> → <code>tcdrain</code> 等发完 → 切回接收</td>
+    <td>写入字节数 / <code>MB_E_IO</code></td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L361-L388">mb_rx<br>agv_modbus.c:361-388</a></td>
+    <td>ctx、buf、cap</td>
+    <td><code>poll</code> 等首字节（超时 → <code>MB_E_TIMEOUT</code>）→ 收头 2 字节 → <code>mb_expected_len</code> 算整帧长 → 收满剩余 → 返回总长</td>
+    <td>帧长 / <code>MB_E_*</code></td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L342-L358">mb_expected_len<br>agv_modbus.c:342-358</a></td>
+    <td>buf、len</td>
+    <td>按功能码算应答总长：异常帧固定 5；读类 <code>5+2n</code>；写类固定 8</td>
+    <td>期望长度 / <code>MB_E_FRAME</code></td>
+  </tr>
+  <tr>
+    <td>9</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L116-L148">mb_parse_read_resp<br>agv_modbus.c:116-148</a></td>
+    <td>resp、len、addr、func、期望条数、out</td>
+    <td>先查异常帧（<code>func|0x80</code> → <code>MB_ERR_EXC</code>）→ 校验 addr/func/长度 → <b>CRC 校验</b> → 逐寄存器取大端 16 位</td>
+    <td>条数 / <code>MB_E_CRC</code> / <code>MB_E_FRAME</code> / <code>MB_ERR_EXC</code></td>
+  </tr>
+  <tr>
+    <td>10</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L38-L54">agv_imu_decode<br>agv_imu.c:38-54</a></td>
+    <td>18 个寄存器、字序、out</td>
+    <td><b>纯函数</b>：i=0..8 调 <code>mb_regs_to_float32(regs[2i], regs[2i+1], order)</code>，按 roll/pitch/yaw、gx/gy/gz、ax/ay/az 落位</td>
+    <td>无（NULL 直接返回）</td>
+  </tr>
+  <tr>
+    <td>11</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L150-L179">mb_regs_to_float32<br>agv_modbus.c:150-179</a></td>
+    <td>r0、r1、字序</td>
+    <td>按 4 种字序把两个 16 位拼成 IEEE754 的 4 字节，再 <code>memcpy</code> 成 <code>float</code>（<b>不能强制指针转换</b>，见 §10）</td>
+    <td><code>float</code></td>
+  </tr>
+  <tr>
+    <td>12</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L59-L69">imu_publish<br>agv_imu.c:59-69</a></td>
+    <td>采样 <code>s</code></td>
+    <td><b>seqlock 写</b>：<code>seq+1</code>(奇) → release 屏障 → <code>s_snap = *s</code> → release 屏障 → <code>seq+2</code>(偶) → <code>s_valid=1</code></td>
+    <td>无</td>
+  </tr>
+  <tr>
+    <td>13</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L71-L91">agv_imu_get<br>agv_imu.c:71-91</a></td>
+    <td>out</td>
+    <td><b>seqlock 读（RT 专用）</b>：无有效快照 → 0；否则 <code>for(;;)</code> 取 s1（奇则重试）→ 拷快照 → acquire 屏障 → 取 s2，<code>s1==s2</code> 才 <code>break</code></td>
+    <td>1=有有效快照；0=尚无</td>
+  </tr>
+  <tr>
+    <td>14</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L470-L657">app_programRt<br>CO_application.c:470-657</a></td>
+    <td>co、节拍延迟、是否定时触发</td>
+    <td>1ms 真节拍：先做 CiA402 下行，再里程计积分（<code>agv_odom_step</code>），再 IMU 互补滤波，最后同一次 <code>CO_LOCK_OD</code> 写 OD</td>
+    <td>无</td>
+  </tr>
+  <tr>
+    <td>15</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L614-L645">融合 + 写 OD<br>CO_application.c:614-645</a></td>
+    <td><code>odom_th</code>、快照</td>
+    <td><code>imu_ok = (agv_imu_get(&amp;imu)&gt;0) &amp;&amp; !agv_imu_offline()</code>；真则 <code>odom_th += 0.02·wrap_pi(yaw − odom_th)</code>；锁内写 <code>x6FFF_agvOdometry[0..2]</code> 与 <code>x7010_imu[0..8]</code></td>
+    <td>无</td>
+  </tr>
+  <tr>
+    <td>16</td>
+    <td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L2161-L2163">ODList[]<br>OD.c:2161-2163</a></td>
+    <td>SDO upload 请求</td>
+    <td>网关按 index/sub 从 <code>OD_RAM</code> 取值（<code>OD_find</code> 二分查 <code>ODList[]</code>），回 SDO 响应</td>
+    <td>0x7010 值</td>
+  </tr>
+</table>
+
+<h2 class="pgbreak">§3 函数总表（含所在位置）</h2>
+<div class="note">下表「位置」列直接写出<b>文件:行号</b>文本（打印后也能看），同时是可点击链接。命名约定：<code>agv_modbus.c:53-66</code> = 该函数定义所在的行区间。</div>
+
+<h3>3.1 agv_modbus · 纯函数层（可脱离串口单测）</h3>
+<table>
+  <tr><th>函数</th><th>位置</th><th>做什么</th><th>返回</th></tr>
+  <tr><td><code>mb_crc16</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L53-L66">agv_modbus.c:53-66</a></td><td>CRC16-Modbus（0xA001/0xFFFF）</td><td>CRC 值</td></tr>
+  <tr><td><code>mb_append_crc</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L69-L75">agv_modbus.c:69-75</a></td><td>在帧尾补 CRC（低字节先）</td><td>新长度</td></tr>
+  <tr><td><code>mb_build_read</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L77-L86">agv_modbus.c:77-86</a></td><td>组 0x03/0x04 读请求</td><td>帧长</td></tr>
+  <tr><td><code>mb_build_write_single</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L88-L97">agv_modbus.c:88-97</a></td><td>组 0x06 写单寄存器请求</td><td>帧长</td></tr>
+  <tr><td><code>mb_build_write_multi</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L99-L114">agv_modbus.c:99-114</a></td><td>组 0x10 写多寄存器请求</td><td>帧长</td></tr>
+  <tr><td><code>mb_parse_read_resp</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L116-L148">agv_modbus.c:116-148</a></td><td>解读响应：异常帧 / 头校验 / CRC / 取寄存器</td><td>条数 或 <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_regs_to_float32</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L150-L179">agv_modbus.c:150-179</a></td><td>两寄存器按字序还原 float32</td><td><code>float</code></td></tr>
+  <tr><td><code>mb_parse_write_resp</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L437-L461">agv_modbus.c:437-461</a></td><td>解写响应（回显校验）</td><td>0 或 <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_expected_len</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L342-L358">agv_modbus.c:342-358</a></td><td>按功能码算应答帧总长</td><td>长度 或 <code>MB_E_FRAME</code></td></tr>
+</table>
+
+<h3>3.2 agv_modbus · 串口 / RS485 层</h3>
+<table>
+  <tr><th>函数</th><th>位置</th><th>做什么</th><th>返回</th></tr>
+  <tr><td><code>mb_baud_const</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L183-L194">agv_modbus.c:183-194</a></td><td>波特率 → termios 常量</td><td>常量 / -1</td></tr>
+  <tr><td><code>mb_setup_port</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L196-L222">agv_modbus.c:196-222</a></td><td>串口 8N1、raw、非阻塞、关闭流控</td><td>0 / <code>MB_E_IO</code></td></tr>
+  <tr><td><code>mb_set_rts</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L224-L229">agv_modbus.c:224-229</a></td><td>手动 RTS 方向控制（兜底方案）</td><td>无</td></tr>
+  <tr><td><code>mb_try_kernel_rs485</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L232-L243">agv_modbus.c:232-243</a></td><td>试 <code>TIOCSRS485</code> 让内核自动翻转方向</td><td>0 / -1</td></tr>
+  <tr><td><code>mb_open</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L245-L286">agv_modbus.c:245-286</a></td><td>开串口 + 配口 + 选 RS485 方案 + 分配 ctx</td><td>ctx / NULL</td></tr>
+  <tr><td><code>mb_close</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L288-L295">agv_modbus.c:288-295</a></td><td>关 fd、释放 ctx</td><td>无</td></tr>
+  <tr><td><code>mb_t35_delay</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L300-L312">agv_modbus.c:300-312</a></td><td>按波特率算 3.5 字符静默并等待</td><td>无</td></tr>
+</table>
+
+<h3>3.3 agv_modbus · 事务层</h3>
+<table>
+  <tr><th>函数</th><th>位置</th><th>做什么</th><th>返回</th></tr>
+  <tr><td><code>mb_tx</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L314-L339">agv_modbus.c:314-339</a></td><td>方向切换 + t3.5 + 发 + <code>tcdrain</code></td><td>字节数 / <code>MB_E_IO</code></td></tr>
+  <tr><td><code>mb_rx</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L361-L388">agv_modbus.c:361-388</a></td><td>poll 首字节 → 收头 → 算长 → 收满</td><td>帧长 / <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_note_ok</code> / <code>mb_note_fail</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L390-L401">agv_modbus.c:390-401</a></td><td>更新成功/失败计数与连续失败数</td><td>无</td></tr>
+  <tr><td><code>mb_read_regs</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L405-L434">agv_modbus.c:405-434</a></td><td>读寄存器事务总控（组帧→收发→解帧→重试）</td><td>条数 / <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_write_common</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L463-L496">agv_modbus.c:463-496</a></td><td>写寄存器事务总控</td><td>0 / <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_write_reg</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L498-L503">agv_modbus.c:498-503</a></td><td>写单个保持寄存器（0x06）</td><td>0 / <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_write_regs</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L505-L510">agv_modbus.c:505-510</a></td><td>写多个保持寄存器（0x10）</td><td>0 / <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_read_float32</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L512-L522">agv_modbus.c:512-522</a></td><td>读两个寄存器并还原 float32</td><td>0 / <code>MB_E_*</code></td></tr>
+  <tr><td><code>mb_is_offline</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L524-L527">agv_modbus.c:524-527</a></td><td>连续失败 ≥ 3 判离线</td><td>1 / 0</td></tr>
+  <tr><td><code>mb_stat_ok</code> / <code>mb_stat_err</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L529-L530">agv_modbus.c:529-530</a></td><td>读事务累计计数</td><td>uint64</td></tr>
+</table>
+
+<h3>3.4 agv_imu · 采集模块</h3>
+<table>
+  <tr><th>函数</th><th>位置</th><th>做什么</th><th>返回</th></tr>
+  <tr><td><code>agv_imu_decode</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L38-L54">agv_imu.c:38-54</a></td><td>纯函数：18 寄存器 → 9 个 float 落位</td><td>无</td></tr>
+  <tr><td><code>imu_publish</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L59-L69">agv_imu.c:59-69</a></td><td>seqlock 发布快照</td><td>无</td></tr>
+  <tr><td><code>agv_imu_get</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L71-L91">agv_imu.c:71-91</a></td><td>seqlock 读快照（RT 无锁）</td><td>1 / 0</td></tr>
+  <tr><td><code>imu_worker</code>（static）</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L96-L125">agv_imu.c:96-125</a></td><td>采集线程主体：20Hz 读 + 发布 + 计数</td><td>NULL</td></tr>
+  <tr><td><code>agv_imu_start</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L130-L165">agv_imu.c:130-165</a></td><td>校验参数 → <code>mb_open</code> → 建线程（失败回滚）</td><td>0 / <code>MB_E_PARAM</code> / <code>MB_E_IO</code></td></tr>
+  <tr><td><code>agv_imu_stop</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L167-L177">agv_imu.c:167-177</a></td><td><code>s_run=0</code> → join → <code>mb_close</code>（幂等）</td><td>无</td></tr>
+  <tr><td><code>agv_imu_offline</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L179-L183">agv_imu.c:179-183</a></td><td>连续失败数判离线</td><td>1 / 0</td></tr>
+  <tr><td><code>agv_imu_stat_ok</code> / <code>stat_err</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L185-L193">agv_imu.c:185-193</a></td><td>原子读采集成败计数</td><td>uint64</td></tr>
+</table>
+<p>接口与常量声明在 <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.h#L29-L77">agv_imu.h:29-77</a>：<code>AGV_IMU_POLL_MS=50</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.h#L29">agv_imu.h:29</a>）、<code>AGV_IMU_REG_BASE 0x0000</code> / <code>AGV_IMU_REG_COUNT 18</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.h#L34-L35">agv_imu.h:34-35</a>）、<code>agv_imu_sample_t</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.h#L38-L42">agv_imu.h:38-42</a>）。</p>
+
+<h3>3.5 CO_application.c · 接线</h3>
+<table>
+  <tr><th>位置</th><th>做什么</th></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L37">CO_application.c:37</a></td><td><code>#include "agv_imu.h"</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L54">CO_application.c:54</a></td><td><code>AGV_IMU_FUSE_ALPHA 0.98</code>（互补滤波系数）</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L56">CO_application.c:56</a></td><td><code>static const char *s_imu_dev</code>（-M 指定的串口路径）</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L59-L63">CO_application.c:59-63</a></td><td><code>app_setImuDev()</code>：main 解析 <code>-M</code> 后落地</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L65-L68">CO_application.c:65-68</a></td><td><code>wrap_pi()</code>：角度差折到 (-π,π]</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L408-L422">CO_application.c:408-422</a></td><td><code>app_programStart</code>：仅当有 <code>-M</code> 时 <code>agv_imu_start()</code>；失败只告警不阻断</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L442-L450">CO_application.c:442-450</a></td><td><code>app_programEnd</code>：<code>agv_imu_stop()</code>（此时 rt_thread 已 join）</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L609-L611">CO_application.c:609-611</a></td><td>里程计积分 <code>agv_odom_step()</code> → <code>odom_x/y/th</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L614-L625">CO_application.c:614-625</a></td><td>取快照 + 判在线 + 互补滤波修正 <code>odom_th</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L631-L645">CO_application.c:631-645</a></td><td>同一次 <code>CO_LOCK_OD</code> 内写 0x6FFF[0..2] 与 0x7010[0..8]</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L648-L657">CO_application.c:648-657</a></td><td>每 1000 拍打一行 <code>[ODOM] … imu=on/off ok=… err=…</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.h#L60-L67">CO_application.h:60-67</a></td><td><code>app_setImuDev()</code> 声明</td></tr>
+</table>
+
+<h3>3.6 OD 0x7010 · 四处改动</h3>
+<table>
+  <tr><th>位置</th><th>改了什么</th></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L67">OD.h:67</a></td><td><code>#define OD_CNT_ARR_7010 9</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L337-L340">OD.h:337-340</a></td><td><code>OD_RAM_t</code> 末尾：<code>uint8_t x7010_imu_sub0; float32_t x7010_imu[9];</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L523">OD.h:523</a> / <a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L688">OD.h:688</a></td><td><code>OD_ENTRY_H7010</code> / <code>OD_ENTRY_H7010_imu</code>（位置式宏 <code>&amp;OD-&gt;list[159]</code>）</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L288-L289">OD.c:288-289</a></td><td>默认值：<code>sub0=0x09</code>、9 个 float 清零</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L457">OD.c:457</a></td><td><code>ODObjs_t</code> 追加 <code>o_7010_imu</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L1983">OD.c:1983</a></td><td><code>ODObjs</code> 初始化：<code>attribute0=ODA_SDO_R</code>、<code>attribute=ODA_SDO_R|ODA_MB</code>、元素长 4</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.c#L2161-L2163">OD.c:2161-2163</a></td><td><code>ODList[]</code> 在 0x7000 之后、哨兵之前追加 <code>{0x7010,0x0A,ODT_ARR,&amp;ODObjs.o_7010_imu,NULL}</code></td></tr>
+</table>
+
+<h3>3.7 main · 命令行</h3>
+<table>
+  <tr><th>位置</th><th>做什么</th></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L268">CO_main_basic.c:268</a></td><td><code>printUsage</code> 里 <code>-M &lt;serial dev&gt;</code> 的说明</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L386">CO_main_basic.c:386</a></td><td>getopt 串加 <code>M:</code>：<code>"i:p:rc:T:s:M:"</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_main_basic.c#L400-L401">CO_main_basic.c:400-401</a></td><td><code>case 'M': app_setImuDev(optarg);</code></td></tr>
+</table>
+<table>
+  <tr><th>位置</th><th>做什么</th></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/Makefile#L18-L51">Makefile:18-51</a></td><td><code>SOURCES</code> 加 <code>agv_imu.c</code>；测试目标 <code>test_agv_imu</code> + <code>clean-test</code>/<code>test</code> 一并纳入</td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/CMakeLists.txt">CMakeLists.txt</a></td><td><code>add_executable(canopend …)</code> 加 <code>agv_imu.c</code>；新增 <code>test_agv_imu</code> 目标与 <code>add_test(NAME agv_imu …)</code></td></tr>
+  <tr><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/tests/test_agv_imu.c">tests/test_agv_imu.c</a></td><td>单测：四种字序 decode 往返 + 模块状态机（44 断言）</td></tr>
+</table>
+
+<h2 class="pgbreak">§4 关键数据结构</h2>
+<table>
+  <tr><th>名字</th><th>位置</th><th>说明</th></tr>
+  <tr><td><code>mb_word_order_t</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L56-L61">agv_modbus.h:56-61</a></td><td>ABCD / CDAB / BADC / DCBA</td></tr>
+  <tr><td><code>mb_cfg_t</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L64-L71">agv_modbus.h:64-71</a></td><td>baud / slave / timeout_ms / retries / rs485 / word_order</td></tr>
+  <tr><td><code>MB_CFG_DEFAULT_INIT</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L74-L82">agv_modbus.h:74-82</a></td><td>115200 / 从站1 / 300ms / 重试2 / RS485开 / ABCD</td></tr>
+  <tr><td><code>mb_ctx_t</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L85">agv_modbus.h:85</a></td><td>不透明句柄</td></tr>
+  <tr><td>错误码</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L35-L50">agv_modbus.h:35-50</a></td><td><code>MB_E_PARAM/IO/TIMEOUT/CRC/FRAME</code>；<code>MB_ERR_EXC(code)</code>、<code>MB_IS_EXC</code>、<code>MB_EXC_CODE</code></td></tr>
+  <tr><td><code>MB_OFFLINE_THRESHOLD</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.h#L53">agv_modbus.h:53</a></td><td>连续失败 3 次判离线</td></tr>
+  <tr><td><code>agv_imu_sample_t</code></td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.h#L38-L42">agv_imu.h:38-42</a></td><td>roll/pitch/yaw(rad)、gx/gy/gz(rad/s)、ax/ay/az(m/s²)</td></tr>
+  <tr><td>0x7010 布局</td><td class="loc"><a href="file:///home/zcy/Project/panasonic_canopen_agv/application/OD.h#L337-L340">OD.h:337-340</a></td><td>子 00=9；01-03 姿态；04-06 角速度；07-09 加速度</td></tr>
+</table>
+<p><b>返回码约定：</b><code>&gt;=0</code> 成功；<code>-1..-5</code> 本地错误；<code>-257..-511</code> 为从站异常（<code>-(0x100|异常码)</code>）。异常响应<b>不重试</b>，仅 CRC/超时/帧错误重试。</p>
+
+<h2>§5 帧格式速查</h2>
+<pre class="code">读请求 (0x04, 起始 0x0000, 18 个)：
+  01 04 00 00 00 12 C6 3F                 ← 8 字节，末 2 字节 CRC(低字节先)
+
+正常响应：
+  01 04 24 &lt;36 字节数据&gt; &lt;CRC_lo&gt; &lt;CRC_hi&gt;   ← 5 + 2*18 = 41 字节
+
+异常响应（功能码 | 0x80 + 异常码）：
+  01 84 02 &lt;CRC_lo&gt; &lt;CRC_hi&gt;               ← 非法数据地址
+</pre>
+<p>寄存器→物理量：输入寄存器 0x0000~0x0011 = 9 个 float32，每 2 个 16 位寄存器一个 float，字序由 <code>mb_cfg_t.word_order</code> 决定（默认 ABCD）。</p>
+
+<h2>§6 float32 四种字序</h2>
+<table>
+  <tr><th>字序</th><th>r0（低地址）</th><th>r1（高地址）</th></tr>
+  <tr><td>ABCD</td><td>AB</td><td>CD</td></tr>
+  <tr><td>CDAB</td><td>CD</td><td>AB</td></tr>
+  <tr><td>BADC</td><td>BA</td><td>DC</td></tr>
+  <tr><td>DCBA</td><td>DC</td><td>BA</td></tr>
+</table>
+<p>实现见 <a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_modbus.c#L150-L179">agv_modbus.c:150-179</a>；单测用「按字序打包 → decode 还原」做往返校验（<a href="file:///home/zcy/Project/panasonic_canopen_agv/tests/test_agv_imu.c">tests/test_agv_imu.c</a>）。</p>
+
+<h2>§7 线程边界与无锁</h2>
+<table>
+  <tr><th>边界</th><th>机制</th><th>为什么</th></tr>
+  <tr><td>采集线程 → RT 线程</td><td>seqlock（<code>_Atomic uint32_t seq</code> 奇偶 + release/acquire 屏障）</td><td>写者（20Hz）永不阻塞读者（1ms 节拍）；RT 侧不上互斥量，避免优先级反转与抖动</td></tr>
+  <tr><td>RT 线程 → main 线程</td><td><code>CO_LOCK_OD</code> 保护 <code>OD_RAM</code></td><td>OD 是跨线程共享内存，且可能被 PDO 映射；网关/PDO 都在 OD 上读写</td></tr>
+  <tr><td>同线程内</td><td>无锁</td><td>RPDO 写钩子与 <code>app_programRt</code> 同处 rt_thread、同圈先后执行，无并发</td></tr>
+</table>
+<div class="note"><b>seqlock 读循环的写法坑：</b>不能用 <code>do…while + continue</code>。写者更新时 <code>seq</code> 为奇数要走重试，而 <code>continue</code> 会跳过 <code>s2</code> 赋值、随后在循环条件里使用<b>未初始化的 s2</b>（UB，GCC <code>-Wmaybe-uninitialized</code> 会报）。这里改用 <code>for(;;)</code> + <code>s1==s2</code> 才 <code>break</code>（<a href="file:///home/zcy/Project/panasonic_canopen_agv/agv_imu.c#L71-L91">agv_imu.c:71-91</a>）。</div>
+
+<h2>§8 互补滤波</h2>
+<pre class="code">odom_th += (1.0 - AGV_IMU_FUSE_ALPHA) * wrap_pi((double)imu.yaw - odom_th);
+odom_th  = wrap_pi(odom_th);</pre>
+<ul>
+  <li><b>α=0.98</b>：短时信里程计（高频、平滑），长时被 IMU 的<b>绝对航向</b>慢慢拉正，消掉里程计累积漂移。</li>
+  <li><b>wrap_pi 必不可少</b>：yaw 与 θ 在 ±π 附近跳变，差值必须先折到 (-π,π]，否则会整圈拉错。</li>
+  <li><b>降级</b>：<code>agv_imu_get()==0</code> 或 <code>agv_imu_offline()</code> 时整段跳过，行为与接入前一致。</li>
+</ul>
+
+<h2 class="pgbreak">§9 验证</h2>
+<h3>9.1 单元测试</h3>
+<pre class="code">$ make test
+==== PASS: 74 checks, 0 failed ====   # agv_queue
+==== PASS: 19 checks, 0 failed ====   # agv_odom
+==== PASS: 46 checks, 0 failed ====   # agv_modbus
+==== PASS: 44 checks, 0 failed ====   # agv_imu  ← 新增
+== 全部通过 ==
+
+$ (cd build && ctest --output-on-failure)     # 本机 cmake 3.16 不支持 --test-dir
+100% tests passed, 0 tests failed out of 4</pre>
+
+<h3>9.2 无硬件端到端（pty 虚拟 IMU + vcan 虚拟电机）</h3>
+<pre class="code"># ① 虚拟 IMU 从站（自建 pty，打印 SLAVE=/dev/pts/N），姿态按正弦动画
+$ python3 tools/sim_imu_modbus.py pty --animate
+SLAVE=/dev/pts/4
+
+# ② 虚拟左右电机从站（提供 0x6041 状态字 + 0x6064 位置 RPDO）
+$ python3 tools/sim_motors_downlink.py vcan0
+
+# ③ 启动主控，-M 指定 IMU 串口
+$ ./canopend vcan0 -i 10 -M /dev/pts/4
+[I] CO_application.c:415 [IMU] 采集已启动: dev=/dev/pts/4 baud=115200 slave=1</pre>
+<p>SDO 客户端（请求 0x60A / 响应 0x58A）读回 <code>0x7010</code>：</p>
+<pre class="code">0x7010:00 count = 9        # roll/pitch/yaw = 0.1 / -0.2 / -1.1333(--animate)
+                           # gx/gy/gz = 0.01 / 0.02 / -0.0197
+                           # ax/ay/az = 0.0 / 0.0 / 9.81
+0x6FFF    1/2/3 = 147.18 / -2100.23 / 0.0659   # 里程计仍在正常积分</pre>
+<p>链路 <b>Modbus pty → 采集线程 → seqlock → RT 拍 → OD → SDO</b> 打通。</p>
+
+<h2>§10 踩坑清单</h2>
+<ul>
+  <li><b>float32 还原必须 memcpy</b>：先拼 <code>uint32_t</code> 再 <code>memcpy</code> 进 <code>float</code>，不能把 <code>uint16_t*</code> 强转成 <code>float*</code> 解引用（对齐/别名 UB）。</li>
+  <li><b>CRC 低字节先发</b>：<code>mb_append_crc</code> 的顺序与从站不一致会导致每帧 <code>MB_E_CRC</code>。</li>
+  <li><b>异常响应不重试</b>：<code>MB_ERR_EXC</code> 是"从站明确拒绝"，重发无意义；只有 CRC/超时/帧错误才重试。</li>
+  <li><b>RS485 方向</b>：先试内核 <code>TIOCSRS485</code>，拿不到再退回手动 RTS；发送必须 <code>tcdrain</code> 后再切回接收，否则截帧。</li>
+  <li><b>ODList 必须 index 升序</b>：<code>OD_find</code> 是二分查找，0x7010 只能插在 0x7000 之后、哨兵之前；<code>OD_ENTRY_H7010</code> 是位置式宏，数组顺序一变就得跟着改。</li>
+  <li><b>两处构建清单都要改</b>：Makefile <code>SOURCES</code> 与 CMakeLists <code>add_executable</code>；测试目标同理（<code>make test</code> 与 <code>ctest</code> 各一份）。</li>
+  <li><b>RT 侧不上锁</b>：只要 RT 里出现 <code>pthread_mutex</code> 就可能在 1ms 节拍里等待，seqlock 才是正解。</li>
+</ul>
+<div class="note"><b>已知取舍：</b>0x7010 的写入挂在里程计分支内（<a href="file:///home/zcy/Project/panasonic_canopen_agv/CO_application.c#L631-L645">CO_application.c:631-645</a>），意味着只有"本拍收到过新位置(<code>odom_new</code>)"才刷 IMU。真机下 0x6064 随 SYNC 周期到达，IMU 也随之刷新；电机侧 PDO 全断时 IMU 也不再写 OD——刻意让"融合"与"里程计"同生共死，避免 IMU 与已漂移的 θ 各自为政。</div>
+<div class="note"><b>待硬件到位：</b>① 实测校准 float32 字序与 RS485 方向；② 用真机数据定 α（0.98 只是起点）；③ 必要时对齐 yaw 零位与里程计 θ 零位（当前假设两者一致）。</div>
+
+<div class="footnote">
+  完整链路实现册（合并原 MODBUS_IMU_IMPL_print.html 的协议层内容与 IMU 接入内容）。
+  每个函数均标注 <b>文件:行号</b>，链接可直接点击跳转到源码。
+</div>
+
+</body>
+</html>
