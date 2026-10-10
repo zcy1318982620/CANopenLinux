@@ -1,10 +1,18 @@
 /html
 /canopend
 /cocomm/cocomm
+/cocomm_cli
 /build*/
 *.o
 *.persist
 *.persist.old
+
+# 测试可执行文件（保留 tests/*.c 源码）
+tests/test_agv_*
+!tests/test_agv_*.c
+
+# AI 助手 / IDE 本地状态
+/.trae/
 
 #eclipse
 .cproject
